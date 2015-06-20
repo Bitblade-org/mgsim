@@ -18,4 +18,12 @@ config.status
 *.rej
 *.orig
 *#*#
+sys_config.h
 sys_config.h.in
+mgsim.1
+stamp-h1
+.dirstamp
+.deps
+*.7
+/.cproject
+/.project
