@@ -7,11 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "../../../sim/inspect.h"
-#include "../../../sim/kernel.h"
-#include "../../simtypes.h"
-
-#include "../../../sim/config.h"
+#include <sim/inspect.h>
+#include <sim/kernel.h>
+#include <sim/config.h>
+#include <arch/simtypes.h>
 
 namespace Simulator {
 namespace drisc {

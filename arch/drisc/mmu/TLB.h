@@ -6,8 +6,9 @@
 #include <string>
 #include <vector>
 
-#include "../../../sim/inspect.h"
-#include "../../simtypes.h"
+#include <sim/inspect.h>
+#include <arch/simtypes.h>
+
 #include "Table.h"
 
 namespace Simulator {

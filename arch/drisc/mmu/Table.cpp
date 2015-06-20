@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-#include "../../../sim/config.h"
-#include "../../../sim/except.h"
+#include <sim/config.h>
+#include <sim/except.h>
 
 namespace Simulator {
 namespace drisc{

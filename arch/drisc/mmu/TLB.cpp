@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "../../../sim/config.h"
+#include <sim/config.h>
 
 namespace Simulator {
 namespace drisc {

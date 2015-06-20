@@ -7,10 +7,10 @@
 #include <string>
 #include <vector>
 
-#include "../../../sim/except.h"
-#include "../../../sim/inspect.h"
-#include "../../IOBus.h"
-#include "../../simtypes.h"
+#include <sim/except.h>
+#include <sim/inspect.h>
+#include <arch/IOBus.h>
+#include <arch/simtypes.h>
 #include "TLB.h"
 
 namespace Simulator {
@@ -24,7 +24,6 @@ public:
     MMU(const std::string& name, Object& parent, Config& config); //Lets try this without a clock
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
-    void DoCommand(std::ostream& s, const std::vector<std::string>& v);
 
     bool isEnabled() const {return m_enabled;}
     MemAddr getTableAddr() const {return m_tableAddr;}
