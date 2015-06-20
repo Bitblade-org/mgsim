@@ -24,6 +24,7 @@
 #include <arch/drisc/Pipeline.h>
 #include <arch/drisc/RegisterFile.h>
 #include <arch/drisc/old/IOMatchUnit.h>
+#include <arch/drisc/mmu/MMU.h>
 
 class Config;
 
@@ -158,6 +159,7 @@ private:
     drisc::DebugChannel   m_lpout;
     drisc::DebugChannel   m_lperr;
     drisc::MMUInterface   m_oldmmu;
+    drisc::mmu::MMU		  m_mmu;
     drisc::ActionInterface m_action;
 
     // External I/O interface, optional

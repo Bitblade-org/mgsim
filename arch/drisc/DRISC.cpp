@@ -45,6 +45,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_lpout("stdout", *this, std::cout),
     m_lperr("stderr", *this, std::cerr),
     m_oldmmu("oldmmu", *this),
+	m_mmu("mmu", *this),
     m_action("action", *this),
     m_io_if(NULL)
 {
