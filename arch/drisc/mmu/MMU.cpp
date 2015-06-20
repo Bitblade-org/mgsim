@@ -36,33 +36,33 @@ void MMU::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*argument
     //MLDTODO Display statistics
 }
 
-//MLDQUESTION DoCommand en Read zijn niet de juiste manier. Is dit mogelijk? Hoe? (Trace is lelijk!!!)
-void MMU::DoCommand(std::ostream& out, const std::vector<std::string>& arguments){
-	if (arguments[0] == "enable"){
-		if(m_enabled){
-			out << "MMU was already enabled!" << std::endl;
-		}else{
-			m_enabled = true;
-			out << "MMU is now enabled." << std::endl;
-		}
-	} else if (arguments[0] == "disable"){
-		if(m_enabled){
-			m_enabled = false;
-			out << "MMU is now disabled." << std::endl;
-		}else{
-			out << "MMU was already disabled!" << std::endl;
-		}
-	} else {
-		out << "Unknown operation: \"" << arguments[0] << "\"" << std::endl;
-	}
-
-
-	//MLDTODO Implement flush operation
-	//MLDTODO Implement PID-flush operation
-	//MLDTODO Implement invalidate operation
-	//MLDTODO Implement set manager address operation
-	//MLDTODO implement set pagetable address operation
-}
+////MLDQUESTION DoCommand en Read zijn niet de juiste manier. Is dit mogelijk? Hoe? (Trace is lelijk!!!)
+//void MMU::DoCommand(std::ostream& out, const std::vector<std::string>& arguments){
+//	if (arguments[0] == "enable"){
+//		if(m_enabled){
+//			out << "MMU was already enabled!" << std::endl;
+//		}else{
+//			m_enabled = true;
+//			out << "MMU is now enabled." << std::endl;
+//		}
+//	} else if (arguments[0] == "disable"){
+//		if(m_enabled){
+//			m_enabled = false;
+//			out << "MMU is now disabled." << std::endl;
+//		}else{
+//			out << "MMU was already disabled!" << std::endl;
+//		}
+//	} else {
+//		out << "Unknown operation: \"" << arguments[0] << "\"" << std::endl;
+//	}
+//
+//
+//	//MLDTODO Implement flush operation
+//	//MLDTODO Implement PID-flush operation
+//	//MLDTODO Implement invalidate operation
+//	//MLDTODO Implement set manager address operation
+//	//MLDTODO implement set pagetable address operation
+//}
 
 } /* namespace mmu */
 } /* namespace drisc */
