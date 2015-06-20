@@ -9,11 +9,11 @@ namespace Simulator {
 namespace drisc{
 namespace mmu{
 
-Table::Table(const std::string& name, Object& parent, Config& config)
+Table::Table(const std::string& name, Object& parent)
 	: Object(name, parent),
-	m_evictionStrategy (getEvictionStrategy(config.getValue<std::string>(*this, "EvictionStrategy"))),
-	m_numEntries (config.getValue<uint64_t>(*this, "NumberOfEntries")),
-	m_offsetSize (config.getValue<size_t>(*this, "OffsetSize"))
+	m_evictionStrategy (getEvictionStrategy(GetConf("EvictionStrategy", std::string))),
+	m_numEntries (GetConf("NumberOfEntries", uint64_t)),
+	m_offsetSize (GetConf("OffsetSize", size_t))
 {}
 
 void Table::Cmd_Info(std::ostream& out, const std::vector<std::string>& /* arguments */) const{

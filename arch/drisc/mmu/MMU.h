@@ -21,7 +21,7 @@ namespace mmu {
 class MMU :	public Object, public Inspect::Interface<Inspect::Info>{
 public:
 	//MLDTODO Keep statistics
-    MMU(const std::string& name, Object& parent, Config& config); //Lets try this without a clock
+    MMU(const std::string& name, Object& parent); //Lets try this without a clock
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 

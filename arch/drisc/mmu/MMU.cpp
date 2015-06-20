@@ -4,17 +4,16 @@ namespace Simulator {
 namespace drisc{
 namespace mmu{
 
-MMU::MMU(const std::string& name, Object& parent, Config& config)
+MMU::MMU(const std::string& name, Object& parent)
 	: Object(name, parent),
-
-	m_vaddrSize (config.getValue<size_t>(*this, "VirtualAddressSize")),
-	m_paddrSize (config.getValue<size_t>(*this, "PhysicalAddressSize")),
-	m_pidSize (config.getValue<size_t>(*this, "ProcessIdSize")),
+	m_vaddrSize (GetConf("VirtualAddressSize", size_t)),
+	m_paddrSize (GetConf("PhysicalAddressSize", size_t)),
+	m_pidSize (GetConf("ProcessIdSize", size_t)),
 	m_enabled (false),
 	m_tableAddr (0),
 	m_managerAddr (0),
-	m_dtlb("dtlb", *this, config),
-	m_itlb("itlb", *this, config)
+	m_dtlb("dtlb", *this),
+	m_itlb("itlb", *this)
 {}
 
 void MMU::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*arguments*/) const{

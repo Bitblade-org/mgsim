@@ -23,7 +23,7 @@ class Table : public Object, public Inspect::Interface<Inspect::Info | Inspect::
 {
 	//MLDTODO Keep statistics
 public:
-    Table(const std::string& name, Object& parent, Config& config); //Lets try this without a clock
+    Table(const std::string& name, Object& parent); //Lets try this without a clock
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;

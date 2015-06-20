@@ -21,7 +21,7 @@ class TLB :	public Object, public Inspect::Interface<Inspect::Info | Inspect::Re
 //MLDTODO Keep statistics!
 public:
 	//MLDTODO Should probably include IIOBus& iobus and other network stuff later on
-    TLB(const std::string& name, Object& parent, Config& config);
+    TLB(const std::string& name, Object& parent);
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;

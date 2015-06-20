@@ -8,16 +8,16 @@ namespace Simulator {
 namespace drisc {
 namespace mmu {
 
-TLB::TLB(const std::string& name, Object& parent, Config& config)
+TLB::TLB(const std::string& name, Object& parent)
 	: Object(name, parent),
-	m_numTables (config.getValue<size_t>(*this, "NumberOfTables")),
+	m_numTables (GetConf("NumberOfTables", size_t)),
 	m_tables (m_numTables)
 {
 	m_tables.reserve(m_numTables);
 
 	for( int i=0; i<m_numTables; i++){
 		//m_tables.emplace_back("table", *this, config); //MLDTODO Should get this working...
-		m_tables.push_back(new Table("table" + std::to_string(i), *this, config));
+		m_tables.push_back(new Table("table" + std::to_string(i), *this));
 	}
 }
 
