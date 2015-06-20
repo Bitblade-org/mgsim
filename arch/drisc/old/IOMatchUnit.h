@@ -6,7 +6,7 @@
 #include <sim/inspect.h>
 #include <arch/simtypes.h>
 #include <map>
-#include "forward.h"
+#include "../forward.h"
 
 namespace Simulator
 {

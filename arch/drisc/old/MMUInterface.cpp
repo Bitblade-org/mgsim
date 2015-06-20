@@ -1,5 +1,6 @@
 #include "MMUInterface.h"
-#include "DRISC.h"
+
+#include "../DRISC.h"
 #include <programs/mgsim.h>
 
 #include <iomanip>

@@ -9,13 +9,11 @@
 #include <arch/BankSelector.h>
 #include <arch/FPU.h>
 #include <arch/drisc/RAUnit.h>
-#include <arch/drisc/IOMatchUnit.h>
 #include <arch/drisc/DebugChannel.h>
 #include <arch/drisc/ActionInterface.h>
 #include <arch/drisc/AncillaryRegisterFile.h>
 #include <arch/drisc/PerfCounters.h>
-#include <arch/drisc/MMUInterface.h>
-#include <arch/drisc/RegisterFile.h>
+#include <arch/drisc/old/MMUInterface.h>
 #include <arch/drisc/FamilyTable.h>
 #include <arch/drisc/ThreadTable.h>
 #include <arch/drisc/ICache.h>
@@ -24,6 +22,8 @@
 #include <arch/drisc/Network.h>
 #include <arch/drisc/Allocator.h>
 #include <arch/drisc/Pipeline.h>
+#include <arch/drisc/RegisterFile.h>
+#include <arch/drisc/old/IOMatchUnit.h>
 
 class Config;
 

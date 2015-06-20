@@ -67,6 +67,10 @@ DEVICE_SRC = \
 BUILT_SOURCES += arch/dev/RPC.h
 
 PROCESSOR_SRC = \
+	arch/drisc/old/IOMatchUnit.h \
+	arch/drisc/old/IOMatchUnit.cpp \
+	arch/drisc/old/MMUInterface.cpp \
+	arch/drisc/old/MMUInterface.h \
         arch/drisc/ActionInterface.cpp \
         arch/drisc/ActionInterface.h \
 	arch/drisc/Allocator.cpp \
@@ -97,8 +101,6 @@ PROCESSOR_SRC = \
 	arch/drisc/IOBusInterface.cpp \
 	arch/drisc/IOInterface.h \
 	arch/drisc/IOInterface.cpp \
-	arch/drisc/IOMatchUnit.h \
-	arch/drisc/IOMatchUnit.cpp \
         arch/drisc/IODirectCacheAccess.p.h \
 	arch/drisc/IODirectCacheAccess.h \
         arch/drisc/IODirectCacheAccess.cpp \
@@ -108,8 +110,6 @@ PROCESSOR_SRC = \
 	arch/drisc/ISA.mips.h \
         arch/drisc/ISA.or1k.h \
 	arch/drisc/MemoryStage.cpp \
-	arch/drisc/MMUInterface.cpp \
-	arch/drisc/MMUInterface.h \
 	arch/drisc/Network.cpp \
 	arch/drisc/Network.p.h \
 	arch/drisc/Network.h \
