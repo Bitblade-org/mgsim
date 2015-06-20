@@ -44,7 +44,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_perfcounters(*this),
     m_lpout("stdout", *this, std::cout),
     m_lperr("stderr", *this, std::cerr),
-    m_mmu("mmu", *this),
+    m_oldmmu("oldmmu", *this),
     m_action("action", *this),
     m_io_if(NULL)
 {
@@ -73,7 +73,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_asr_file.Connect(m_mmio, IOMatchUnit::READ);
     m_lpout.Connect(m_mmio, IOMatchUnit::WRITE);
     m_lperr.Connect(m_mmio, IOMatchUnit::WRITE);
-    m_mmu.Connect(m_mmio, IOMatchUnit::WRITE);
+    m_oldmmu.Connect(m_mmio, IOMatchUnit::WRITE);
     m_action.Connect(m_mmio, IOMatchUnit::WRITE);
 
     // Check if there is an initial register configuration

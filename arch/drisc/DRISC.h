@@ -157,7 +157,7 @@ private:
     drisc::PerfCounters   m_perfcounters;
     drisc::DebugChannel   m_lpout;
     drisc::DebugChannel   m_lperr;
-    drisc::MMUInterface   m_mmu;
+    drisc::MMUInterface   m_oldmmu;
     drisc::ActionInterface m_action;
 
     // External I/O interface, optional
