@@ -71,6 +71,12 @@ PROCESSOR_SRC = \
 	arch/drisc/old/IOMatchUnit.cpp \
 	arch/drisc/old/MMUInterface.cpp \
 	arch/drisc/old/MMUInterface.h \
+	arch/drisc/mmu/MMU.cpp \
+	arch/drisc/mmu/MMU.h \
+	arch/drisc/mmu/Table.cpp \
+	arch/drisc/mmu/Table.h \
+	arch/drisc/mmu/TLB.cpp \
+	arch/drisc/mmu/TLB.h \
         arch/drisc/ActionInterface.cpp \
         arch/drisc/ActionInterface.h \
 	arch/drisc/Allocator.cpp \
