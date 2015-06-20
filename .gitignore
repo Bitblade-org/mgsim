@@ -27,3 +27,10 @@ stamp-h1
 *.7
 /.cproject
 /.project
+*.o
+*.a
+/tools/preproc
+/mgsim
+/tinysim
+/tinysim-dyn
+/programs/nobounds.ini
