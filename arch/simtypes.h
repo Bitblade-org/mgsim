@@ -103,6 +103,13 @@ struct Float64
 };
 
 #if defined(TARGET_MTALPHA)
+typedef uint64_t MAddr_base; 	//Type capable of storing any valid MAddr value
+typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
+#define MADDR_WIDTH_MAX 64U		//Architecture-dictated maximum width of MAddr
+typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
+typedef uint16_t PAddr_base;	//Type capable of storing any valid PAddr (Process ID) value
+#define PADDR_WIDTH 16			//Width of PAddr
+
 typedef uint64_t MemAddr;       ///< Address into memory
 typedef uint64_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
@@ -113,6 +120,14 @@ typedef Float64  Float;         ///< Natural floating point type
 #define INTEGER_WIDTH 64
 #define MEMSIZE_MAX UINT64_MAX
 #elif defined(TARGET_MTSPARC) || defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL) || defined(TARGET_OR1K)
+typedef uint32_t MAddr_base; 	//Type capable of storing any valid MAddr value (Must be unsigned!)
+typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
+#define MADDR_WIDTH_MAX 32		//Architecture-dictated maximum width of MAddr
+
+typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
+typedef uint16_t PAddr_base;	//Type capable of storing any valid PAddr (Process ID) value
+#define PADDR_WIDTH 16			//Width of PAddr
+
 typedef uint32_t MemAddr;       ///< Address into memory
 typedef uint32_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
@@ -123,6 +138,34 @@ typedef Float32  Float;         ///< Natural floating point type
 #define INTEGER_WIDTH 32
 #define MEMSIZE_MAX UINT32_MAX
 #endif
+
+struct MAddr{
+	static const MWidth VAddrWidth = 48; //MLDTODO Fetch these values from configuration;
+	static const MWidth PAddrWidth = 52; //MLDTODO Fetch these values from configuration;
+
+	MAddr():MAddr(0,0){}
+	MAddr(int) = delete;
+	MAddr(MAddr_base v, MWidth w):m_value(v), m_width(w){};
+
+	MAddr_base 	m_value;
+	MWidth 		m_width;
+
+	MAddr truncateLsb(MWidth) const;
+	MAddr truncateMsb(MWidth) const;
+	bool isValid(MWidth) const;
+	bool isValid() const {return isValid(MADDR_WIDTH_MAX);}
+	bool isValidPAddr() const {return isValid(PAddrWidth);}
+	bool isValidVAddr() const {return isValid(VAddrWidth);};
+	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
+};
+
+struct PAddr{
+	static const PWidth Width = 16; //MLDTODO Fetch these values from configuration;
+
+	PAddr_base m_value;
+	bool isValid() const;
+	SERIALIZE(a) {a & "ProcessId" & m_value;}
+};
 
 typedef Integer  FCapability;   ///< Capability for a family
 typedef Integer  PCapability;   ///< Capability for a place

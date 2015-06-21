@@ -13,6 +13,26 @@ const char* const ThreadStateNames[TST_NUMSTATES] = {
     "", "WAITING", "READY", "ACTIVE", "RUNNING", "SUSPENDED", "UNUSED", "TERMINATED"
 };
 
+bool MAddr::isValid(MWidth maxWidth) const
+{
+	if(this->m_width > maxWidth) { return false; }
+	return ((this->m_value & (~MAddr_base(0) << maxWidth)) == 0);
+}
+
+MAddr MAddr::truncateLsb(MWidth width) const{
+	return MAddr((this->m_value & ~(~MAddr_base(0) << width)), width);
+}
+
+MAddr MAddr::truncateMsb(MWidth width) const{
+	return MAddr((this->m_value & (~MAddr_base(0) << width)), width);
+}
+
+bool PAddr::isValid() const
+{
+	return ((this->m_value & (~PAddr_base(0) << this->Width)) == 0);
+}
+
+
 string PlaceID::str() const
 {
     ostringstream ss;
