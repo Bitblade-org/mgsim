@@ -26,20 +26,16 @@ public:
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
     bool isEnabled() const {return m_enabled;}
-    MemAddr getTableAddr() const {return m_tableAddr;}
+    MAddr getTableAddr() const {return m_tableAddr;}
     IODeviceID getManagerAddr() const {return m_managerAddr;}
 
     void setStatus(bool enabled) {m_enabled = enabled;}
-    void setTableAddr(MemAddr addr) {m_tableAddr = addr;}
+    void setTableAddr(MAddr addr) {m_tableAddr = addr;}
     void setManagerAddr(IODeviceID addr) {m_managerAddr = addr;}
 
 private:
-    //MLDNOTE Placing this information here for now.
-    size_t const	m_vaddrSize;
-    size_t const	m_paddrSize;
-    size_t const	m_pidSize;
     bool			m_enabled;
-    MemAddr			m_tableAddr;
+    MAddr			m_tableAddr;
     IODeviceID		m_managerAddr; //MLDTODO Verify type
 
     TLB const		m_dtlb;

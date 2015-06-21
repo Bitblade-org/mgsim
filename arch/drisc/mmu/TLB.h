@@ -27,9 +27,9 @@ public:
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
     void handleInvalidate();
-    void handleInvalidate(PID pid);
-    void handleInvalidate(PID pid, MemAddr addr);
-    void lookup(PID pid, MemAddr addr); //MLDTODO Return type
+    void handleInvalidate(PAddr pid);
+    void handleInvalidate(PAddr pid, MemAddr addr);
+    void lookup(PAddr pid, MemAddr addr); //MLDTODO Return type
 
 private:
     uint8_t	const		m_numTables;
