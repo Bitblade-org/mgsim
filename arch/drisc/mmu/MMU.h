@@ -33,13 +33,15 @@ public:
     void setTableAddr(MAddr addr) {m_tableAddr = addr;}
     void setManagerAddr(IODeviceID addr) {m_managerAddr = addr;}
 
-private:
+    //MLDTODO Make members private!!
     bool			m_enabled;
     MAddr			m_tableAddr;
     IODeviceID		m_managerAddr; //MLDTODO Verify type
 
-    TLB const		m_dtlb;
-    TLB	const		m_itlb;
+    TLB 			m_dtlb;
+    TLB				m_itlb;
+private:
+
 };
 
 

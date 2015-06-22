@@ -32,7 +32,6 @@ bool PAddr::isValid() const
 	return ((this->m_value & (~PAddr_base(0) << this->Width)) == 0);
 }
 
-
 string PlaceID::str() const
 {
     ostringstream ss;

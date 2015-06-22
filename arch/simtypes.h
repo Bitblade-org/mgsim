@@ -156,14 +156,21 @@ struct MAddr{
 	bool isValid() const {return isValid(MADDR_WIDTH_MAX);}
 	bool isValidPAddr() const {return isValid(PAddrWidth);}
 	bool isValidVAddr() const {return isValid(VAddrWidth);};
+
+	bool operator==(MAddr &other) const {return m_value == other.m_value && m_width == other.m_width;}
+	bool operator!=(MAddr &other) const {return m_value != other.m_value || m_width != other.m_width;}
 	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
 };
 
 struct PAddr{
+	PAddr(PAddr_base v):m_value(v){}
 	static const PWidth Width = 16; //MLDTODO Fetch these values from configuration;
 
 	PAddr_base m_value;
 	bool isValid() const;
+
+	bool operator==(PAddr &other) const {return m_value == other.m_value;}
+	bool operator!=(PAddr &other) const {return m_value != other.m_value;}
 	SERIALIZE(a) {a & "ProcessId" & m_value;}
 };
 

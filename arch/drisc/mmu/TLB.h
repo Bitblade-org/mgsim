@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <sim/inspect.h>
 #include <arch/simtypes.h>
@@ -26,14 +27,15 @@ public:
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
-    void handleInvalidate();
-    void handleInvalidate(PAddr pid);
-    void handleInvalidate(PAddr pid, MemAddr addr);
-    void lookup(PAddr pid, MemAddr addr); //MLDTODO Return type
+    void Invalidate();
+    void Invalidate(PAddr pid);
+    void Invalidate(PAddr pid, MAddr addr);
+    DTlbEntry* lookup(PAddr pid, MAddr addr);
+    void store(DTlbEntry &entry);
 
 private:
     uint8_t	const		m_numTables;
-    std::vector<Table*>	m_tables; 		//MLDTODO Am I absolutely certain this does not require a destructor?
+    std::vector<Table>	m_tables;
 };
 
 } /* namespace mmu */
