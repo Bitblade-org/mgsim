@@ -109,11 +109,13 @@ public:
 class IMemoryAdmin
 {
 public:
+	//MLDNOTE Deze 4 verdwijnen in principe
     virtual void Reserve(MemAddr address, MemSize size, ProcessID pid, int perm) = 0;
     virtual void Unreserve(MemAddr address, MemSize size) = 0;
     virtual void UnreserveAll(ProcessID pid) = 0;
     virtual bool CheckPermissions(MemAddr address, MemSize size, int access) const = 0;
 
+	//MLDNOTE Interface simulatie <> kernel, console
     virtual void Read (MemAddr address, void* data, MemSize size) const = 0;
     virtual void Write(MemAddr address, const void* data, const bool* mask, MemSize size) = 0;
 
