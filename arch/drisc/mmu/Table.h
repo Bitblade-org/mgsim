@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <functional>
+#include <iomanip>
 
 #include <sim/inspect.h>
 #include <sim/kernel.h>
@@ -99,12 +100,12 @@ public:
     Table(const std::string& name, Object& parent); //Lets try this without a clock
     Table(const Table&) = delete; //MLDQUESTION Needed because I use pointers?
 
-    MWidth getOffsetWidth(){return m_offsetWidth;}
-    MWidth getVAddrWidth(){return RMAddr::VirtWidth - m_offsetWidth;}
+    MWidth getOffsetWidth() const {return m_offsetWidth;}
+    MWidth getVAddrWidth() const {return RMAddr::VirtWidth - m_offsetWidth;}
 
     Line *find(RPAddr processId, RMAddr vAddr, LineType type);
 
-    Result storePending(RPAddr processId, RMAddr vAddr, RMAddr d$LineId, RMAddr &tableLineId);
+    Result storePending(RPAddr processId, RMAddr vAddr, RMAddr d$LineId, MAddr &tableLineId);
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
@@ -114,6 +115,7 @@ private:
 
     Line *find(const LineType type);
     Line *find(std::function<bool (Line&)> const&);
+    MAddr getIndex(const Line &line) const;
 
     void setPrioHigh(Line &entry);
 
@@ -122,11 +124,10 @@ private:
     Line& pickVictim_accessed();
     Line& pickVictim_lru();
 
+    //MLDTODO What to do when a locked entry matches an invalidation?
 	void freeLines();
 	void freeLines(const RPAddr &processId, const RMAddr *vAddr);
 	void freeLine(Line &line);
-
-    void printLruIndex(std::ostream& out, Line *entry) const;
 
    	EvictionStrategy 	m_evictionStrategy;
    	unsigned int 		m_numLines;
@@ -144,7 +145,7 @@ private:
    	//std::function<Line&(const Table&)> f_pickVictim;
 };
 
-EvictionStrategy getEvictionStrategy(std::string name);
+EvictionStrategy getEvictionStrategy(const std::string name);
 std::ostream& operator<<(std::ostream& os, EvictionStrategy strategy);
 
 } /* namespace mmu */
