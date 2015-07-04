@@ -103,12 +103,12 @@ struct Float64
 };
 
 #if defined(TARGET_MTALPHA)
-typedef uint64_t MAddr_base; 	//Type capable of storing any valid MAddr value
-typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
 #define MADDR_WIDTH_MAX 64U		//Architecture-dictated maximum width of MAddr
-typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
-typedef uint16_t PAddr_base;	//Type capable of storing any valid PAddr (Process ID) value
 #define PADDR_WIDTH 16			//Width of PAddr
+typedef uint64_t MAddr; 		//Type capable of storing any valid MAddr value
+typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
+typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
+typedef uint16_t PAddr;			//Type capable of storing any valid PAddr (Process ID) value
 
 typedef uint64_t MemAddr;       ///< Address into memory
 typedef uint64_t MemSize;       ///< Size of something in memory
@@ -120,13 +120,12 @@ typedef Float64  Float;         ///< Natural floating point type
 #define INTEGER_WIDTH 64
 #define MEMSIZE_MAX UINT64_MAX
 #elif defined(TARGET_MTSPARC) || defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL) || defined(TARGET_OR1K)
-typedef uint32_t MAddr_base; 	//Type capable of storing any valid MAddr value (Must be unsigned!)
-typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
 #define MADDR_WIDTH_MAX 32		//Architecture-dictated maximum width of MAddr
-
-typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
-typedef uint16_t PAddr_base;	//Type capable of storing any valid PAddr (Process ID) value
 #define PADDR_WIDTH 16			//Width of PAddr
+typedef uint32_t MAddr; 		//Type capable of storing any valid MAddr value (Must be unsigned!)
+typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
+typedef uint16_t PAddr;			//Type capable of storing any valid PAddr (Process ID) value
+typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
 
 typedef uint32_t MemAddr;       ///< Address into memory
 typedef uint32_t MemSize;       ///< Size of something in memory
@@ -139,40 +138,58 @@ typedef Float32  Float;         ///< Natural floating point type
 #define MEMSIZE_MAX UINT32_MAX
 #endif
 
-struct MAddr{
-	static const MWidth VAddrWidth = 48; //MLDTODO Fetch these values from configuration;
-	static const MWidth PAddrWidth = 52; //MLDTODO Fetch these values from configuration;
+//Restricted Memory Address
+#define RMADDR_AUTO_VALIDATE true
+struct RMAddr{
+	static const MWidth VirtWidth = 48; //MLDTODO Fetch these values from configuration;
+	static const MWidth PhysWidth = 52; //MLDTODO Fetch these values from configuration;
 
-	MAddr():MAddr(0,0){}
-	MAddr(int) = delete;
-	MAddr(MAddr_base v, MWidth w):m_value(v), m_width(w){};
+	RMAddr():RMAddr(0,0){}
+	RMAddr(int) = delete;
+	RMAddr(MAddr v, MWidth w);
 
-	MAddr_base 	m_value;
-	MWidth 		m_width;
+	MAddr 	m_value;
+	MWidth 	m_width;
 
-	MAddr truncateLsb(MWidth) const;
-	MAddr truncateMsb(MWidth) const;
-	bool isValid(MWidth) const;
-	bool isValid() const {return isValid(MADDR_WIDTH_MAX);}
-	bool isValidPAddr() const {return isValid(PAddrWidth);}
-	bool isValidVAddr() const {return isValid(VAddrWidth);};
+	static RMAddr factory	 (MAddr const a, MWidth const w ) {return RMAddr(a, w);}
+	static RMAddr p			 (MAddr const a				    ) {return factory(a, PhysWidth);}
+	static RMAddr v			 (MAddr const a				    ) {return factory(a, VirtWidth);}
+	static bool   isValid    (MAddr const a, MWidth const w );
+	static RMAddr truncateLsb(MAddr const a, MWidth const oldW, MWidth const by);
+	static RMAddr truncateMsb(MAddr const a, MWidth const newW);
 
-	bool operator==(MAddr &other) const {return m_value == other.m_value && m_width == other.m_width;}
-	bool operator!=(MAddr &other) const {return m_value != other.m_value || m_width != other.m_width;}
+	RMAddr truncateLsb(MWidth const by) const {return truncateLsb(m_value, m_width, by);}
+	RMAddr truncateMsb(MWidth const newW) const {return truncateMsb(m_value, newW);}
+
+	bool isValid() 		const {return isValid(m_value, m_width	 );}
+	bool isValidPAddr() const {return isValid(m_value, PhysWidth);}
+	bool isValidVAddr() const {return isValid(m_value, VirtWidth);}
+
+	bool operator==(RMAddr &other) const {return m_value == other.m_value && m_width == other.m_width;}
+	bool operator!=(RMAddr &other) const {return m_value != other.m_value || m_width != other.m_width;}
 	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
 };
 
-struct PAddr{
-	PAddr(PAddr_base v):m_value(v){}
-	static const PWidth Width = 16; //MLDTODO Fetch these values from configuration;
+//Restricted Process "Address"
+#define RPADDR_AUTO_VALIDATE true
+struct RPAddr{
+	static const PWidth PidWidth = 16; //MLDTODO Fetch these values from configuration;
 
-	PAddr_base m_value;
-	bool isValid() const;
+	RPAddr(PAddr v);
 
-	bool operator==(PAddr &other) const {return m_value == other.m_value;}
-	bool operator!=(PAddr &other) const {return m_value != other.m_value;}
-	SERIALIZE(a) {a & "ProcessId" & m_value;}
+	PAddr m_value;
+
+	static bool isValid (PAddr const a);
+	bool isValid() const {return isValid(m_value);}
+
+	bool operator==(RPAddr &other) const {return m_value == other.m_value;}
+	bool operator!=(RPAddr &other) const {return m_value != other.m_value;}
+	SERIALIZE(a) {a & "PAddr" & m_value;}
 };
+
+std::ostream& operator<<(std::ostream& os, RPAddr ra);
+std::ostream& operator<<(std::ostream& os, RMAddr ra);
+
 
 typedef Integer  FCapability;   ///< Capability for a family
 typedef Integer  PCapability;   ///< Capability for a place

@@ -12,24 +12,58 @@ namespace Simulator
 const char* const ThreadStateNames[TST_NUMSTATES] = {
     "", "WAITING", "READY", "ACTIVE", "RUNNING", "SUSPENDED", "UNUSED", "TERMINATED"
 };
+//
 
-bool MAddr::isValid(MWidth maxWidth) const
+
+RMAddr::RMAddr(MAddr val, MWidth w): m_value(val), m_width(w)
 {
-	if(this->m_width > maxWidth) { return false; }
-	return ((this->m_value & (~MAddr_base(0) << maxWidth)) == 0);
+#if (RMADDR_AUTO_VALIDATE == true)
+	if(!isValid(val, w)){
+		throw exceptf<InvalidArgumentException>("Invalid address for RMAddr[%d]: 0x%lX", w, val);
+	}
+#endif
 }
 
-MAddr MAddr::truncateLsb(MWidth width) const{
-	return MAddr((this->m_value & ~(~MAddr_base(0) << width)), width);
-}
-
-MAddr MAddr::truncateMsb(MWidth width) const{
-	return MAddr((this->m_value & (~MAddr_base(0) << width)), width);
-}
-
-bool PAddr::isValid() const
+RMAddr RMAddr::truncateLsb(MAddr const a, MWidth const oldW, MWidth const by)
 {
-	return ((this->m_value & (~PAddr_base(0) << this->Width)) == 0);
+	return RMAddr((a >> by), oldW - by);
+}
+
+RMAddr RMAddr::truncateMsb(MAddr const a, MWidth const newW)
+{
+	return RMAddr((a & (~((~MAddr(0)) << newW))), newW);
+}
+
+bool RMAddr::isValid(MAddr const a, MWidth const w)
+{
+	return ((a >> w) == 0);
+}
+
+RPAddr::RPAddr(PAddr v): m_value(v)
+{
+#if (RMADDR_AUTO_VALIDATE == true)
+	if(!RPAddr::isValid(v)){
+		throw exceptf<InvalidArgumentException>("Invalid address for RPAddr");
+	}
+#endif
+}
+
+bool RPAddr::isValid (PAddr const a)
+{
+	return ((a & (~PAddr(0) << RPAddr::PidWidth)) == 0);
+}
+
+std::ostream& operator<<(std::ostream& os, RPAddr ra)
+{
+	using namespace std;
+	os << "[" << hex << showbase << setw((ra.PidWidth+3)/4) << ra.m_value << "]";
+	return os;
+}
+std::ostream& operator<<(std::ostream& os, RMAddr ra)
+{
+	using namespace std;
+	os << "[" << hex << showbase << setw((ra.m_width+3)/4) << ra.m_value << "]";
+	return os;
 }
 
 string PlaceID::str() const

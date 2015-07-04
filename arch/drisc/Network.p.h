@@ -22,6 +22,31 @@ namespace Simulator
         ((name RemoteMessage)
          (variants
           (MSG_NONE)
+
+		  (MSG_SET_MMU_PROPERTY mmuProperty
+		   (state
+		    (MAddr			value)
+			(bool			typebit0)
+			(bool			typebit1)		//MLDTODO Enum
+		   	   ))
+
+		  (MSG_MMU_INVALIDATE mmuInvalidate
+		   (state
+			(bool           filterPid)		//MLDTODO Enum
+			(PAddr          processId)
+		    (bool			filterAddr)
+			(MAddr			addr)
+			   ))
+
+		  (MSG_DTLB_STORE dTlbStore
+		   (state
+			(uint8_t        table)
+			(PAddr          processId)
+			(MAddr			vAddr)
+			(MAddr			pAddr)
+			(uint8_t        perms)
+			   ))
+
           (MSG_ALLOCATE allocate
            (state
             (PlaceID        place)           ///< The place to allocate at
@@ -187,6 +212,16 @@ namespace Simulator
           (bool     exact)     ///< If the allocate was exact, unwind all the way
              ))
         // {% endcall %}
+
+		/// TLB Miss message (going backwards)
+	    // {% call gen_struct() %}
+	    ((name TlbMissMessage)
+	     (state
+	      (bool     isDTlb)
+		  (PAddr    processId)
+		  (MAddr	addr)
+		     ))
+		// {% endcall %}
 
 class Network : public Object, public Inspect::Interface<Inspect::Read>
 {

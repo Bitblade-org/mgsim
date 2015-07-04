@@ -7,7 +7,7 @@ namespace mmu{
 MMU::MMU(const std::string& name, Object& parent)
 	: Object(name, parent),
 	m_enabled (false),
-	m_tableAddr (0, MAddr::PAddrWidth),
+	m_tableAddr (0, RMAddr::PhysWidth),
 	m_managerAddr (0),
 	m_dtlb("dtlb", *this),
 	m_itlb("itlb", *this)
@@ -16,9 +16,9 @@ MMU::MMU(const std::string& name, Object& parent)
 void MMU::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*arguments*/) const{
     out << "The MMU blablabla\n\n";
     out << "                MMU is : " 	<< (m_enabled ? "enabled." : "DISABLED!") << "\n";
-    out << "   Virtual address size: " 	<< MAddr::VAddrWidth 	<< " bytes\n";
-    out << "  Physical address size: " 	<< MAddr::PAddrWidth 	<< " bytes\n";
-    out << "        Process ID size: " 	<< PAddr::Width		 	<< " bytes\n";
+    out << "   Virtual address size: " 	<< unsigned(RMAddr::VirtWidth) 	<< " bytes\n";
+    out << "  Physical address size: " 	<< unsigned(RMAddr::PhysWidth) 	<< " bytes\n";
+    out << "        Process ID size: " 	<< unsigned(RPAddr::PidWidth) 	<< " bytes\n";
     out << "     Page table address: "  << std::hex << m_tableAddr.m_value << "\n";
     out << "        Manager address: "  << std::hex << m_managerAddr << "\n";
     out << "\n";

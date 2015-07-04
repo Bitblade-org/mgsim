@@ -12,14 +12,40 @@ namespace drisc {
 namespace mmu {
 
 MMUTester::MMUTester(MMU &mmu) {
-	DTlbEntry e1 = DTlbEntry(12);
-	e1.pAddr = MAddr(0x0123456789ABCDEF, MAddr::PAddrWidth - 12);
-	e1.vAddr = MAddr(0xFEDCBA9876543210, MAddr::VAddrWidth - 12);
-	e1.processId = 0x0001;
-	e1.read = true;
-	e1.write = true;
+	RMAddr p = RMAddr::p(0);
+	RMAddr v = RMAddr::v(0x10000);
 
-	mmu.m_dtlb.store(e1);
+	DTlbEntry e = DTlbEntry(12);
+	e.read = true;
+	e.write = true;
+
+	for(int i=0; i<32; i++){
+		e.processId.m_value = i;
+		e.pAddr = p.truncateLsb(12);
+		e.vAddr = v.truncateLsb(12);
+		mmu.m_dtlb.store_entry(e);
+		p.m_value += 0x1111080000;
+		v.m_value += 0x1111080000;
+	}
+
+	mmu.m_dtlb.Invalidate(5);
+	mmu.m_dtlb.Invalidate(10);
+	mmu.m_dtlb.Invalidate(15);
+	mmu.m_dtlb.Invalidate(20);
+	mmu.m_dtlb.Invalidate(25);
+	mmu.m_dtlb.Invalidate(30);
+
+	e.processId.m_value = 0xFF;
+	e.pAddr = RMAddr::p(0xfffffffff).truncateLsb(12);
+	e.vAddr = RMAddr::v(0xffffffff).truncateLsb(12);
+
+	mmu.m_dtlb.store_entry(e);
+	mmu.m_dtlb.store_entry(e);
+	mmu.m_dtlb.store_entry(e);
+	mmu.m_dtlb.store_entry(e);
+	mmu.m_dtlb.store_entry(e);
+
+	assert(mmu.m_dtlb.lookup(RPAddr(0xFF), RMAddr::v(0xffffffff)) != NULL);
 }
 
 } /* namespace mmu */

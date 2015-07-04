@@ -21,21 +21,29 @@ class TLB :	public Object, public Inspect::Interface<Inspect::Info | Inspect::Re
 
 //MLDTODO Keep statistics!
 public:
-	//MLDTODO Should probably include IIOBus& iobus and other network stuff later on
     TLB(const std::string& name, Object& parent);
+    ~TLB();
+
+    Result lookup(RPAddr const processId, RMAddr const vAddr, int const d$line, bool *r, bool *w, RMAddr *pAddr);
+    MWidth getMinOffsetSize(){return m_tables[0]->getOffsetWidth();}
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
-    void Invalidate();
-    void Invalidate(PAddr pid);
-    void Invalidate(PAddr pid, MAddr addr);
-    DTlbEntry* lookup(PAddr pid, MAddr addr);
-    void store(DTlbEntry &entry);
-
 private:
+    void unlink(DTlbEntry &entry);
+    void Invalidate();
+    void Invalidate(RPAddr pid);
+    void Invalidate(RPAddr pid, RMAddr addr);
+
+    Result store_entry(DTlbEntry &entry);
+    Result store_pending_entry(RPAddr processId, RMAddr vAddr, int D$line);
+
+    DTlbEntry* find(RPAddr processId, RMAddr vAddr);
+
+    MMU					&m_mmu;
     uint8_t	const		m_numTables;
-    std::vector<Table>	m_tables;
+    std::vector<Table*>	m_tables;
 };
 
 } /* namespace mmu */

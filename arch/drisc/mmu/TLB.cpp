@@ -4,61 +4,120 @@
 
 #include <sim/config.h>
 #include <algorithm>
+#include <assert.h>
 
 namespace Simulator {
 namespace drisc {
 namespace mmu {
 
+//MLDTODO-DOC On reserve of +L-P entry: What to do if the pickDestination algo returns a locked entry? Nothing for now...
+
 TLB::TLB(const std::string& name, Object& parent)
 	: Object(name, parent),
-	m_numTables(GetConf("NumberOfTables", size_t))//,
-
-	//The number of Table objects is not known before runtime, so initialisation of each Table
-	//object here is not an option
-
-	//m_tables(m_numTables) !!!Calls default constructor which forces a call to a constructor of Object
-	//Having a default constructor is not possible since the name needs to be calculated.
+	m_mmu(parent),
+	m_numTables(GetConf("NumberOfTables", size_t)),
+	m_tables(0) 	//MLDTODO Must be a way to initialise to the right size.
 {
-	for( int i=0; i<m_numTables; i++){
-		m_tables.emplace_back(("table" + std::to_string(i)), *this);
-		//Vector needs to grow, causing a call to the move constructor of Table, causing a call to
-		//the move constructor of Object, which is deleted.
-
-		//Tried a vector of pointers to Table objects created using m_tables.push_back(new ...),
-		//but the pointers I retrieved using m_tables.at(i) were == NULL. Can't figure out why.
-		//Same happened when using multiple steps, Table *table = new ...; m_tables.push_back(table)
-
-		//Tried a vector of unique_ptr<Table>> objects, but had the same problems as with
-		//a vector of pointers...
-
-//		std::unique_ptr<Table> ptr(new Table("table" + std::to_string(i), *this));
-//		std::cout << "Table address: " << ptr.get() << std::endl;
-//
-//		m_tables.push_back(std::move(ptr));
+	if(m_numTables == 0){
+        throw exceptf<InvalidArgumentException>("%s must have at least one table.", name);
 	}
+
+	for( int i=0; i<m_numTables; i++){
+
+		Table *table = new Table("table" + std::to_string(i), *this);
+		if(i > 0 && table->getOffsetWidth() <= m_tables[i-1]->getOffsetWidth()){
+            throw exceptf<InvalidArgumentException>("TLB tables must have ascending offset sizes.");
+		}
+		m_tables.emplace_back(table);
+	}
+}
+
+TLB::~TLB(){
+	auto lambda = [](Table *table){delete table;};
+	std::for_each(m_tables.begin(), m_tables.end(), lambda);
+}
+
+// SUCCESS: Address in TLB
+// DELAYED: Address not in TLB, expecting refill
+// FAILED:  Stalled or Address not in TLB and unable to transmit refill request
+// domain_error: TLB is disabled
+Result TLB::lookup(RPAddr const processId, RMAddr const vAddr, int const d$line, bool *r, bool *w, RMAddr *pAddr){
+	if(!m_mmu.isEnabled()){
+		throw exceptf<std::domain_error>("TLB cannot handle lookups while disabled");
+	}
+
+	if(!processId.isValid()){
+		throw exceptf<std::invalid_argument>("Process ID is not valid"); //MLDTODO see if using std::exceptions is ok.
+	}
+
+	if(!vAddr.isValid()){
+		throw exceptf<std::invalid_argument>("Virtual Address is not valid"); //MLDTODO see if using std::exceptions is ok.
+	}
+
+	if(vAddr.m_width != m_tables[0]->getVAddrWidth()){
+		throw exceptf<std::invalid_argument>("Virtual Address should be of width %d", m_tables[0]->getVAddrWidth()); //MLDTODO see if using std::exceptions is ok.
+	}
+
+	DTlbEntry *entry = find(processId, vAddr);
+	if(entry == NULL){
+		DTlbEntry dest = m_tables[0]->pickDestination();
+
+		if(dest.locked){
+			return Result::FAILED;
+		}
+
+		m_tables[0]->invalidate(dest);
+
+		dest.processId = processId;
+		dest.vAddr = vAddr;
+		dest.
+
+
+		dest.d$line =
+
+	}
+}
+
+DTlbEntry* TLB::find(RPAddr processId, RMAddr vAddr){
+	DTlbEntry *discoveredEntry = NULL; //MLDTODO Remove after debugging
+
+	for(Table *table : m_tables){
+		RMAddr truncatedAddr = vAddr.truncateLsb(table->getVAddrWidth());
+		DTlbEntry *entry = *table->lookup(processId, truncatedAddr);
+		if(entry != NULL){
+			if(discoveredEntry != NULL){ //MLDTODO Remove after debugging
+				throw exceptf<std::domain_error>("vAddr %lX exists in multiple tables!", vAddr);
+			}
+			discoveredEntry = entry;
+		}
+	}
+
+	return discoveredEntry;
 }
 
 void TLB::Invalidate(){
-	auto lambda = [](Table &table){table.invalidate();};
+	auto lambda = [](Table *table){table->invalidate();};
 	std::for_each(m_tables.begin(), m_tables.end(), lambda);
 }
 
-void TLB::Invalidate(PAddr pid){
-	auto lambda = [pid](Table &table){table.invalidate(pid);};
+void TLB::Invalidate(RPAddr pid){
+	auto lambda = [pid](Table *table){table->invalidate(pid);};
 	std::for_each(m_tables.begin(), m_tables.end(), lambda);
 }
 
-void TLB::Invalidate(PAddr pid, MAddr addr){
-	for(Table &table : m_tables){
-		MAddr tableAddr = addr.truncateLsb(table.getVAddrWidth());
-		table.invalidate(pid, tableAddr);
+void TLB::Invalidate(RPAddr pid, RMAddr addr){
+	for(Table *table : m_tables){
+		RMAddr tableAddr = addr.truncateLsb(table->getVAddrWidth());
+		table->invalidate(pid, tableAddr);
 	}
 }
 
-DTlbEntry* TLB::lookup(PAddr pid, MAddr addr){
-	for(Table &table : m_tables){
-		MAddr tableAddr = addr.truncateLsb(table.getVAddrWidth());
-		DTlbEntry *res = table.lookup(pid, tableAddr);
+DTlbEntry* TLB::lookup(RPAddr pid, RMAddr addr){ //MLDTODO Rename to processId and vAddr
+	assert(addr.m_width == RMAddr::VirtWidth);
+
+	for(Table *table : m_tables){
+		RMAddr tableAddr = addr.truncateLsb(table->getOffsetWidth());
+		DTlbEntry *res = table->lookup(pid, tableAddr);
 
 		if(res != NULL){
 			return res;
@@ -67,25 +126,29 @@ DTlbEntry* TLB::lookup(PAddr pid, MAddr addr){
 	return NULL;
 }
 
-void TLB::store(DTlbEntry &entry){
-	std::cout << "TLB::store1" << std::endl;
-//	for(int i=0; i<m_numTables; i++){
-//		std::unique_ptr<Table> ptr = m_tables.at(i);
-//		std::cout << "Table from vector, addr: " << ptr.get() << std::endl;
-//	}
-	for(Table &table : m_tables){
-		std::cout << "Table addr: " << &table << std::endl;
-		std::cout << "TLB::store2" << std::endl;
-		if(table.getVAddrWidth() == entry.vAddr.m_width){
-			std::cout << "TLB::store3" << std::endl;
-			table.store(entry);
-			return;
+//MLDTODO See if offset is already stored in D$
+//MLDTODO Find the correct type for D$line
+Result TLB::store_pending_lookup(RPAddr processId, RMAddr vAddr, RMAddr offset, int D$line){
+	for(Table *table : m_tables){
+		if(table->getVAddrWidth() == entry.vAddr.m_width){
+			return table->store(entry);
 		}
-		std::cout << "TLB::store4" << std::endl;
 	}
-	std::cout << "TLB::store5" << std::endl;
-	//MLDTODO Throw exception!!!
-	std::cerr << "Could not add DTlbEntry, cannot find table with correct addrWidth in TLB::store" << std::endl;
+
+	throw exceptf<InvalidArgumentException>(*this, "Invalid address length"); //MLDTODO Rewrite after change to msg
+}
+
+//MLDTODO Use store message with line-id
+//SUCCESS: Successfully stored.
+//FAIL	 : Destination entry locked
+Result TLB::store_entry(DTlbEntry &entry){
+	for(Table *table : m_tables){
+		if(table->getVAddrWidth() == entry.vAddr.m_width){
+			return table->store(entry);
+		}
+	}
+
+	throw exceptf<InvalidArgumentException>(*this, "Invalid address length"); //MLDTODO Rewrite after change to msg
 }
 
 void TLB::Cmd_Info(std::ostream& out, const std::vector<std::string>& /* arguments */) const{

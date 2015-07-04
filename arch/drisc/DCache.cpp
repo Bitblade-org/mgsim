@@ -33,7 +33,7 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     InitBuffer(m_writebacks, clock, "ReadWritebacksBufferSize"),
     InitBuffer(m_outgoing, clock, "OutgoingBufferSize"),
     m_wbstate(),
-    InitSampleVariable(numRHits, SVC_CUMULATIVE),
+    InitSampleVariable(numRHits, SVC_CUMULATIVE),//MLDTODO Registreren variabelen voorbeeld
     InitSampleVariable(numDelayedReads, SVC_CUMULATIVE),
     InitSampleVariable(numEmptyRMisses, SVC_CUMULATIVE),
     InitSampleVariable(numInvalidRMisses, SVC_CUMULATIVE),
@@ -87,8 +87,8 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     m_data.resize(m_lines.size() * m_lineSize);
     m_valid = new bool[m_lines.size() * m_lineSize];
 
-    RegisterStateArray(m_valid, m_lines.size() * m_lineSize, "valid");
-    RegisterStateVariable(m_data, "data");
+    RegisterStateArray(m_valid, m_lines.size() * m_lineSize, "valid"); //MLDTODO Registreren variabelen voorbeeld
+    RegisterStateVariable(m_data, "data");//MLDTODO Registreren variabelen voorbeeld
 
     for (size_t i = 0; i < m_lines.size(); ++i)
     {
@@ -102,7 +102,7 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
 
     m_wbstate.size   = 0;
     m_wbstate.offset = 0;
-    RegisterStateObject(m_wbstate, "wbstate");
+    RegisterStateObject(m_wbstate, "wbstate");//MLDTODO Registreren variabelen voorbeeld
 }
 
 void DCache::ConnectMemory(IMemory* memory)
@@ -237,6 +237,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     if (result == DELAYED)
     {
         // A new line has been allocated; send the request to memory
+        //MLDTODO DCache miss -> TLB Lookup -> Interface hier.
+
         Request request;
         request.write     = false;
         request.address   = address - offset;
@@ -395,7 +397,10 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
     Request request;
     request.write     = true;
     request.address   = address - offset;
-    request.wid       = tid;
+    request.wid       = tid;//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
+    //MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
+    //MLDNOTE Beginnen met een stall.
+    //MLDTODO Hoort ook weer in scriptie.
 
     COMMIT{
     std::copy((char*)data, ((char*)data)+size, request.data.data+offset);

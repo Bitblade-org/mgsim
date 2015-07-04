@@ -26,16 +26,16 @@ public:
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
     bool isEnabled() const {return m_enabled;}
-    MAddr getTableAddr() const {return m_tableAddr;}
+    RMAddr getTableAddr() const {return m_tableAddr;}
     IODeviceID getManagerAddr() const {return m_managerAddr;}
 
     void setStatus(bool enabled) {m_enabled = enabled;}
-    void setTableAddr(MAddr addr) {m_tableAddr = addr;}
+    void setTableAddr(RMAddr addr) {m_tableAddr = addr;}
     void setManagerAddr(IODeviceID addr) {m_managerAddr = addr;}
 
     //MLDTODO Make members private!!
     bool			m_enabled;
-    MAddr			m_tableAddr;
+    RMAddr			m_tableAddr;
     IODeviceID		m_managerAddr; //MLDTODO Verify type
 
     TLB 			m_dtlb;

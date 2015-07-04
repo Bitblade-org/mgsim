@@ -18,84 +18,115 @@ namespace mmu {
 
 enum class EvictionStrategy {PSEUDO_RANDOM=0, ACCESSED=1, LRU=2};
 
-struct DTlbEntry;
+union Line;
 
-struct AlgData_A{
-	bool 		accessed;
+union Prio{
+	struct a{
+		bool 	accessed;
+	};
+
+	struct lru{
+		Line	*previous;
+		Line 	*next;
+	};
 };
 
-struct AlgData_LRU{
-	DTlbEntry	*previous;
-	DTlbEntry 	*next;
+union Line{
+	Line() = delete;
+	Line(MWidth offsetWidth);
+
+	struct noEntry{
+		Prio 	prio;
+		bool	present;
+		bool	locked;
+	};
+
+	struct normalEntry{
+		Prio 	prio;
+		bool	present;
+		bool 	locked;
+		RPAddr	processId;
+		RMAddr	vAddr;
+		bool	read;
+		bool	write;
+		RMAddr	pAddr;
+	};
+
+	struct pendingEntry{
+		Prio 	prio;
+		bool	present;
+		bool 	locked;
+		RPAddr	processId;
+		RMAddr	vAddr;
+		RMAddr	d$lineId;
+	};
 };
 
-union AlgData{
-	AlgData_A	a;
-	AlgData_LRU	lru;
-};
-
-struct DTlbEntry{
-	DTlbEntry() = delete;
-	DTlbEntry(MWidth offsetWidth);
-	PAddr 		processId;
-	MAddr		vAddr;
-	MAddr		pAddr;
-
-	bool 		read;
-	bool 		write;
-	bool 		present;
-	AlgData		algData;
-};
+//struct DTlbEntry{ //MLDTODO Refactor to DTlbLine
+//	DTlbEntry() = delete;
+//	DTlbEntry(MWidth offsetWidth);
+//	RPAddr 		processId;
+//	RMAddr		vAddr;
+//	RMAddr		pAddr;
+//
+//	bool 		read;
+//	bool 		write;
+//	bool 		present;
+//	bool 		locked;
+//	Prio		algData;
+//};
 
 //MLDTODO Not extending MMIOComponent, I consider MMIOComponent deprecated.
 class Table : public Object, public Inspect::Interface<Inspect::Info | Inspect::Read>
 {
+	//Nomenclature: A (pending) entry is written to a free (= !p && !l) line.
+
+	friend class TLB;
 	//MLDTODO Keep statistics
 	//MLDTODO Destructor...
 public:
     Table(const std::string& name, Object& parent); //Lets try this without a clock
-//    Table(Table &&other):
-//    	 m_evictionStrategy(other.m_evictionStrategy),
-//		 m_numEntries(other.m_numEntries),
-//		 m_offsetWidth(other.m_offsetWidth),
-//		 m_entries(std::move(other.m_entries)),
-//		 m_head(other.m_head),
-//		 m_indexWidth(other.m_indexWidth){}
-    //Table(Table&) = delete; //MLDQUESTION Needed because I use pointers?
+    Table(const Table&) = delete; //MLDQUESTION Needed because I use pointers?
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
-    void store(DTlbEntry &entry);
-    DTlbEntry* lookup(PAddr processId, MAddr vAddr);
-    void invalidate();
-    void invalidate(PAddr processId);
-    void invalidate(PAddr processId, MAddr vAddr);
-
     MWidth getOffsetWidth(){return m_offsetWidth;}
-    MWidth getVAddrWidth(){return MAddr::VAddrWidth - m_offsetWidth;}
+    MWidth getVAddrWidth(){return RMAddr::VirtWidth - m_offsetWidth;}
 
-    //void operator=(Table&) = delete; //MLDQUESTION Needed because I use pointers?
+    Line *find(RPAddr processId, RMAddr vAddr);
+
+    Result storePendingEntry(Line &entry);
+
+    void operator=(Table&) = delete; //MLDQUESTION Needed because I use pointers?
 private:
-    void invalidate(DTlbEntry &entry);
-    DTlbEntry& pickDestination();
-    DTlbEntry* pickEmpty();
-    void prioritizeEntry(DTlbEntry &entry);
-    DTlbEntry& pickVictim_random();
-    DTlbEntry& pickVictim_accessed();
-    DTlbEntry& pickVictim_lru();
-    MAddr_base getIndex(DTlbEntry *entry) const;
+    Line *findFree();
 
+    void setPrioHigh(Line &entry);
 
-   	EvictionStrategy 		m_evictionStrategy;
-   	unsigned int 			m_numEntries;
-   	MWidth 					m_offsetWidth;
-   	std::vector<DTlbEntry>	m_entries;
+    void invalidate();
+    void invalidate(RPAddr processId);
+    void invalidate(RPAddr processId, RMAddr vAddr);
+    void invalidate(Line &entry);
 
-   	// For Least Recently Used eviction
-   	DTlbEntry 				*m_head;
-   	// For Accessed / Pseudo-Random eviction
-   	MWidth					m_indexWidth;
+    Line& pickDestination();
+    Line& pickVictim_random();
+    Line& pickVictim_accessed();
+    Line& pickVictim_lru();
+
+    void printLruIndex(std::ostream& out, Line *entry) const;
+
+   	EvictionStrategy 	m_evictionStrategy;
+   	unsigned int 		m_numEntries;
+   	MWidth 				m_offsetWidth;
+   	std::vector<Line>	m_entries;
+
+   	//			     e2.prev	   e2.next
+   	//				   MRU			 LRU
+   	//			HEAD - [e1] - [e2] - [e3] - TAIL
+   	Line 				*m_head;    	// For Least Recently Used eviction
+   	Line				*m_tail;
+   	MWidth				m_indexWidth;   // For Accessed / Pseudo-Random eviction
 };
 
 EvictionStrategy getEvictionStrategy(std::string name);
