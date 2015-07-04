@@ -34,3 +34,6 @@ stamp-h1
 /tinysim
 /tinysim-dyn
 /programs/nobounds.ini
+*.test
+*.trs
+*-bin
