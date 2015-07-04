@@ -11,11 +11,13 @@
 #include <arch/simtypes.h>
 
 #include "Table.h"
+#include "MMU.h"
 
 namespace Simulator {
 namespace drisc {
 namespace mmu {
 
+class MMU;
 //MLDNOTE Not extending MMIOComponent. TLB is not a memory component itself. Table probably is.
 class TLB :	public Object, public Inspect::Interface<Inspect::Info | Inspect::Read> {
 
@@ -31,15 +33,15 @@ public:
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
 private:
-    void unlink(DTlbEntry &entry);
+    void unlink(Line &line);
     void Invalidate();
     void Invalidate(RPAddr pid);
     void Invalidate(RPAddr pid, RMAddr addr);
 
-    Result store_entry(DTlbEntry &entry);
+    Result store_entry(Line &line);
     Result store_pending_entry(RPAddr processId, RMAddr vAddr, int D$line);
 
-    DTlbEntry* find(RPAddr processId, RMAddr vAddr);
+    Line* find(RPAddr processId, RMAddr vAddr);
 
     MMU					&m_mmu;
     uint8_t	const		m_numTables;

@@ -1,147 +1,84 @@
 #include "Table.h"
 
-#include <cstdint>
-#include <cstring>
-
-#include <sim/config.h>
-#include <sim/except.h>
-#include <algorithm>
-#include <iomanip>
-#include <cmath>
-#include <ctgmath>
-
 namespace Simulator {
 namespace drisc {
 namespace mmu {
 
-Line::Line(MWidth offsetWidth){
 
-}
-
-
-Table::Table(const std::string& name, Object& parent) :
-		Object(name, parent), m_evictionStrategy(getEvictionStrategy(GetConf("EvictionStrategy", std::string))),
-		m_numEntries(GetConf("NumberOfEntries", uint64_t)), //MLDTODO Refactor to numLines
-		m_offsetWidth(GetConf("OffsetSize", size_t)),
-		m_entries(m_numEntries,	Line(m_offsetWidth)),
-		m_head(NULL),
-		m_tail(NULL),
-		m_indexWidth(std::log2(m_numEntries))
+Table::Table(const std::string& name, Object& parent):
+	Object(name, parent),
+	m_evictionStrategy(getEvictionStrategy(GetConf("EvictionStrategy", std::string))),
+	m_numLines(GetConf("NumberOfEntries", uint64_t)), //MLDTODO Refactor to numLines
+	m_offsetWidth(GetConf("OffsetSize", size_t)),
+	m_lines(m_numLines,	Line(m_offsetWidth)),
+	m_head(NULL),
+	m_tail(NULL),
+	m_indexWidth(std::log2(m_numLines))
 {
+	//MLDTODO Force numLines is power of 2 when random is used (random, accessed)
 
-	if(m_numEntries == 0){
-		throw exceptf<std::invalid_argument>("A table cannot be initialised with 0 lines");
-	}
 
-	if (m_evictionStrategy != EvictionStrategy::LRU) {
-		if (((m_numEntries & (m_numEntries - 1)) != 0)) {
-			throw exceptf<std::invalid_argument>("The number of entries in a table must be a factor of 2");
-		}
-
-		m_head = &(m_entries[0]);
-		m_tail = &(m_entries[m_numEntries-1]);
-
-		for(int i=1; i<m_numEntries; i++){
-			m_entries[i-1].noEntry. .algData.lru.next = &(m_entries[i]);
-			m_entries[i].algData.lru.previous = &(m_entries[i-1]);
-		}
-	}
 }
 
-Result Table::storePendingEntry(DTlbEntry &entry){}
-
-////SUCCESS: Successfully stored.
-////FAIL	 : Destination entry locked
-//Result Table::storePendingEntry(DTlbEntry &entry) {
-//	DTlbEntry *dest = find(entry.processId, entry.vAddr);
-//
-//	if (dest == NULL) {
-//		dest = &pickDestination();
-//		if (dest->locked) {
-//			return Result::FAILED;
-//		}
-//		invalidate(*dest);
-//
-//		dest->processId = entry.processId;
-//		dest->vAddr = entry.vAddr;
-//	} else if (dest->locked) {
-//		return Result::FAILED;
-//	}
-//
-//	dest->pAddr = entry.pAddr;
-//	dest->read = entry.read;
-//	dest->write = entry.write;
-//	dest->present = true;
-//
-//	setPrioHigh(*dest);
-//
-//	return Result::SUCCESS;
-//}
-
-
-//MLDTODO What to do when a locked entry matches an invalidation?
-void Table::invalidate() {
-	auto lambda = [](DTlbEntry &entry) {invalidate(entry);};
-	std::for_each(m_entries.begin(), m_entries.end(), lambda);
+Line *Table::find(RPAddr processId, RMAddr vAddr, LineType type)
+{
+	auto lambda =
+			[&processId, &vAddr, &type]
+			(Line &line)
+			{return line.is(&processId, &vAddr, type);};
+	return find(lambda);
 }
 
-void Table::invalidate(RPAddr processId) {
-	for (DTlbEntry &entry : m_entries) {
-		if (entry.processId == processId) {
-			invalidate(entry);
-		}
+Line *Table::find(LineType type)
+{
+	auto lambda = [type](Line &line) {return line.is(type);};
+	return find(lambda);
+}
+
+Line *Table::find(std::function<bool (Line&)> const &lambda)
+{
+	auto res = std::find_if(m_lines.begin(), m_lines.end(), lambda);
+	if (res == m_lines.end()) {
+		return NULL;
+	} else {
+		return &(*res);
 	}
 }
 
-void Table::invalidate(RPAddr processId, RMAddr vAddr) {
-	DTlbEntry *entry = find(processId, vAddr);
-	if (entry != NULL) {
-		invalidate(*entry);
-	}
-}
+//MLDTODO Does this function have to return a Result obj?
+Result Table::storeNormal(RMAddr tableLineId, bool read, bool write, RMAddr pAddr, RMAddr &d$LineId)
+{
+	Line &line = m_lines.at(tableLineId.m_value);
 
-void Table::invalidate(DTlbEntry &entry) {
-	if(entry.locked == true){
-		throw exceptf<std::domain_error>("Attempt to invalidate locked TLB line");
+	// Should be impossible anyway! Might as well assert!
+	if(!line.is(LineType::PENDING)){
+		return Result::FAILED;
 	}
 
-	entry.present = false;
+	d$LineId = line.pending.d$lineId;
+	line.type.type = LineType::N_LOCKED;
+	line.normal.read = read;
+	line.normal.write = write;
+	line.normal.pAddr = pAddr;
+
+	return Result::SUCCESS;
 }
 
+Result Table::storePending(RPAddr processId, RMAddr vAddr, RMAddr d$LineId, RMAddr &tableLineId){}
 
-DTlbEntry* Table::find(RPAddr processId, RMAddr vAddr) {
-	for (DTlbEntry &entry : m_entries) {
-		if (entry.vAddr == vAddr && entry.processId == processId) {
-			return &entry;
-		}
-	}
-	return NULL;
+void Table::Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const{
+	(void)(out);
+	(void)(arguments);
+}
+void Table::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const{
+	(void)(out);
+	(void)(arguments);
 }
 
-void Table::setPrioHigh(DTlbEntry &entry) {
-	if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
-		entry.algData.a.accessed = true;
-	} else if (this->m_evictionStrategy == EvictionStrategy::LRU) {
-		if(&entry != m_head){
-			if(&entry == m_tail){
-				m_tail = entry.algData.lru.previous;
-				m_tail->algData.lru.next = NULL;
-			}else{
-				DTlbEntry *prev = entry.algData.lru.previous;
-				DTlbEntry *next = entry.algData.lru.next;
-				prev->algData.lru.next = next;
-				next->algData.lru.previous = prev;
-			}
-			entry.algData.lru.previous = NULL;
-			entry.algData.lru.next = m_head;
-			m_head->algData.lru.previous = &entry;
-			m_head = &entry;
-		}
-	}
-}
+void Table::setPrioHigh(Line &entry){}
 
-DTlbEntry& Table::pickDestination() {
-	DTlbEntry *dest = findFree();
+Line& Table::pickDestination() {
+	Line *dest = find(LineType::FREE);
 
 	if (dest == NULL) {
 		if (m_evictionStrategy == EvictionStrategy::PSEUDO_RANDOM) {
@@ -156,109 +93,73 @@ DTlbEntry& Table::pickDestination() {
 	return *dest;
 }
 
-DTlbEntry& Table::pickVictim_random() {
+Line& Table::pickVictim_random() {
+	MAddr mask = m_numLines - 1;
 	MAddr index = 0;
-	MAddr mask = ((~MAddr(0)) - 1);
-	for (unsigned i = 0; i < m_numEntries; i++) {
-		DTlbEntry entry = m_entries.at(i);
-
-		index |= (entry.pAddr.m_value & mask) << i;
+	for(Line &line : m_lines){
+		index ^= line.normal.vAddr.m_value & mask;
 	}
-	return m_entries.at(index);
+
+	return m_lines.at(index);
 }
 
-DTlbEntry& Table::pickVictim_accessed() {
-	auto lambda =
-			[](DTlbEntry &entry) {return (entry.algData.a.accessed == true);};
-	auto res = std::find_if(m_entries.begin(), m_entries.end(), lambda);
-	if (res == m_entries.end()) {
+Line& Table::pickVictim_accessed() {
+	auto lambda = [](Line &line){return (line.is(LineType::NORMAL) && !line.normal.prio.a.accessed);};
+	Line *res = find(lambda);
+
+	if(res == NULL){
 		return pickVictim_random();
-	} else {
-		return *res;
 	}
+
+	return *res;
 }
 
-DTlbEntry& Table::pickVictim_lru() {
+Line& Table::pickVictim_lru() {
 	return *m_tail;
 }
 
-DTlbEntry* Table::findFree() {
-	auto lambda = [](DTlbEntry &entry) {return (entry.present == false);};
-	auto res = std::find_if(m_entries.begin(), m_entries.end(), lambda);
-	if (res == m_entries.end()) {
-		return NULL;
-	} else {
-		return &(*res);
-	}
+void Table::freeLines(){
+	auto lambda = [&](Line &line) {freeLine(line);};
+	std::for_each(m_lines.begin(), m_lines.end(), lambda);
 }
 
-void Table::Cmd_Info(std::ostream& out,
-		const std::vector<std::string>& /* arguments */) const {
-	out << "The Table blablabla\n\n";
-	out << "  Eviction strategy: " << m_evictionStrategy << "\n";
-	out << "        Offset size: " << unsigned(m_offsetWidth) << " bytes\n";
-	out << "    Number of lines: " << unsigned(m_numEntries) << "\n\n";
-	out << "Supported operations:\n";
-	out << "  None implemented yet!" << std::endl;
+//void Table::freeLines(const RPAddr &processId){
+//	auto lambda =
+//			[&, processId]
+//			(Line &line)
+//			{if(line.is(&processId, NULL, LineType::INDEXABLE)){freeLine(line);}};
+//	std::for_each(m_lines.begin(), m_lines.end(), lambda);
+//}
 
-	//MLDTODO Display statistics
+void Table::freeLines(const RPAddr &processId, const RMAddr *vAddr){
+	auto lambda =
+			[&]
+			(Line &line)
+			{if(line.is(&processId, vAddr, LineType::INDEXABLE)){freeLine(line);}};
+	std::for_each(m_lines.begin(), m_lines.end(), lambda);
 }
 
-void Table::Cmd_Read(std::ostream& out,
-		const std::vector<std::string>& /* arguments */) const {
-	using namespace std;
 
-	string algHeader = "";
-	if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
-		algHeader = " | A";
-	} else if (this->m_evictionStrategy == EvictionStrategy::LRU) {
-		out << "Linked list head: ";
-		printLruIndex(out, m_head);
-		out << std::endl;
-		algHeader = " | Prev | Next";
+void Table::freeLine(Line &line){
+	if(line.base.locked == true){
+		throw exceptf<std::domain_error>("Attempt to invalidate locked TLB line");
 	}
 
-	out
-			<< "  # | Proc. ID |  Virtual Address   |  Physical Address  | R | W | P"
-			<< algHeader << endl;
-	for (unsigned i = 0; i < m_entries.size(); i++) {
-		DTlbEntry entry = m_entries.at(i);
-		out << noboolalpha << noshowbase << setfill(' ') << dec;
-		out << setw(3) << i << " | ";
-		out << showbase << setfill(' ') << hex;
-		out << setw(8) << entry.processId.m_value << " | ";
-		out << setw(18) << entry.vAddr.m_value << " | ";
-		out << setw(18) << entry.pAddr.m_value << " | ";
-		out << noshowbase << dec;
-		out << setw(1) << entry.read << " | ";
-		out << setw(1) << entry.write << " | ";
-		out << setw(1) << entry.present;
-		if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
-			out << " | " << setw(1) << entry.algData.a.accessed << endl;
-		} else if (this->m_evictionStrategy == EvictionStrategy::LRU) {
-			out << " | " << setw(4);
-			printLruIndex(out, entry.algData.lru.previous);
-			out << " | " << setw(4);
-			printLruIndex(out, entry.algData.lru.next);
-			out << endl;
+	line.base.present = false;
+}
+
+void Table::printLruIndex(std::ostream& out, Line *entry) const{}
+
+bool Line::is(const RPAddr *processId, const RMAddr *vAddr, LineType cmp)
+{
+	if(is(cmp)){
+		if(processId == NULL || *processId == normal.processId){
+				if(vAddr == NULL || *vAddr == normal.vAddr){
+					return true;
+				}
 		}
 	}
-}
-
-void Table::printLruIndex(std::ostream& out, DTlbEntry *entry) const {
-	if (entry == NULL) {
-		out << "----";
-		return;
-	}
-
-	for (unsigned i = 0; i < m_numEntries; i++) {
-		if (entry == &(m_entries[i])) {
-			out << i;
-			return;
-		}
-	}
-
-	out << "????";
+	return false;
 }
 
 EvictionStrategy getEvictionStrategy(std::string name) {

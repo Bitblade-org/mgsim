@@ -6,6 +6,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <algorithm>
+#include <functional>
 
 #include <sim/inspect.h>
 #include <sim/kernel.h>
@@ -21,45 +23,54 @@ enum class EvictionStrategy {PSEUDO_RANDOM=0, ACCESSED=1, LRU=2};
 union Line;
 
 union Prio{
-	struct a{
+	struct{
 		bool 	accessed;
-	};
+	} a;
 
-	struct lru{
+	struct{
 		Line	*previous;
 		Line 	*next;
-	};
+	} lru;
 };
+
+//INDEXABLE is a special type meaning !FREE
+enum class LineType : unsigned char {FREE=0, NORMAL=1, PENDING=2, N_LOCKED=3, INDEXABLE=4};
 
 union Line{
 	Line() = delete;
-	Line(MWidth offsetWidth);
+	Line(const MWidth offsetWidth);
+	bool is(const LineType cmp){return is(NULL, NULL, cmp);};
+	bool is(const RPAddr *processId, const RMAddr *vAddr, const LineType cmp);
 
-	struct noEntry{
-		Prio 	prio;
+	struct {
+		LineType type : 2;
+	} type;
+
+	struct {
 		bool	present;
 		bool	locked;
-	};
-
-	struct normalEntry{
 		Prio 	prio;
+	} base;
+
+	struct {
 		bool	present;
 		bool 	locked;
+		Prio 	prio;
 		RPAddr	processId;
 		RMAddr	vAddr;
 		bool	read;
 		bool	write;
 		RMAddr	pAddr;
-	};
+	} normal;
 
-	struct pendingEntry{
-		Prio 	prio;
+	struct {
 		bool	present;
 		bool 	locked;
+		Prio 	prio;
 		RPAddr	processId;
 		RMAddr	vAddr;
 		RMAddr	d$lineId;
-	};
+	} pending;
 };
 
 //struct DTlbEntry{ //MLDTODO Refactor to DTlbLine
@@ -81,45 +92,46 @@ class Table : public Object, public Inspect::Interface<Inspect::Info | Inspect::
 {
 	//Nomenclature: A (pending) entry is written to a free (= !p && !l) line.
 
-	friend class TLB;
+	//friend class TLB;
 	//MLDTODO Keep statistics
 	//MLDTODO Destructor...
 public:
     Table(const std::string& name, Object& parent); //Lets try this without a clock
     Table(const Table&) = delete; //MLDQUESTION Needed because I use pointers?
 
-    void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
-    void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
-
     MWidth getOffsetWidth(){return m_offsetWidth;}
     MWidth getVAddrWidth(){return RMAddr::VirtWidth - m_offsetWidth;}
 
-    Line *find(RPAddr processId, RMAddr vAddr);
+    Line *find(RPAddr processId, RMAddr vAddr, LineType type);
 
-    Result storePendingEntry(Line &entry);
+    Result storePending(RPAddr processId, RMAddr vAddr, RMAddr d$LineId, RMAddr &tableLineId);
 
+    void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
+    void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void operator=(Table&) = delete; //MLDQUESTION Needed because I use pointers?
 private:
-    Line *findFree();
+    Result storeNormal(RMAddr tableLineId, bool read, bool write, RMAddr pAddr, RMAddr &d$LineId);
+
+    Line *find(const LineType type);
+    Line *find(std::function<bool (Line&)> const&);
 
     void setPrioHigh(Line &entry);
-
-    void invalidate();
-    void invalidate(RPAddr processId);
-    void invalidate(RPAddr processId, RMAddr vAddr);
-    void invalidate(Line &entry);
 
     Line& pickDestination();
     Line& pickVictim_random();
     Line& pickVictim_accessed();
     Line& pickVictim_lru();
 
+	void freeLines();
+	void freeLines(const RPAddr &processId, const RMAddr *vAddr);
+	void freeLine(Line &line);
+
     void printLruIndex(std::ostream& out, Line *entry) const;
 
    	EvictionStrategy 	m_evictionStrategy;
-   	unsigned int 		m_numEntries;
+   	unsigned int 		m_numLines;
    	MWidth 				m_offsetWidth;
-   	std::vector<Line>	m_entries;
+   	std::vector<Line>	m_lines;
 
    	//			     e2.prev	   e2.next
    	//				   MRU			 LRU
@@ -127,6 +139,9 @@ private:
    	Line 				*m_head;    	// For Least Recently Used eviction
    	Line				*m_tail;
    	MWidth				m_indexWidth;   // For Accessed / Pseudo-Random eviction
+
+   	// Can't do this due to GCC bug PR60594
+   	//std::function<Line&(const Table&)> f_pickVictim;
 };
 
 EvictionStrategy getEvictionStrategy(std::string name);
