@@ -139,7 +139,7 @@ typedef Float32  Float;         ///< Natural floating point type
 #endif
 
 //Restricted Memory Address
-#define RMADDR_AUTO_VALIDATE true
+#define RMADDR_STRICT true
 struct RMAddr{
 	static const MWidth VirtWidth = 48; //MLDTODO Fetch these values from configuration;
 	static const MWidth PhysWidth = 52; //MLDTODO Fetch these values from configuration;
@@ -165,13 +165,15 @@ struct RMAddr{
 	bool isValidPAddr() const {return isValid(m_value, PhysWidth);}
 	bool isValidVAddr() const {return isValid(m_value, VirtWidth);}
 
+	void expect(MWidth const w) const;
+
 	bool operator==(RMAddr &other) const {return m_value == other.m_value && m_width == other.m_width;}
 	bool operator!=(RMAddr &other) const {return m_value != other.m_value || m_width != other.m_width;}
 	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
 };
 
 //Restricted Process "Address"
-#define RPADDR_AUTO_VALIDATE true
+#define RPADDR_STRICT true
 struct RPAddr{
 	static const PWidth PidWidth = 16; //MLDTODO Fetch these values from configuration;
 
@@ -181,6 +183,8 @@ struct RPAddr{
 
 	static bool isValid (PAddr const a);
 	bool isValid() const {return isValid(m_value);}
+
+	void check() const;
 
 	bool operator==(RPAddr &other) const {return m_value == other.m_value;}
 	bool operator!=(RPAddr &other) const {return m_value != other.m_value;}

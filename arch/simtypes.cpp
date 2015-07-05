@@ -17,7 +17,7 @@ const char* const ThreadStateNames[TST_NUMSTATES] = {
 
 RMAddr::RMAddr(MAddr val, MWidth w): m_value(val), m_width(w)
 {
-#if (RMADDR_AUTO_VALIDATE == true)
+#if (RMADDR_STRICT == true)
 	if(!isValid(val, w)){
 		throw exceptf<InvalidArgumentException>("Invalid address for RMAddr[%d]: 0x%lX", w, val);
 	}
@@ -39,9 +39,29 @@ bool RMAddr::isValid(MAddr const a, MWidth const w)
 	return ((a >> w) == 0);
 }
 
+void RMAddr::expect(MWidth const w) const{
+#if (RMADDR_STRICT == true)
+	if(m_width != w){
+		throw exceptf<InvalidArgumentException>("Provided address has width %d while %d was expected.", m_width, w);
+	}
+
+	if(!isValid()){
+		throw exceptf<InvalidArgumentException>("Provided address is invalid (width mismatch) RMAddr[%d]: 0x%lX", m_width, m_value);
+	}
+#endif
+}
+
+void RPAddr::check() const{
+#if (RMADDR_STRICT == true)
+	if(!isValid()){
+		throw exceptf<InvalidArgumentException>("Provided process id is invalid (width mismatch) RPAddr[%d]: 0x%lX", RPAddr::PidWidth, m_value);
+	}
+#endif
+}
+
 RPAddr::RPAddr(PAddr v): m_value(v)
 {
-#if (RMADDR_AUTO_VALIDATE == true)
+#if (RPADDR_STRICT == true)
 	if(!RPAddr::isValid(v)){
 		throw exceptf<InvalidArgumentException>("Invalid address for RPAddr");
 	}
