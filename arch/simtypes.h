@@ -107,8 +107,6 @@ struct Float64
 #define PADDR_WIDTH 16			//Width of PAddr
 typedef uint64_t MAddr; 		//Type capable of storing any valid MAddr value
 typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
-typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
-typedef uint16_t PAddr;			//Type capable of storing any valid PAddr (Process ID) value
 
 typedef uint64_t MemAddr;       ///< Address into memory
 typedef uint64_t MemSize;       ///< Size of something in memory
@@ -143,6 +141,7 @@ typedef Float32  Float;         ///< Natural floating point type
 struct RMAddr{
 	static const MWidth VirtWidth = 48; //MLDTODO Fetch these values from configuration;
 	static const MWidth PhysWidth = 52; //MLDTODO Fetch these values from configuration;
+	static const MWidth PidWidth = 16; //MLDTODO Fetch these values from configuration;
 
 	RMAddr():RMAddr(0,0){}
 	RMAddr(int) = delete;
@@ -151,12 +150,14 @@ struct RMAddr{
 	MAddr 	m_value;
 	MWidth 	m_width;
 
-	static RMAddr factory	 (MAddr const a, MWidth const w ) {return RMAddr(a, w);}
-	static RMAddr p			 (MAddr const a				    ) {return factory(a, PhysWidth);}
-	static RMAddr v			 (MAddr const a				    ) {return factory(a, VirtWidth);}
-	static bool   isValid    (MAddr const a, MWidth const w );
-	static RMAddr truncateLsb(MAddr const a, MWidth const oldW, MWidth const by);
-	static RMAddr truncateMsb(MAddr const a, MWidth const newW);
+	static RMAddr factory	  (MAddr const a, MWidth const w) {return RMAddr(a, w);}
+	static RMAddr p			  (MAddr const a				) {return factory(a, PhysWidth);}
+	static RMAddr v			  (MAddr const a				) {return factory(a, VirtWidth);}
+	static bool   isValid     (MAddr const a, MWidth const w);
+	static void   strictExpect(MAddr const a, MWidth const w);
+	static void   alwaysExpect(MAddr const a, MWidth const w);
+	static RMAddr truncateLsb (MAddr const a, MWidth const oldW, MWidth const by);
+	static RMAddr truncateMsb (MAddr const a, MWidth const newW);
 
 	RMAddr truncateLsb(MWidth const by) const {return truncateLsb(m_value, m_width, by);}
 	RMAddr truncateMsb(MWidth const newW) const {return truncateMsb(m_value, newW);}
@@ -165,7 +166,8 @@ struct RMAddr{
 	bool isValidPAddr() const {return isValid(m_value, PhysWidth);}
 	bool isValidVAddr() const {return isValid(m_value, VirtWidth);}
 
-	void expect(MWidth const w) const;
+	void strictExpect(MWidth const w) const;
+	void alwaysExpect(MWidth const w) const;
 
 	bool operator==(RMAddr &other) const {return m_value == other.m_value && m_width == other.m_width;}
 	bool operator!=(RMAddr &other) const {return m_value != other.m_value || m_width != other.m_width;}
@@ -175,13 +177,12 @@ struct RMAddr{
 //Restricted Process "Address"
 #define RPADDR_STRICT true
 struct RPAddr{
-	static const PWidth PidWidth = 16; //MLDTODO Fetch these values from configuration;
+	//MLDTODO Config gaat naar de MMU.
 
-	RPAddr(PAddr v);
+	RPAddr(MAddr v);
+	MAddr m_value;
 
-	PAddr m_value;
-
-	static bool isValid (PAddr const a);
+	static bool isValid (MAddr const a);
 	bool isValid() const {return isValid(m_value);}
 
 	void check() const;
@@ -441,6 +442,12 @@ struct MemoryRequest
             a & "mr" & next & fid
                 & size & offset & sign_extend;
         }
+};
+
+enum TlbType
+{
+	DTLB,
+	ITLB
 };
 
 /// Different types of shared classes

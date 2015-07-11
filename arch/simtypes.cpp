@@ -39,27 +39,43 @@ bool RMAddr::isValid(MAddr const a, MWidth const w)
 	return ((a >> w) == 0);
 }
 
-void RMAddr::expect(MWidth const w) const{
+void RMAddr::alwaysExpect(MAddr const a, MWidth const w ){
+	if(!isValid(a, w)){
+		throw exceptf<InvalidArgumentException>("Address is invalid (width mismatch) MAddr[%d]: 0x%lX", w, a);
+	}
+}
+
+void RMAddr::strictExpect(MAddr const a, MWidth const w ){
 #if (RMADDR_STRICT == true)
+	alwaysExpect(a, w);
+#endif
+}
+
+void RMAddr::alwaysExpect(MWidth const w) const{
 	if(m_width != w){
-		throw exceptf<InvalidArgumentException>("Provided address has width %d while %d was expected.", m_width, w);
+		throw exceptf<InvalidArgumentException>("Address has width %d while %d was expected.", m_width, w);
 	}
 
 	if(!isValid()){
-		throw exceptf<InvalidArgumentException>("Provided address is invalid (width mismatch) RMAddr[%d]: 0x%lX", m_width, m_value);
+		throw exceptf<InvalidArgumentException>("Address is invalid (width mismatch) RMAddr[%d]: 0x%lX", m_width, m_value);
 	}
+}
+
+void RMAddr::strictExpect(MWidth const w) const{
+#if (RMADDR_STRICT == true)
+	alwaysExpect(w);
 #endif
 }
 
 void RPAddr::check() const{
 #if (RMADDR_STRICT == true)
 	if(!isValid()){
-		throw exceptf<InvalidArgumentException>("Provided process id is invalid (width mismatch) RPAddr[%d]: 0x%lX", RPAddr::PidWidth, m_value);
+		throw exceptf<InvalidArgumentException>("Provided process id is invalid (width mismatch) RPAddr[%d]: 0x%lX", RMAddr::PidWidth, m_value);
 	}
 #endif
 }
 
-RPAddr::RPAddr(PAddr v): m_value(v)
+RPAddr::RPAddr(MAddr v): m_value(v)
 {
 #if (RPADDR_STRICT == true)
 	if(!RPAddr::isValid(v)){
@@ -68,15 +84,15 @@ RPAddr::RPAddr(PAddr v): m_value(v)
 #endif
 }
 
-bool RPAddr::isValid (PAddr const a)
+bool RPAddr::isValid (MAddr const a)
 {
-	return ((a & (~PAddr(0) << RPAddr::PidWidth)) == 0);
+	return ((a & (~MAddr(0) << RMAddr::PidWidth)) == 0);
 }
 
 std::ostream& operator<<(std::ostream& os, RPAddr ra)
 {
 	using namespace std;
-	os << "[" << hex << showbase << setw((ra.PidWidth+3)/4) << ra.m_value << "]";
+	os << "[" << hex << showbase << setw((RMAddr::PidWidth+3)/4) << ra.m_value << "]";
 	return os;
 }
 std::ostream& operator<<(std::ostream& os, RMAddr ra)
