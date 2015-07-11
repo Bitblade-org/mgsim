@@ -162,15 +162,15 @@ struct RMAddr{
 	RMAddr truncateLsb(MWidth const by) const {return truncateLsb(m_value, m_width, by);}
 	RMAddr truncateMsb(MWidth const newW) const {return truncateMsb(m_value, newW);}
 
-	bool isValid() 		const {return isValid(m_value, m_width	 );}
+	bool isValid() 		const {return isValid(m_value, m_width	);}
 	bool isValidPAddr() const {return isValid(m_value, PhysWidth);}
 	bool isValidVAddr() const {return isValid(m_value, VirtWidth);}
 
 	void strictExpect(MWidth const w) const;
 	void alwaysExpect(MWidth const w) const;
 
-	bool operator==(RMAddr &other) const {return m_value == other.m_value && m_width == other.m_width;}
-	bool operator!=(RMAddr &other) const {return m_value != other.m_value || m_width != other.m_width;}
+	bool operator==(RMAddr &other) const {return m_value == other.m_value;}
+	bool operator!=(RMAddr &other) const {return m_value != other.m_value;}
 	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
 };
 
