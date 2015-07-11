@@ -35,6 +35,10 @@ namespace Simulator
         struct LinkMessage;
         struct AllocResponse;
 
+    namespace mmu{
+    	class MMU;
+    }
+
         const std::vector<std::string>& GetDefaultLocalRegisterAliases(RegType type);
 // ISA-specific function to map virtual registers to register classes
         unsigned char GetRegisterClass(unsigned char addr, const RegsNo& regs, RegClass* rc, RegType type);
