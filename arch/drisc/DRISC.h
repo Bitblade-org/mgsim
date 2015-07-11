@@ -110,6 +110,7 @@ public:
     drisc::Network& GetNetwork() { return m_network; }
     drisc::IOInterface* GetIOInterface() { return m_io_if; }
     drisc::RegisterFile& GetRegisterFile() { return m_registerFile; }
+    drisc::mmu::MMU& getMMU() {return m_mmu; }
     drisc::ICache& GetICache() { return m_icache; }
     drisc::DCache& GetDCache() { return m_dcache; }
     drisc::Allocator& GetAllocator() { return m_allocator; }
