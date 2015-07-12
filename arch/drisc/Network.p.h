@@ -23,28 +23,28 @@ namespace Simulator
          (variants
           (MSG_NONE)
 
-		  (MSG_SET_MMU_PROPERTY mmuProperty
+		  (MSG_TLB_SET_PROPERTY tlbProperty
 		   (state
-		    (MAddr			value)
-			(bool			typebit0)
-			(bool			typebit1)		//MLDTODO Enum
+			(TlbType			tlb)
+		    (Addr				value)
+			(TlbPropertyMsgType	type)
 		   	   ))
 
-		  (MSG_MMU_INVALIDATE mmuInvalidate
+		  (MSG_TLB_INVALIDATE tlbInvalidate
 		   (state
 			(bool           filterPid)		//MLDTODO Enum
-			(PAddr          processId)
+			(Addr          processId)
 		    (bool			filterAddr)
-			(MAddr			addr)
+			(Addr			addr)
 			   ))
 
 		  (MSG_DTLB_STORE dTlbStore
 		   (state
 			(uint8_t        table)
-			(PAddr          processId)
-			(MAddr			vAddr)
-			(MAddr			pAddr)
-			(uint8_t        perms)
+			(Addr			lineIndex)
+			(Addr			pAddr)
+			(bool			read)
+			(bool 			write)
 			   ))
 
           (MSG_ALLOCATE allocate
@@ -218,8 +218,8 @@ namespace Simulator
 	    ((name TlbMissMessage)
 	     (state
 	      (bool     isDTlb)
-		  (PAddr    processId)
-		  (MAddr	addr)
+		  (Addr    	processId)
+		  (Addr		addr)
 		     ))
 		// {% endcall %}
 
@@ -366,6 +366,7 @@ private:
     RegisterFile&                  m_regFile;
     FamilyTable&                   m_familyTable;
     Allocator&                     m_allocator;
+    mmu::MMU&    				   m_mmu;
     Network*                       m_prev;
     Network*                       m_next;
     const std::vector<DRISC*>& m_grid;
