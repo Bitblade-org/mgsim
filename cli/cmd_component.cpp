@@ -48,7 +48,14 @@ bool cmd_write(const vector<string>& /*command*/, vector<string>& args, cli_cont
 {
     string pat = args[0];
     args.erase(args.begin());
-    DoObjectCommand<Inspect::Write>(cout, ctx.sys, pat, args);
+    try
+    {
+        DoObjectCommand<Inspect::Write>(cout, ctx.sys, pat, args);
+    }
+    catch (const exception &e)
+    {
+        PrintException(&ctx.sys, cerr, e);
+    }
     return false;
 }
 
