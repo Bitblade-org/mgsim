@@ -24,12 +24,12 @@ public:
 	bool namedSet(std::string varName, bool consume, bool &var);
 	bool namedSet(std::string varName, bool consume, Addr &addr);
 	bool namedSet(std::string varName, bool consume, RAddr &addr);
-	bool namedSet(std::string varName, bool consume, IODeviceID &id);
+	bool namedSet(std::string varName, bool consume, PID &id);
 
 	void set(unsigned int index, bool &var);
 	void set(unsigned int index, Addr &addr);
 	void set(unsigned int index, RAddr &addr);
-	void set(unsigned int index, IODeviceID &id);
+	void set(unsigned int index, PID &id);
 
 	bool getBool(unsigned int index);
 	unsigned long long getULL(unsigned int index, unsigned long long max);

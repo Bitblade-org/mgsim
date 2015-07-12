@@ -98,7 +98,7 @@ bool Arguments::namedSet(std::string varName, bool consume, RAddr &addr){
 	return true;
 }
 
-bool Arguments::namedSet(std::string varName, bool consume, IODeviceID &id){
+bool Arguments::namedSet(std::string varName, bool consume, PID &id){
 	if(m_namedValues.count(varName) == 0){
 		return false;
 	}
@@ -126,7 +126,7 @@ void Arguments::set(unsigned int index, RAddr &addr){
 	addr.alwaysExpect(addr.m_width);
 }
 
-void Arguments::set(unsigned int index, IODeviceID &id){
+void Arguments::set(unsigned int index, PID &id){
 	id = getULL(index, std::numeric_limits<IODeviceID>::max());
 	//MLDTODO Test if id is correct!
 }
