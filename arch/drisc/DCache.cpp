@@ -218,6 +218,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         return FAILED;
     }
 
+    //MLDTODO Perform TLB request
+
     Line*  line;
     Result result;
     // SUCCESS - A line with the address was found
@@ -227,6 +229,9 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     {
         // Cache-miss and no free line
         // DeadlockWrite() is done in FindLine
+
+    	//MLDNOTE (first) LOAD, MISS, WAITING, != tag
+    	//MLDTODO Handle TLB request result
         ++m_numHardConflicts;
         return FAILED;
     }
@@ -236,8 +241,9 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
 
     if (result == DELAYED)
     {
+    	//MLDNOTE LOAD, MISS, AVAIL
+    	//MLDTODO Handle TLB request result
         // A new line has been allocated; send the request to memory
-        //MLDTODO DCache miss -> TLB Lookup -> Interface hier.
 
         Request request;
         request.write     = false;
@@ -274,6 +280,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         if (i == size)
         {
             // Data is entirely in the cache, copy it
+        	//MLDNOTE LOAD, HIT
+        	//MLDTODO Handle TLB request result
             COMMIT
             {
                 memcpy(data, line->data + offset, (size_t)size);
@@ -285,6 +293,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         // Data is not entirely in the cache; it should be loading from memory
         if (line->state != LINE_LOADING)
         {
+        	//MLDNOTE (second) LOAD, MISS, WAITING, != tag
+        	//MLDTODO Handle TLB request result
             assert(line->state == LINE_INVALID);
             ++m_numInvalidRMisses;
             return FAILED;
@@ -299,6 +309,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     COMMIT
     {
         line->state = LINE_LOADING;
+        //MLDNOTE LOAD, MISS, WAITING, == tag
+        //MLDTODO Handle TLB request result
         if (reg != NULL && reg->valid())
         {
             // We're loading to a valid register, queue it
@@ -352,6 +364,8 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
         return FAILED;
     }
 
+    //MLDTODO Perform TLB Request
+
     Line* line = NULL;
     Result result = FindLine(address, line, true);
     if (result == SUCCESS)
@@ -360,6 +374,8 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
 
         if (line->state == LINE_LOADING || line->state == LINE_INVALID)
         {
+        	//MLDNOTE STORE, MISS, WAITING, *
+        	//MLDTODO Handle TLB request result
             // We cannot write into a loading line or we might violate the
             // sequential semantics of a single thread because pending reads
             // might get the later write's data.
@@ -380,6 +396,7 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
             // Update the line
             assert(line->state == LINE_FULL);
             COMMIT{
+            	//MLDNOTE STORE, HIT
                 std::copy((char*)data, (char*)data + size, line->data + offset);
                 std::fill(line->valid + offset, line->valid + offset + size, true);
 
@@ -393,7 +410,8 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
         COMMIT{ ++m_numPassThroughWMisses; }
     }
 
-    // Store request for memory (pass-through)
+    //MLDNOTE STORE, MISS, AVAIL
+    //MLDTODO Handle TLB request result
     Request request;
     request.write     = true;
     request.address   = address - offset;
