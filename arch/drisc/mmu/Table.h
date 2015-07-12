@@ -57,52 +57,6 @@ struct Line{
 	bool	write;
 };
 
-//MLDTODO Test memory address widths
-//union Line{
-//	Line(AddrWidth vAddrWidth, AddrWidth pAddrWidth){
-//		base.processId = RAddr(0, RAddr::PidWidth);
-//		base.vAddr = RAddr(0, vAddrWidth);
-//		normal.pAddr = RAddr(0, pAddrWidth);
-//	} //MLDTODO Initialise to zero?
-//	bool is(const LineTag cmp);
-//	bool is(const RAddr *processId, const RAddr *vAddr, const LineTag cmp);
-//	void setLock(const bool value){locked = value;}
-//
-//	struct {
-//		bool	present;
-//		bool	locked;
-//		Prio 	prio;
-//	};
-//
-//	struct {
-//		bool	present;
-//		bool	locked;
-//		Prio 	prio;
-//		RAddr	processId;
-//		RAddr	vAddr;
-//	} base;
-//
-//	struct {
-//		bool	present;
-//		bool 	locked;
-//		Prio 	prio;
-//		RAddr	processId;
-//		RAddr	vAddr;
-//		bool	read;
-//		bool	write;
-//		RAddr	pAddr;
-//	} normal;
-//
-//	struct {
-//		bool	present;
-//		bool 	locked;
-//		Prio 	prio;
-//		RAddr	processId;
-//		RAddr	vAddr;
-//		RAddr	d$lineId;
-//	} pending;
-//};
-
 #define NOTIMPL throw std::logic_error("Not implemented");
 //MLDTODO Not extending MMIOComponent, I consider MMIOComponent deprecated.
 class Table : public Object, public IMemoryAdmin //MLDQUESTION D$, I$, none of them implement IMemoryAdmin. Should I?
@@ -126,7 +80,7 @@ public:
     Result releasePending(RAddr tableLineId);
     Result storePending(RAddr processId, RAddr vAddr, RAddr &d$LineId, Addr &tableLineId);
     Result storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId);
-    Result storeNormal(RAddr vAddr, RAddr pAddr, bool read, bool write);
+    Result storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write);
 
 
     //MLDTODO What to do when a locked entry matches an invalidation?

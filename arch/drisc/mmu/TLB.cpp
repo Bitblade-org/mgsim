@@ -5,6 +5,8 @@
 #include <sim/config.h>
 #include <algorithm>
 #include <assert.h>
+#include <arch/drisc/DRISC.h>
+
 
 namespace Simulator {
 namespace drisc {
@@ -20,6 +22,7 @@ TLB::TLB(const std::string& name, Object& parent)
 	m_tableAddr(0, RAddr::PhysWidth),
 	m_managerAddr(0)
 {
+
 	if(m_numTables == 0){
         throw exceptf<InvalidArgumentException>("%s must have at least one table.", name.c_str());
 	}
@@ -63,8 +66,17 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr &d$lineId, bo
 			return Result::FAILED;
 		}
 
-		std::cout << "I should be doing something here... What was it..." << std::endl;
-		//MLDTODO Send request to manager!
+		RemoteMessage msg;
+		msg.TlbMissMessage.addr = vAddr.m_value;
+		msg.TlbMissMessage.processId = processId.m_value;
+		msg.TlbMissMessage.lineIndex = tableLineId;
+		msg.TlbMissMessage.tlb = TlbType::DTLB;
+		msg.TlbMissMessage.dest = m_managerAddr;
+
+
+		if(!GetDRISC().GetNetwork().SendMessage(msg)){
+			return Result::FAILED;
+		}
 
 		return Result::DELAYED;
 	}
@@ -137,12 +149,13 @@ Result TLB::onPropertyMsg(RemoteMessage &msg){
 
 	if(msg.tlbProperty.type == TlbPropertyMsgType::ENABLED){
 		assert(msg.tlbProperty.value <= 1);
+		std::cout << "enabled prop: " << msg.tlbProperty.value;
 		m_enabled = msg.tlbProperty.value;
 	}else if(msg.tlbProperty.type == TlbPropertyMsgType::MANAGER_ADDRESS){
 		//MLDTODO Checking
 		m_managerAddr = msg.tlbProperty.value;
 	}else if(msg.tlbProperty.type == TlbPropertyMsgType::PT_ADDRESS){
-		m_tableAddr = RAddr(RAddr::PhysWidth, msg.tlbProperty.value);
+		m_tableAddr = msg.tlbProperty.value;
 	}
 
 	return Result::SUCCESS;
@@ -153,8 +166,8 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 
 	Table *table = m_tables[msg.dTlbStore.table];
 	RAddr d$lineId;
-	RAddr pAddr = RAddr(table->getPAddrWidth(), msg.dTlbStore.pAddr);
-	RAddr lineIndex = RAddr(table->getIndexWidth(), msg.dTlbStore.lineIndex);
+	RAddr pAddr = RAddr(msg.dTlbStore.pAddr, table->getPAddrWidth());
+	RAddr lineIndex = RAddr(msg.dTlbStore.lineIndex, m_tables[0]->getIndexWidth());
 
 	Result res;
 	if(msg.dTlbStore.table == 0){
@@ -163,11 +176,14 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 		RAddr vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
 		RAddr processId = RAddr(0, RAddr::ProcIdWidth);
 
-		m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
+		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
+		if(res != Result::SUCCESS){
+			return Result::FAILED;
+		}
 
 		vAddr = vAddr.truncateLsb(table->getOffsetWidth() - m_tables[0]->getOffsetWidth());
-		res = table->storeNormal(vAddr, pAddr, msg.dTlbStore.read, msg.dTlbStore.write);
 
+		res = table->storeNormal(processId, vAddr, pAddr, msg.dTlbStore.read, msg.dTlbStore.write);
 		if(res == Result::SUCCESS){
 			m_tables[0]->releasePending(lineIndex);
 		}
@@ -178,7 +194,7 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 		//MLDTODO-DOC Continuatie gegarandeerd zolang een line enkel vanaf netwerk gelocked kan worden. (Line van table <> 0 kan niet pending zijn)
 	}
 
-	std::cout << "INFORM D$, LINEID " << d$lineId; //MLDTODO Inform D$
+	std::cout << "INFORM D$, LINEID " << d$lineId << std::endl; //MLDTODO Inform D$
 
 	return Result::SUCCESS;
 }
@@ -201,12 +217,18 @@ void TLB::Cmd_Usage(std::ostream& out) const{
 	out << "    write p(ta)     	   <value>\n";
 	out << std::endl;
 	out << "Simulate incomming messages:\n";
-	out << "    write sim-l(ookup)     <values>           (PIPELINE > TLB)\n";
-	out << "    write sim-i(nvalidate) (MANAGER  > TLB)\n";
-	out << "      <filterPid> <ProcessId> <filterAddr> <Addr>\n";
-	out << "    write sim-p(roperty)    <type> <value>     (MANAGER  > TLB)\n";
-	out << "    write sim-s(tore)      (MANAGER  > TLB)\n";
-	out << "      <TableId> <LineId> <ProcessId> <PAddr> <read> <write>\n";
+	out << "    From Pipeline:\n";
+	out << "         write sim-l(ookup)     <values>\n";
+	out << std::endl;
+	out << "    From Manager:\n";
+	out << "         write sim-i(nvalidate)\n";
+	out << "            <filterPid> <ProcessId> <filterAddr> <Addr>\n";
+	out << std::endl;
+	out << "         write sim-p(roperty)\n";
+	out << "            <ENABLED|PTA|MA> <value>\n";
+	out << std::endl;
+	out << "         write sim-s(tore)\n";
+	out << "            <TableId> <LineId> <PAddr> <read> <write>\n";
 	out << std::endl;
 }
 
@@ -214,72 +236,76 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 {
 	Arguments arg(arguments);
 
-    if (arg.size() == 0){
-    	Cmd_Usage(out);
-    	return;
-    }
+	if (arg.size() == 0){
+		Cmd_Usage(out);
+		return;
+	}
 
-    if(arg.is(0, false, "s", "status")){
-    	arg.expect(2);
+	if(arg.is(0, false, "s", "status")){
+		arg.expect(2);
 		out << "Changed status from " << m_enabled << " to ";
 		arg.set(1, m_enabled);
 		out << m_enabled << std::endl;
-    }else if(arg.is(0, false, "m", "manageraddr")){
-    	arg.expect(2);
-    	out << "Changed Manager Address from " << m_managerAddr;
-    	arg.set(1, m_managerAddr);
-    	out << " to " << m_managerAddr << std::endl;
-    }else if(arg.is(0, false, "p", "pta")){
-    	arg.expect(2);
-    	out << "Changed Page Table Address from " << m_tableAddr;
-    	arg.set(1, m_tableAddr);
-    	out << " to " << m_tableAddr << std::endl;
-    }else if(arg.is(0, false, "sim-l", "sim-lookup")){
-    	out << "Not yet implemented!" << std::endl; //MLDTODO Implement
-    }else if(arg.is(0, false, "sim-i", "sim-invalidate")){
-    	arg.expect(5);
+	}else if(arg.is(0, false, "m", "manageraddr")){
+		arg.expect(2);
+		out << "Changed Manager Address from " << m_managerAddr;
+		arg.set(1, m_managerAddr);
+		out << " to " << m_managerAddr << std::endl;
+	}else if(arg.is(0, false, "p", "pta")){
+		arg.expect(2);
+		out << "Changed Page Table Address from " << m_tableAddr;
+		arg.set(1, m_tableAddr);
+		out << " to " << m_tableAddr << std::endl;
+	}else if(arg.is(0, false, "sim-l", "sim-lookup")){
+		out << "Not yet implemented!" << std::endl; //MLDTODO Implement
+	}else if(arg.is(0, false, "sim-i", "sim-invalidate")){
+		arg.expect(5);
 
-    	RemoteMessage msg;
-    	arg.set(1, msg.tlbInvalidate.filterPid);
-    	arg.set(3, msg.tlbInvalidate.filterAddr);
-    	msg.tlbInvalidate.processId = arg.getMAddr(2, RAddr::ProcIdWidth);
-    	msg.tlbInvalidate.addr = arg.getMAddr(4, RAddr::VirtWidth);
+		RemoteMessage msg;
+		arg.set(1, msg.tlbInvalidate.filterPid);
+		arg.set(3, msg.tlbInvalidate.filterAddr);
+		msg.tlbInvalidate.processId = arg.getMAddr(2, RAddr::ProcIdWidth);
+		msg.tlbInvalidate.addr = arg.getMAddr(4, RAddr::VirtWidth);
 
-    	Result res = onInvalidateMsg(msg);
-    	out << "Simulated invalidation message with result: " << res << std::endl;
-    }else if(arg.is(0, false, "sim-p", "sim-property")){
-    	arg.expect(3);
+		Result res = onInvalidateMsg(msg);
+		out << "Simulated invalidation message with result: " << res << std::endl;
+	}else if(arg.is(0, false, "sim-p", "sim-property")){
+		arg.expect(3);
 
-    	RemoteMessage msg;
-    	msg.tlbProperty.tlb = TlbType::DTLB;
-    	msg.tlbProperty.type = getTlbPropertyMsgType(arg.getString(1, false));
+		RemoteMessage msg;
+		msg.tlbProperty.tlb = TlbType::DTLB;
+		msg.tlbProperty.type = getTlbPropertyMsgType(arg.getString(1, false));
 
-    	//MLDTODO Transform using case
-    	if(msg.tlbProperty.type == TlbPropertyMsgType::ENABLED){
-    		arg.set(2, msg.tlbProperty.value);
-    	}else if(msg.tlbProperty.type == TlbPropertyMsgType::PT_ADDRESS){
-    		msg.tlbProperty.value = arg.getMAddr(2, RAddr::PhysWidth);
-    	}else{
-    		msg.tlbProperty.value = arg.getMAddr(2); //MLDTODO Check validitiy
-    	}
+		switch (msg.tlbProperty.type) {
+			case TlbPropertyMsgType::ENABLED:
+				msg.tlbProperty.value = arg.getBool(2);
+				break;
+			case TlbPropertyMsgType::PT_ADDRESS:
+				msg.tlbProperty.value = arg.getMAddr(2, RAddr::PhysWidth);
+				break;
+			case TlbPropertyMsgType::MANAGER_ADDRESS:
+				msg.tlbProperty.value = arg.getMAddr(2); //MLDTODO Check validitiy
+				break;
+			default: UNREACHABLE
+		}
 
-    	Result res = onPropertyMsg(msg);
-    	out << "Simulated property message with result: " << res << std::endl;
-    }else if(arg.is(0, false, "sim-s", "sim-store")){
-    	arg.expect(6);
+		Result res = onPropertyMsg(msg);
+		out << "Simulated property message with result: " << res << std::endl;
+	}else if(arg.is(0, false, "sim-s", "sim-store")){
+		arg.expect(6);
 
-    	RemoteMessage msg;
-    	msg.dTlbStore.table = arg.getMAddr(1);
-    	msg.dTlbStore.lineIndex = arg.getMAddr(2);
-    	msg.dTlbStore.pAddr = arg.getMAddr(3, RAddr::ProcIdWidth);
-    	msg.dTlbStore.read = arg.getBool(4);
-    	msg.dTlbStore.write = arg.getBool(5);
+		RemoteMessage msg;
+		msg.dTlbStore.table = arg.getMAddr(1);
+		msg.dTlbStore.lineIndex = arg.getMAddr(2);
+		msg.dTlbStore.pAddr = arg.getMAddr(3, RAddr::ProcIdWidth);
+		msg.dTlbStore.read = arg.getBool(4);
+		msg.dTlbStore.write = arg.getBool(5);
 
-    	Result res = onStoreMsg(msg);
-    	out << "Simulated store message with result: " << res << std::endl;
-    }else{
-    	Cmd_Usage(out);
-    }
+		Result res = onStoreMsg(msg);
+		out << "Simulated store message with result: " << res << std::endl;
+	}else{
+		Cmd_Usage(out);
+	}
 }
 
 } /* namespace mmu */

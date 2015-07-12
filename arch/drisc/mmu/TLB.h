@@ -46,6 +46,7 @@ public:
 
 
 private:
+    Object& GetDRISCParent() const { return *GetParent()->GetParent(); }
     void unlink(Line &line);
     void invalidate();
     void invalidate(RAddr pid);
@@ -60,7 +61,7 @@ private:
     std::vector<Table*>	m_tables;
     bool				m_enabled;
     RAddr				m_tableAddr;
-    IODeviceID			m_managerAddr; //MLDTODO Verify type
+    PID			m_managerAddr; //MLDTODO Verify type
 };
 
 } /* namespace mmu */

@@ -114,12 +114,30 @@ Result Table::releasePending(RAddr tableLineId){
 	return Result::SUCCESS;
 }
 
-Result Table::storeNormal(RAddr vAddr, RAddr pAddr, bool read, bool write){
-	throw exceptf<std::domain_error>("Not Implemented");
+Result Table::storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write){
+	vAddr.strictExpect(m_vWidth);
+	pAddr.strictExpect(m_pWidth);
+	processId.strictExpect(RAddr::ProcIdWidth);
+
+	Line &dst = pickDestination();
+	if(dst.locked){
+		return Result::FAILED;
+	}
+
+	freeLine(dst);
+
+	dst.present = true;
+	dst.locked = true;
+	dst.processId = processId;
+	dst.vAddr = vAddr;
+	dst.pAddr = pAddr;
+	dst.read = read;
+	dst.write = write;
+
+	return Result::SUCCESS;
 }
 
 
-//MLDTODO Does this function have to return a Result obj?
 Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId)
 {
 	pAddr.strictExpect(m_pWidth);
@@ -127,7 +145,7 @@ Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr,
 
 	Line &line = m_lines.at(tableLineId.m_value);
 
-	// Should be impossible anyway! Might as well assert!
+	//MLDTODO Should this be impossible? Should be impossible anyway! Might as well assert!
 	if(!line.is(LineTag::PENDING)){
 		return Result::FAILED;
 	}
@@ -477,18 +495,12 @@ EvictionStrategy getEvictionStrategy(const std::string name){
 
 std::ostream& operator<<(std::ostream& os, EvictionStrategy strategy) {
 	switch (strategy) {
-	case EvictionStrategy::PSEUDO_RANDOM:
-		os << "PSEUDO_RANDOM";
-		break;
-	case EvictionStrategy::ACCESSED:
-		os << "ACCESSED";
-		break;
-	case EvictionStrategy::LRU:
-		os << "LRU";
-		break;
-	default:
-		os.setstate(std::ios_base::failbit);
+		case EvictionStrategy::PSEUDO_RANDOM: os << "PSEUDO_RANDOM"; break;
+		case EvictionStrategy::ACCESSED: os << "ACCESSED"; break;
+		case EvictionStrategy::LRU:	os << "LRU"; break;
+		default: UNREACHABLE
 	}
+
 	return os;
 }
 
