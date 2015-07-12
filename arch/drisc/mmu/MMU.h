@@ -11,6 +11,7 @@
 #include <sim/inspect.h>
 #include <arch/IOBus.h>
 #include <arch/simtypes.h>
+#include <arch/drisc/Network.h>
 #include "TLB.h"
 
 namespace Simulator {
@@ -20,28 +21,17 @@ namespace mmu {
 
 class MMU :	public Object, public Inspect::Interface<Inspect::Info>{
 public:
-	//MLDTODO Keep statistics
-    MMU(const std::string& name, Object& parent); //Lets try this without a clock
-
+    MMU(const std::string& name, Object& parent);
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
-    bool isEnabled() const {return m_enabled;}
-    RMAddr getTableAddr() const {return m_tableAddr;}
-    IODeviceID getManagerAddr() const {return m_managerAddr;}
+    TLB &getITLB(){return m_dtlb;}
+    TLB &getDTlb(){return m_itlb;}
 
-    void setStatus(bool enabled) {m_enabled = enabled;}
-    void setTableAddr(RMAddr addr) {m_tableAddr = addr;}
-    void setManagerAddr(IODeviceID addr) {m_managerAddr = addr;}
+    void onInvalidateMsg(RemoteMessage &msg);
 
-    //MLDTODO Make members private!!
-    bool			m_enabled;
-    RMAddr			m_tableAddr;
-    IODeviceID		m_managerAddr; //MLDTODO Verify type
-
+private:
     TLB 			m_dtlb;
     TLB				m_itlb;
-private:
-
 };
 
 
