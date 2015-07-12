@@ -24,6 +24,7 @@ Network::Network(
     m_regFile    (parent.GetRegisterFile()),
     m_familyTable(parent.GetFamilyTable()),
     m_allocator  (parent.GetAllocator()),
+	m_mmu		 (parent.getMMU()),
 
     m_prev(NULL),
     m_next(NULL),
@@ -511,6 +512,7 @@ Result Network::DoDelegationOut()
     return SUCCESS;
 }
 
+//MLDTODO Toevoegen TLB messages. Tijdelijk alle messages over Delegation.
 Result Network::DoDelegationIn()
 {
     // Handle incoming message from the delegation network
@@ -526,6 +528,14 @@ Result Network::DoDelegationIn()
 
     switch (msg.type)
     {
+    case RemoteMessage::MSG_TLB_SET_PROPERTY: 	break;
+    case RemoteMessage::MSG_DTLB_STORE:			break;
+    case RemoteMessage::MSG_TLB_INVALIDATE:
+    	//MLDTODO Forward in family?
+    	//MLDTODO Sync?
+    	this->m_mmu.onInvalidateMsg(msg);
+    	return Result::SUCCESS;
+
     case RemoteMessage::MSG_ALLOCATE:
         if (!msg.allocate.bundle &&
             msg.allocate.type == ALLOCATE_BALANCED && msg.allocate.place.size > 1)
