@@ -37,3 +37,4 @@ stamp-h1
 *.test
 *.trs
 *-bin
+/mgsim.dbg
