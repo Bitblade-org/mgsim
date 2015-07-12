@@ -31,11 +31,11 @@ void Table::initStrategy(){
 		// Initially link all nodes ascending.
 		m_head = &(m_lines[0]);
 		m_tail = &(m_lines[m_numLines-1]);
-		m_head->prio.lru.previous = m_tail->prio.lru.next = NULL;
+		m_head->previous = m_tail->next = NULL;
 
 		for(unsigned int i=1; i<m_numLines; i++){
-			m_lines[i-1].prio.lru.next = &(m_lines[i]);
-			m_lines[i].prio.lru.previous = &(m_lines[i-1]);
+			m_lines[i-1].next = &(m_lines[i]);
+			m_lines[i].previous = &(m_lines[i-1]);
 		}
 	}else{
 		if (((m_numLines & (m_numLines - 1)) != 0)) {
@@ -174,21 +174,21 @@ void Table::setPrioHigh(Line &line) {
 	if (!line.present){ return; } //MLDTODO Correct check?
 
 	if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
-		line.prio.a.accessed = true;
+		line.accessed = true;
 	} else if (this->m_evictionStrategy == EvictionStrategy::LRU) {
 		if(&line != m_head){
 			if(&line == m_tail){
-				m_tail = line.prio.lru.previous;
-				m_tail->prio.lru.next = NULL;
+				m_tail = line.previous;
+				m_tail->next = NULL;
 			}else{
-				Line *prev = line.prio.lru.previous;
-				Line *next = line.prio.lru.next;
-				prev->prio.lru.next = next;
-				next->prio.lru.previous = prev;
+				Line *prev = line.previous;
+				Line *next = line.next;
+				prev->next = next;
+				next->previous = prev;
 			}
-			line.prio.lru.previous = NULL;
-			line.prio.lru.next = m_head;
-			m_head->prio.lru.previous = &line;
+			line.previous = NULL;
+			line.next = m_head;
+			m_head->previous = &line;
 			m_head = &line;
 		}
 	}
@@ -220,7 +220,7 @@ Line& Table::pickVictim_random(){
 }
 
 Line& Table::pickVictim_accessed(){
-	auto lambda = [](Line &line){return (line.is(LineTag::NORMAL) && !line.prio.a.accessed);};
+	auto lambda = [](Line &line){return (line.is(LineTag::NORMAL) && !line.accessed);};
 	Line *res = find(lambda);
 
 	if(res == NULL){
@@ -259,6 +259,9 @@ void Table::freeLine(Line &line){
 Line::Line(AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth):
 	present(false),
 	locked(false),
+	accessed(false),
+	previous(NULL),
+	next(NULL),
 	processId(0, RAddr::ProcIdWidth),
 	vAddr(0, vAddrWidth),
 	pAddr(0, pAddrWidth),
@@ -335,16 +338,16 @@ void Table::Cmd_Read(std::ostream& out,	const std::vector<std::string>& /* argum
 		out << setw(1) << line.locked << " | ";
 
 		if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
-			out << setw(1) << line.prio.a.accessed << " | ";
+			out << setw(1) << line.accessed << " | ";
 		} else if (this->m_evictionStrategy == EvictionStrategy::LRU) {
 			out << setw(4);
-			if(line.prio.lru.previous == NULL){	out << "-"; }
-			else{ out << getIndex(*line.prio.lru.previous); }
+			if(line.previous == NULL){	out << "-"; }
+			else{ out << getIndex(*line.previous); }
 
 			out << " | " << setw(4);
 
-			if(line.prio.lru.next == NULL){	out << "-"; }
-			else{ out << getIndex(*line.prio.lru.next); }
+			if(line.next == NULL){	out << "-"; }
+			else{ out << getIndex(*line.next); }
 
 			out << " | ";
 		}
@@ -377,131 +380,54 @@ void Table::Cmd_Write(std::ostream& out, const std::vector<std::string>& argumen
     if(arg.is(0, false, "s", "strategy")){
     	arg.expect(2);
 		EvictionStrategy old = m_evictionStrategy;
-    	try{
-    		m_evictionStrategy = getEvictionStrategy(arguments[1]);
-    		initStrategy();
-    		out << "Changed eviction strategy from " << old << " to " << m_evictionStrategy << std::endl;
-    		out << "Priorities have been reset where applicable" << std::endl;
-    	}catch (std::exception &e){
-            out << "An exception occured while changing strategy:" << std::endl;
-            out << e.what() << std::endl;
-            m_evictionStrategy = old;
-        }
+
+		m_evictionStrategy = getEvictionStrategy(arguments[1]);
+		initStrategy();
+		out << "Changed eviction strategy from " << old << " to " << m_evictionStrategy << std::endl;
+		out << "Priorities have been reset where applicable" << std::endl;
     }else if(arg.is(0, false, "h", "head")){
     	arg.expect(2);
+    	assert(m_evictionStrategy == EvictionStrategy::LRU);
 
-    	//MLDTODO Handle through argument.h/cpp
-    	if(m_evictionStrategy != EvictionStrategy::LRU){
-    		out << "Eviction strategy is not set to LRU" << std::endl;
-    	}
+    	Addr index = arg.getULL(1, m_numLines);
+    	Line *line = &(m_lines[index]);
 
-    	try{
-    		Addr index = std::strtoul(arguments[1].c_str(), NULL, 0 );
-    		Line line = m_lines[index];
-    		m_head = &line;
-
-    		out << "Changed LRU head to " << index << std::endl;
-    	}catch (std::exception &e){
-            out << "An exception occured while changing LRU head:" << std::endl;
-            out << e.what() << std::endl;
-        }
+    	out << "Changed LRU Head from " << getIndex(*m_head);
+    	m_head = line;
+    	out << " to " << index << std::endl;
     }else if(arg.is(0, false, "t", "tail")){
     	arg.expect(2);
+    	assert(m_evictionStrategy == EvictionStrategy::LRU);
 
-    	if(m_evictionStrategy != EvictionStrategy::LRU){
-    		out << "Eviction strategy is not set to LRU" << std::endl;
-    	}
+    	Addr index = arg.getULL(1, m_numLines);
+    	Line *line = &(m_lines[index]);
 
-    	try{
-    		Addr index = std::strtoul(arguments[1].c_str(), NULL, 0 );
-    		Line line = m_lines[index];
-    		m_tail = &line;
-
-    		out << "Changed LRU tail to " << index << std::endl;
-    	}catch (std::exception &e){
-            out << "An exception occured while changing LRU tail:" << std::endl;
-            out << e.what() << std::endl;
-        }
+    	out << "Changed LRU Tail from " << getIndex(*m_tail);
+    	m_tail = line;
     }else if(arg.is(0, false, "l", "line")){
-    	//MLDTODO Somewhere, vaddr-width is set to 0!
     	arg.expect(2, SIZE_MAX);
 
-    	Addr lineIndex;
-    	Line *line;
-    	try{
-    		lineIndex = std::strtoul(arguments[1].c_str(), NULL, 0 );
-        	line = &(m_lines[lineIndex]);
-    	}catch (std::exception &e){
-            out << "Could not find line:" << std::endl;
-            out << e.what() << std::endl;
-            return;
-    	}
+		Addr lineIndex = arg.getULL(1, m_numLines);
+		Line *line = &(m_lines[lineIndex]);
 
-    	std::map<std::string, Addr> settings;
+		arg.namedSet("p", true, line->present);
+		arg.namedSet("pid", true, line->processId);
+		arg.namedSet("pa", true, line->pAddr);
+		arg.namedSet("l", true, line->locked);
+		arg.namedSet("va", true, line->vAddr);
+		arg.namedSet("rd", true, line->read);
+		arg.namedSet("wr", true, line->write);
+		arg.namedSet("d$", true, line->d$lineId);
+		arg.namedSet("a", true, line->accessed);
 
-    	for(size_t i=2; i<arguments.size(); i++){
-    		std::string str = arguments[i];
-    		size_t pos = str.find('=');
-    		if(pos == std::string::npos){
-    			out << "Invalid argument `" << str << "`" << std::endl;
-        		Cmd_Usage_write_line(out);
-        		return;
-    		}
-    		std::string varName = str.substr(0, pos);
+		RAddr lineAddr = RAddr(0, m_numLines);
+		if(arg.namedSet("prev", true, lineAddr)){
+    		line->previous = &(m_lines[lineAddr.m_value]);
+		}
 
-    		if(std::string("=p=pid=pa=prev=l=va=rd=wr=d$=a=nxt=").find("=" + varName + "=") == std::string::npos){
-    			out << "Invalid variable name `" << varName << "`" << std::endl;
-        		Cmd_Usage_write_line(out);
-        		return;
-    		}
-
-    		Addr value = strtoull(str.substr(pos + 1).c_str(), NULL, 0);
-
-    		if(varName=="p" || varName=="l" || varName=="rd" || varName=="wr" || varName=="a"){
-    			if(value > 1){
-        			out << "Invalid value for variable `" << varName << "`. The value must be 0 or 1" << std::endl;
-            		Cmd_Usage_write_line(out);
-            		return;
-    			}
-    		}else if(varName=="prev" || varName=="nxt"){
-    	    	try{
-    	    		value = (Addr)&(m_lines[lineIndex]);
-    	    	}catch (std::exception &e){
-    	            out << "Could not find line:" << std::endl;
-    	            out << e.what() << std::endl;
-    	            return;
-    	    	}
-    		}else if(varName=="pid"){
-    			if(!RAddr::isValid(value, RAddr::ProcIdWidth)){
-    	            out << "Value for pid is out of range. (Max width: " << RAddr::ProcIdWidth << ")" << std::endl;
-    	            return;
-    			}
-    		}else if(varName=="pa"){
-    			if(!RAddr::isValid(value, RAddr::PhysWidth)){
-    	            out << "Value for pa is out of range. (Max width: " << RAddr::PhysWidth << ")" << std::endl;
-    	            return;
-    			}
-    		}else if(varName=="va"){
-    			if(!RAddr::isValid(value, RAddr::VirtWidth)){
-    	            out << "Value for va is out of range. (Max width: " << RAddr::VirtWidth << ")" << std::endl;
-    	            return;
-    			}
-    		}
-
-    		settings[varName] = value;
-    	}
-
-		if(settings.count("p"))		{line->present = settings["p"];}
-		if(settings.count("l"))		{line->locked = settings["l"];}
-		if(settings.count("rd"))	{line->read = settings["rd"];}
-		if(settings.count("wr"))	{line->write = settings["wr"];}
-		if(settings.count("a"))		{line->prio.a.accessed = settings["a"];}
-		if(settings.count("prev"))	{line->prio.lru.previous = (Line*)settings["prev"];}
-		if(settings.count("nxt"))	{line->prio.lru.next = (Line*)settings["nxt"];}
-		if(settings.count("pid"))	{line->processId = settings["pid"];}
-		if(settings.count("pa"))	{line->pAddr = settings["pa"];}
-		if(settings.count("va"))	{line->vAddr = settings["va"];}
-		if(settings.count("d$"))	{line->d$lineId = settings["d$"];}
+		if(arg.namedSet("next", true, lineAddr)){
+			line->next = &(m_lines[lineAddr.m_value]);
+		}
 
 		out << "Line " << unsigned(lineIndex) << " has been updated" << std::endl;
     }else{

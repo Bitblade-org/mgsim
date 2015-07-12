@@ -14,7 +14,7 @@
 #include <sim/inspect.h>
 #include <sim/kernel.h>
 #include <sim/config.h>
-#include <sim/argument.h>
+#include <cli/argument.h>
 #include <arch/simtypes.h>
 #include <arch/Memory.h>
 
@@ -25,17 +25,6 @@ namespace mmu {
 enum class EvictionStrategy {PSEUDO_RANDOM=0, ACCESSED=1, LRU=2};
 
 struct Line;
-
-union Prio{
-	struct{
-		bool 	accessed;
-	} a;
-
-	struct{
-		Line	*previous;
-		Line 	*next;
-	} lru;
-};
 
 enum class LineTag : unsigned char {
 	FREE		=0x1,
@@ -54,7 +43,9 @@ struct Line{
 	bool	present;
 	bool 	locked;
 
-	Prio 	prio;
+	bool 	accessed;
+	Line	*previous;
+	Line	*next;
 
 	RAddr	processId;
 	RAddr	vAddr;

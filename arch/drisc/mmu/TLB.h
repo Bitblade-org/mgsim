@@ -9,7 +9,7 @@
 #include <cassert>
 
 #include <sim/inspect.h>
-#include <sim/argument.h>
+#include <cli/argument.h>
 #include <arch/simtypes.h>
 #include <arch/IOBus.h>
 #include <arch/drisc/Network.h>

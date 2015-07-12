@@ -8,7 +8,7 @@
 
 #include <arch/simtypes.h>
 #include <arch/IOBus.h>
-#include "serialization.h"
+#include <sim/serialization.h>
 
 
 namespace Simulator{
@@ -16,10 +16,15 @@ namespace Simulator{
 class Arguments{
 
 public:
-	Arguments(const std::vector<std::string> &arguments): m_arguments(arguments) {};
+	Arguments(const std::vector<std::string> &arguments);
 
 	void expect(size_t nrArguments);
 	void expect(size_t nrArgumentsMin, size_t nrArgumentsMax);
+
+	bool namedSet(std::string varName, bool consume, bool &var);
+	bool namedSet(std::string varName, bool consume, Addr &addr);
+	bool namedSet(std::string varName, bool consume, RAddr &addr);
+	bool namedSet(std::string varName, bool consume, IODeviceID &id);
 
 	void set(unsigned int index, bool &var);
 	void set(unsigned int index, Addr &addr);
@@ -41,9 +46,14 @@ public:
 //	bool is(unsigned int index, bool caseSensitive, const CMP1& cmp1, const CMPREST&... cmpRest);
 //	bool is(unsigned int /* index */, bool /* caseSensitive */){ return false; }
 
-	size_t size(){return m_arguments.size();}
+	size_t size(){return m_source.size();}
 private:
-	const std::vector<std::string> &m_arguments;
+	unsigned long long getULL(const std::string &source, unsigned long long max);
+	bool getBool(const std::string &source);
+
+	const std::vector<std::string> &m_source;
+	std::map<std::string, std::string> m_namedValues;
+
 };
 
 } /* namespace Simulator */
