@@ -47,5 +47,16 @@ namespace Simulator
         kernel.GetVariableRegistry().RegisterVariable(m_state, m_name + ":state", SVC_LEVEL);
     }
 
+    std::ostream& operator<<(std::ostream& os, Result result) {
+    	switch (result) {
+    		case Result::SUCCESS: os << "SUCCESS"; break;
+    		case Result::DELAYED: os << "DELAYED"; break;
+    		case Result::FAILED: os << "FAILED"; break;
+    		default: UNREACHABLE
+    	}
+
+    	return os;
+    }
+
 
 }

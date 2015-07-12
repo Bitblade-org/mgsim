@@ -9,6 +9,7 @@
 #include <string>
 #include <type_traits>
 #include "sim/storagetrace.h"
+#include <sim/unreachable.h>
 
 namespace Simulator
 {
@@ -38,6 +39,8 @@ namespace Simulator
         DELAYED,
         SUCCESS
     };
+    std::ostream& operator<<(std::ostream& os, Result result);
+
 
     // The most common delegate form in MGSim is cycle handlers, of
     // type Result (*)(). So alias this to "delegate" for convenience.
