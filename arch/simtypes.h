@@ -10,6 +10,7 @@
 
 #include <string>
 #include <cassert>
+#include <cmath>
 
 namespace Simulator
 {
@@ -103,10 +104,10 @@ struct Float64
 };
 
 #if defined(TARGET_MTALPHA)
-#define MADDR_WIDTH_MAX 64U		//Architecture-dictated maximum width of MAddr
+#define ADDR_WIDTH_MAX 64U		//Architecture-dictated maximum width of MAddr
 #define PADDR_WIDTH 16			//Width of PAddr
-typedef uint64_t MAddr; 		//Type capable of storing any valid MAddr value
-typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
+typedef uint64_t Addr; 			//Type capable of storing any valid Addr value
+typedef uint8_t  AddrWidth; 	//Type capable of storing any valid Addr width
 
 typedef uint64_t MemAddr;       ///< Address into memory
 typedef uint64_t MemSize;       ///< Size of something in memory
@@ -118,10 +119,10 @@ typedef Float64  Float;         ///< Natural floating point type
 #define INTEGER_WIDTH 64
 #define MEMSIZE_MAX UINT64_MAX
 #elif defined(TARGET_MTSPARC) || defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL) || defined(TARGET_OR1K)
-#define MADDR_WIDTH_MAX 32		//Architecture-dictated maximum width of MAddr
+#define ADDR_WIDTH_MAX 32		//Architecture-dictated maximum width of MAddr
 #define PADDR_WIDTH 16			//Width of PAddr
-typedef uint32_t MAddr; 		//Type capable of storing any valid MAddr value (Must be unsigned!)
-typedef uint8_t  MWidth; 		//Type capable of storing any valid MAddr width
+typedef uint32_t Addr; 		//Type capable of storing any valid MAddr value (Must be unsigned!)
+typedef uint8_t  AddrWidth; 		//Type capable of storing any valid MAddr width
 typedef uint16_t PAddr;			//Type capable of storing any valid PAddr (Process ID) value
 typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
 
@@ -138,62 +139,49 @@ typedef Float32  Float;         ///< Natural floating point type
 
 //Restricted Memory Address
 #define RMADDR_STRICT true
-struct RMAddr{
-	static const MWidth VirtWidth = 48; //MLDTODO Fetch these values from configuration;
-	static const MWidth PhysWidth = 52; //MLDTODO Fetch these values from configuration;
-	static const MWidth PidWidth = 16; //MLDTODO Fetch these values from configuration;
+struct RAddr{
+	static const AddrWidth VirtWidth = 48; //MLDTODO Fetch these values from configuration;
+	static const AddrWidth PhysWidth = 52; //MLDTODO Fetch these values from configuration;
+	static const AddrWidth ProcIdWidth = 16; //MLDTODO Fetch these values from configuration;
 
-	RMAddr():RMAddr(0,0){}
-	RMAddr(int) = delete;
-	RMAddr(MAddr v, MWidth w);
+	RAddr():RAddr(0,0){}
+	RAddr(int) = delete;
+	RAddr(Addr v, AddrWidth w);
 
-	MAddr 	m_value;
-	MWidth 	m_width;
+	Addr 	m_value;
+	AddrWidth 	m_width;
 
-	static RMAddr factory	  (MAddr const a, MWidth const w) {return RMAddr(a, w);}
-	static RMAddr p			  (MAddr const a				) {return factory(a, PhysWidth);}
-	static RMAddr v			  (MAddr const a				) {return factory(a, VirtWidth);}
-	static bool   isValid     (MAddr const a, MWidth const w);
-	static void   strictExpect(MAddr const a, MWidth const w);
-	static void   alwaysExpect(MAddr const a, MWidth const w);
-	static RMAddr truncateLsb (MAddr const a, MWidth const oldW, MWidth const by);
-	static RMAddr truncateMsb (MAddr const a, MWidth const newW);
+	static RAddr factory	  (Addr const a, AddrWidth const w) {return RAddr(a, w);}
+	static RAddr p			  (Addr const a				) {return factory(a, PhysWidth);}
+	static RAddr v			  (Addr const a				) {return factory(a, VirtWidth);}
+	static bool   isValid     (Addr const a, AddrWidth const w);
+	static void   strictExpect(Addr const a, AddrWidth const w);
+	static void   alwaysExpect(Addr const a, AddrWidth const w);
+	static RAddr truncateLsb (Addr const a, AddrWidth const oldW, AddrWidth const by);
+	static RAddr truncateMsb (Addr const a, AddrWidth const newW);
+	static AddrWidth getPrintWidth(AddrWidth addr);
 
-	RMAddr truncateLsb(MWidth const by) const {return truncateLsb(m_value, m_width, by);}
-	RMAddr truncateMsb(MWidth const newW) const {return truncateMsb(m_value, newW);}
+	RAddr truncateLsb(AddrWidth const by) const {return truncateLsb(m_value, m_width, by);}
+	RAddr truncateMsb(AddrWidth const newW) const {return truncateMsb(m_value, newW);}
 
 	bool isValid() 		const {return isValid(m_value, m_width	);}
 	bool isValidPAddr() const {return isValid(m_value, PhysWidth);}
 	bool isValidVAddr() const {return isValid(m_value, VirtWidth);}
 
-	void strictExpect(MWidth const w) const;
-	void alwaysExpect(MWidth const w) const;
+	void strictExpect(AddrWidth const w) const;
+	void alwaysExpect(AddrWidth const w) const;
 
-	bool operator==(RMAddr &other) const {return m_value == other.m_value;}
-	bool operator!=(RMAddr &other) const {return m_value != other.m_value;}
+	AddrWidth getRealWidth(){return std::log2(m_value) + 1;}
+	AddrWidth getPrintWidth(){return getPrintWidth(m_width);}
+
+	bool operator==(RAddr &other) const {return m_value == other.m_value;}
+	bool operator!=(RAddr &other) const {return m_value != other.m_value;}
+	RAddr& operator=(const Addr &addr);
+
 	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
 };
 
-//Restricted Process "Address"
-#define RPADDR_STRICT true
-struct RPAddr{
-	//MLDTODO Config gaat naar de MMU.
-
-	RPAddr(MAddr v);
-	MAddr m_value;
-
-	static bool isValid (MAddr const a);
-	bool isValid() const {return isValid(m_value);}
-
-	void check() const;
-
-	bool operator==(RPAddr &other) const {return m_value == other.m_value;}
-	bool operator!=(RPAddr &other) const {return m_value != other.m_value;}
-	SERIALIZE(a) {a & "PAddr" & m_value;}
-};
-
-std::ostream& operator<<(std::ostream& os, RPAddr ra);
-std::ostream& operator<<(std::ostream& os, RMAddr ra);
+std::ostream& operator<<(std::ostream& os, RAddr ra);
 
 
 typedef Integer  FCapability;   ///< Capability for a family
@@ -449,6 +437,15 @@ enum TlbType
 	DTLB,
 	ITLB
 };
+
+enum TlbPropertyMsgType
+{
+	PT_ADDRESS,
+	MANAGER_ADDRESS,
+	ENABLED
+};
+
+TlbPropertyMsgType getTlbPropertyMsgType(const std::string name);
 
 /// Different types of shared classes
 enum RemoteRegType

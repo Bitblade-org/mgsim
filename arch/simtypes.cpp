@@ -15,7 +15,7 @@ const char* const ThreadStateNames[TST_NUMSTATES] = {
 //
 
 
-RMAddr::RMAddr(MAddr val, MWidth w): m_value(val), m_width(w)
+RAddr::RAddr(Addr val, AddrWidth w): m_value(val), m_width(w)
 {
 #if (RMADDR_STRICT == true)
 	if(!isValid(val, w)){
@@ -24,34 +24,34 @@ RMAddr::RMAddr(MAddr val, MWidth w): m_value(val), m_width(w)
 #endif
 }
 
-RMAddr RMAddr::truncateLsb(MAddr const a, MWidth const oldW, MWidth const by)
+RAddr RAddr::truncateLsb(Addr const a, AddrWidth const oldW, AddrWidth const by)
 {
-	return RMAddr((a >> by), oldW - by);
+	return RAddr((a >> by), oldW - by);
 }
 
-RMAddr RMAddr::truncateMsb(MAddr const a, MWidth const newW)
+RAddr RAddr::truncateMsb(Addr const a, AddrWidth const newW)
 {
-	return RMAddr((a & (~((~MAddr(0)) << newW))), newW);
+	return RAddr((a & (~((~Addr(0)) << newW))), newW);
 }
 
-bool RMAddr::isValid(MAddr const a, MWidth const w)
+bool RAddr::isValid(Addr const a, AddrWidth const w)
 {
 	return ((a >> w) == 0);
 }
 
-void RMAddr::alwaysExpect(MAddr const a, MWidth const w ){
+void RAddr::alwaysExpect(Addr const a, AddrWidth const w ){
 	if(!isValid(a, w)){
 		throw exceptf<InvalidArgumentException>("Address is invalid (width mismatch) MAddr[%d]: 0x%lX", w, a);
 	}
 }
 
-void RMAddr::strictExpect(MAddr const a, MWidth const w ){
+void RAddr::strictExpect(Addr const a, AddrWidth const w ){
 #if (RMADDR_STRICT == true)
 	alwaysExpect(a, w);
 #endif
 }
 
-void RMAddr::alwaysExpect(MWidth const w) const{
+void RAddr::alwaysExpect(AddrWidth const w) const{
 	if(m_width != w){
 		throw exceptf<InvalidArgumentException>("Address has width %d while %d was expected.", m_width, w);
 	}
@@ -61,45 +61,62 @@ void RMAddr::alwaysExpect(MWidth const w) const{
 	}
 }
 
-void RMAddr::strictExpect(MWidth const w) const{
+void RAddr::strictExpect(AddrWidth const w) const{
 #if (RMADDR_STRICT == true)
 	alwaysExpect(w);
 #endif
 }
 
-void RPAddr::check() const{
-#if (RMADDR_STRICT == true)
-	if(!isValid()){
-		throw exceptf<InvalidArgumentException>("Provided process id is invalid (width mismatch) RPAddr[%d]: 0x%lX", RMAddr::PidWidth, m_value);
+AddrWidth RAddr::getPrintWidth(AddrWidth w){
+	AddrWidth width = (w + 3) / 4; // ceil(w/4), width of hex value
+	width += 5; // [..:0x...]
+	width += w > 0 ? std::log10(w) + 1 : 1; // Width display
+	return width;
+}
+
+std::ostream& operator<<(std::ostream& os, RAddr addr)
+{
+	ios::fmtflags oldFlags(os.flags());
+
+	size_t hexWidth = (addr.m_width + 3) / 4; // ceil(addr.m_width/4)
+
+	if(addr.isValid()){
+		os << "[" << std::dec << unsigned(addr.m_width) << ":0x";
+		os << std::hex << std::noshowbase << std::uppercase << right;
+		os << std::setw(hexWidth) << std::setfill('0') << addr.m_value << "]";
+	}else{
+		AddrWidth real = addr.getRealWidth();
+		AddrWidth expected = addr.m_width;
+		AddrWidth truncateBy = real - expected;
+		addr = addr.truncateLsb(addr.m_value, real, truncateBy);
+
+		os << "!" << std::dec << unsigned(addr.m_width) << ":0x";
+		os << std::hex << std::noshowbase << std::uppercase << right;
+		os << std::setw(hexWidth) << std::setfill('0') << addr.m_value << "..";
 	}
-#endif
-}
 
-RPAddr::RPAddr(MAddr v): m_value(v)
-{
-#if (RPADDR_STRICT == true)
-	if(!RPAddr::isValid(v)){
-		throw exceptf<InvalidArgumentException>("Invalid address for RPAddr");
-	}
-#endif
-}
-
-bool RPAddr::isValid (MAddr const a)
-{
-	return ((a & (~MAddr(0) << RMAddr::PidWidth)) == 0);
-}
-
-std::ostream& operator<<(std::ostream& os, RPAddr ra)
-{
-	using namespace std;
-	os << "[" << hex << showbase << setw((RMAddr::PidWidth+3)/4) << ra.m_value << "]";
+	os.flags(oldFlags);
 	return os;
 }
-std::ostream& operator<<(std::ostream& os, RMAddr ra)
-{
-	using namespace std;
-	os << "[" << hex << showbase << setw((ra.m_width+3)/4) << ra.m_value << "]";
-	return os;
+
+RAddr& RAddr::operator=(const Addr &addr){
+	RAddr::strictExpect(addr, m_width);
+	m_value = addr;
+	return *this;
+}
+
+
+TlbPropertyMsgType getTlbPropertyMsgType(const std::string name){
+	if (name == "ENABLED" || name == "E") {
+		return TlbPropertyMsgType::ENABLED;
+	}
+	if (name == "PT_ADDRESS" || name == "PTADDR" || name == "PTA" || name == "PT") {
+		return TlbPropertyMsgType::PT_ADDRESS;
+	}
+	if (name == "MANAGER_ADDRESS" || name == "MANAGER" || name == "PTADDR" || name == "MA") {
+		return TlbPropertyMsgType::MANAGER_ADDRESS;
+	}
+	throw exceptf<SimulationException>("Unknown TlbPropertyMsgType"); //MLDTODO Figure out exception system
 }
 
 string PlaceID::str() const
