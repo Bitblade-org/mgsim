@@ -90,15 +90,16 @@ bool Network::SendMessage(const RemoteMessage& msg)
     // Get destination
     switch (msg.type)
     {
-    case RemoteMessage::MSG_ALLOCATE:     dmsg.dest = msg.allocate.place.pid; break;
-    case RemoteMessage::MSG_SET_PROPERTY: dmsg.dest = msg.property.fid.pid; break;
-    case RemoteMessage::MSG_CREATE:       dmsg.dest = msg.create.fid.pid; break;
-    case RemoteMessage::MSG_DETACH:       dmsg.dest = msg.detach.fid.pid; break;
-    case RemoteMessage::MSG_SYNC:         dmsg.dest = msg.sync.fid.pid; break;
-    case RemoteMessage::MSG_RAW_REGISTER: dmsg.dest = msg.rawreg.pid; break;
-    case RemoteMessage::MSG_FAM_REGISTER: dmsg.dest = msg.famreg.fid.pid; break;
-    case RemoteMessage::MSG_BREAK:        dmsg.dest = msg.brk.pid; break;
-    default:                              dmsg.dest = INVALID_PID; break;
+    case RemoteMessage::MSG_ALLOCATE:     		dmsg.dest = msg.allocate.place.pid; break;
+    case RemoteMessage::MSG_SET_PROPERTY: 		dmsg.dest = msg.property.fid.pid; break;
+    case RemoteMessage::MSG_CREATE:       		dmsg.dest = msg.create.fid.pid; break;
+    case RemoteMessage::MSG_DETACH:       		dmsg.dest = msg.detach.fid.pid; break;
+    case RemoteMessage::MSG_SYNC:         		dmsg.dest = msg.sync.fid.pid; break;
+    case RemoteMessage::MSG_RAW_REGISTER: 		dmsg.dest = msg.rawreg.pid; break;
+    case RemoteMessage::MSG_FAM_REGISTER: 		dmsg.dest = msg.famreg.fid.pid; break;
+    case RemoteMessage::MSG_BREAK:        		dmsg.dest = msg.brk.pid; break;
+    case RemoteMessage::MSG_TLB_MISS_MESSAGE:	dmsg.dest = msg.TlbMissMessage.dest; break;
+    default:                              		dmsg.dest = INVALID_PID; break;
     }
 
     assert(dmsg.dest != INVALID_PID);
@@ -528,8 +529,21 @@ Result Network::DoDelegationIn()
 
     switch (msg.type)
     {
-    case RemoteMessage::MSG_TLB_SET_PROPERTY: 	break;
-    case RemoteMessage::MSG_DTLB_STORE:			break;
+    case RemoteMessage::MSG_TLB_MISS_MESSAGE:
+    	//MLDTODO Handle
+    	break;
+    case RemoteMessage::MSG_TLB_SET_PROPERTY:
+    	//MLDTODO Forward in family?
+    	//MLDTODO Sync?
+    	if(msg.tlbProperty.tlb == TlbType::DTLB){
+    		return this->m_mmu.getDTlb().onPropertyMsg(msg);
+    	}else{
+    		return this->m_mmu.getITLB().onPropertyMsg(msg);
+    	}
+    	break;
+    case RemoteMessage::MSG_DTLB_STORE:
+    	return this->m_mmu.getDTlb().onStoreMsg(msg);
+    	break;
     case RemoteMessage::MSG_TLB_INVALIDATE:
     	//MLDTODO Forward in family?
     	//MLDTODO Sync?

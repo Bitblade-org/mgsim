@@ -23,6 +23,15 @@ namespace Simulator
          (variants
           (MSG_NONE)
 
+		  (MSG_TLB_MISS_MESSAGE TlbMissMessage
+		   (state
+		    (TlbType    tlb)
+		    (Addr		lineIndex)
+		    (Addr    	processId)
+		    (Addr		addr)
+			(PID        dest)
+			   ))
+
 		  (MSG_TLB_SET_PROPERTY tlbProperty
 		   (state
 			(TlbType			tlb)
@@ -212,16 +221,6 @@ namespace Simulator
           (bool     exact)     ///< If the allocate was exact, unwind all the way
              ))
         // {% endcall %}
-
-		/// TLB Miss message (going backwards)
-	    // {% call gen_struct() %}
-	    ((name TlbMissMessage)
-	     (state
-	      (bool     isDTlb)
-		  (Addr    	processId)
-		  (Addr		addr)
-		     ))
-		// {% endcall %}
 
 class Network : public Object, public Inspect::Interface<Inspect::Read>
 {
