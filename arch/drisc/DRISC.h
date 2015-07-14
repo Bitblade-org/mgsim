@@ -142,6 +142,7 @@ private:
     } m_bits;
 
     // The components on the core
+    drisc::mmu::MMU		  m_mmu;
     drisc::FamilyTable    m_familyTable;
     drisc::ThreadTable    m_threadTable;
     drisc::RegisterFile   m_registerFile;
@@ -160,7 +161,6 @@ private:
     drisc::DebugChannel   m_lpout;
     drisc::DebugChannel   m_lperr;
     drisc::MMUInterface   m_oldmmu;
-    drisc::mmu::MMU		  m_mmu;
     drisc::ActionInterface m_action;
 
     // External I/O interface, optional

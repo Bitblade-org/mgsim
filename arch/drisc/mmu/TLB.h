@@ -25,16 +25,24 @@ namespace mmu {
 class TLB :	public Object, public Inspect::Interface<Inspect::Info | Inspect::Write> {
 
 //MLDTODO Keep statistics!
+	/*
+	 * - Number of hits
+	 * - Number of misses
+	 * 		- line ==, etc
+	 * - Number of flushes
+	 * - Number of PID invalidates
+	 * - Number of vAddr+PID invalidates
+	 *
+	 *
+	 *
+	 * - Per lookup: Manager round trip time
+	 */
 public:
     TLB(const std::string& name, Object& parent);
     ~TLB();
 
     Result lookup(RAddr const processId, RAddr const vAddr, RAddr &d$line, bool &r, bool &w, RAddr &pAddr, bool mayUnlock);
     AddrWidth getMinOffsetSize(){return m_tables[0]->getOffsetWidth();}
-
-    void setState(bool enabled){m_enabled = enabled;}
-    void setTableAddr(RAddr tableAddr){m_tableAddr = tableAddr;}
-    void setManagerAddr(IODeviceID managerAddr){m_managerAddr = managerAddr;}
 
     Result onInvalidateMsg(RemoteMessage &msg);
     Result onPropertyMsg(RemoteMessage &msg);
@@ -46,7 +54,6 @@ public:
 
 
 private:
-    Object& GetDRISCParent() const { return *GetParent()->GetParent(); }
     void unlink(Line &line);
     void invalidate();
     void invalidate(RAddr pid);
@@ -55,13 +62,16 @@ private:
     Result store_entry(Line &line);
     Result store_pending_entry(RAddr processId, RAddr vAddr, int D$line);
 
-    Line* find(RAddr processId, RAddr vAddr, LineTag tag);
+    Line* doLookup(RAddr processId, RAddr vAddr, LineTag tag);
 
     uint8_t	const		m_numTables;
     std::vector<Table*>	m_tables;
     bool				m_enabled;
     RAddr				m_tableAddr;
-    PID			m_managerAddr; //MLDTODO Verify type
+    RAddr				m_managerAddr;
+
+    Object& GetDRISCParent() const { return *GetParent()->GetParent(); }
+   	MMU&	getMMU() const { return (MMU&)*GetParent(); }
 };
 
 } /* namespace mmu */

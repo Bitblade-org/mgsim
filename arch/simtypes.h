@@ -7,6 +7,7 @@
 #include <sim/unreachable.h>
 #include <sim/except.h>
 #include <sim/serialization.h>
+#include <sim/log2.h>
 
 #include <string>
 #include <cassert>
@@ -140,10 +141,6 @@ typedef Float32  Float;         ///< Natural floating point type
 //Restricted Memory Address
 #define RMADDR_STRICT true
 struct RAddr{
-	static const AddrWidth VirtWidth = 48; //MLDTODO Fetch these values from configuration;
-	static const AddrWidth PhysWidth = 52; //MLDTODO Fetch these values from configuration;
-	static const AddrWidth ProcIdWidth = 16; //MLDTODO Fetch these values from configuration;
-
 	RAddr():RAddr(0,0){}
 	RAddr(int) = delete;
 	RAddr(Addr v, AddrWidth w);
@@ -151,9 +148,6 @@ struct RAddr{
 	Addr 	m_value;
 	AddrWidth 	m_width;
 
-	static RAddr factory	  (Addr const a, AddrWidth const w) {return RAddr(a, w);}
-	static RAddr p			  (Addr const a				) {return factory(a, PhysWidth);}
-	static RAddr v			  (Addr const a				) {return factory(a, VirtWidth);}
 	static bool   isValid     (Addr const a, AddrWidth const w);
 	static void   strictExpect(Addr const a, AddrWidth const w);
 	static void   alwaysExpect(Addr const a, AddrWidth const w);
@@ -165,13 +159,11 @@ struct RAddr{
 	RAddr truncateMsb(AddrWidth const newW) const {return truncateMsb(m_value, newW);}
 
 	bool isValid() 		const {return isValid(m_value, m_width	);}
-	bool isValidPAddr() const {return isValid(m_value, PhysWidth);}
-	bool isValidVAddr() const {return isValid(m_value, VirtWidth);}
 
-	void strictExpect(AddrWidth const w) const;
+	void strictExpect(AddrWidth const w) const; //MLDTODO Change to macro
 	void alwaysExpect(AddrWidth const w) const;
 
-	AddrWidth getRealWidth(){return std::log2(m_value) + 1;}
+	AddrWidth getRealWidth(){return ilog2(m_value);}
 	AddrWidth getPrintWidth(){return getPrintWidth(m_width);}
 
 	bool operator==(RAddr &other) const {return m_value == other.m_value;}

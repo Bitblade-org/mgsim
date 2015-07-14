@@ -98,21 +98,6 @@ bool Arguments::namedSet(std::string varName, bool consume, RAddr &addr){
 	return true;
 }
 
-bool Arguments::namedSet(std::string varName, bool consume, PID &id){
-	if(m_namedValues.count(varName) == 0){
-		return false;
-	}
-
-	id = getULL(m_namedValues[varName], std::numeric_limits<IODeviceID>::max());
-	//MLDTODO Test if id is correct!
-
-	if(consume){
-		m_namedValues.erase(varName);
-	}
-
-	return true;
-}
-
 void Arguments::set(unsigned int index, bool &var){
 	std::string a = getString(index, true);
 	var = getBool(a);
@@ -124,11 +109,6 @@ void Arguments::set(unsigned int index, Addr &addr){
 void Arguments::set(unsigned int index, RAddr &addr){
 	addr = getULL(index, std::numeric_limits<Addr>::max());
 	addr.alwaysExpect(addr.m_width);
-}
-
-void Arguments::set(unsigned int index, PID &id){
-	id = getULL(index, std::numeric_limits<IODeviceID>::max());
-	//MLDTODO Test if id is correct!
 }
 
 bool Arguments::getBool(unsigned int index){
@@ -150,7 +130,7 @@ Addr Arguments::getMAddr(unsigned int index, AddrWidth width){
 }
 
 RAddr Arguments::getRMAddr(unsigned int index, AddrWidth width){
-	RAddr addr = RAddr(width, getMAddr(index));
+	RAddr addr = RAddr(getMAddr(index), width);
 	addr.alwaysExpect(width);
 	return addr;
 }

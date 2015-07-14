@@ -1,34 +1,35 @@
 #include "Table.h"
 
+#include "MMU.h"
+#include <sim/log2.h>
 namespace Simulator {
 namespace drisc {
 namespace mmu {
 
-
 Table::Table(const std::string& name, Object& parent):
 Object(name, parent),
 m_offsetWidth(GetConf("OffsetSize", size_t)),
-m_vWidth(RAddr::VirtWidth - m_offsetWidth),
-m_pWidth(RAddr::PhysWidth - m_offsetWidth),
+m_vWidth(getMMU().vAW() - m_offsetWidth),
+m_pWidth(getMMU().pAW() - m_offsetWidth),
+m_numLines(GetConf("NumberOfLines", size_t)),
 m_evictionStrategy(getEvictionStrategy(GetConf("EvictionStrategy", std::string))),
-m_numLines(GetConf("NumberOfEntries", uint64_t)), //MLDTODO Refactor to numLines
-m_lines(m_numLines,	Line(m_vWidth, m_pWidth, ADDR_WIDTH_MAX)),
+m_lines(m_numLines,	Line(getMMU().procAW(), m_vWidth, m_pWidth, getMMU().netAW())),
 m_head(NULL),
 m_tail(NULL),
-m_indexWidth(std::log2(m_numLines))
+m_indexWidth(ilog2(m_numLines))
 {
 	if(m_numLines == 0){
 		throw exceptf<std::invalid_argument>("A table cannot be initialised with 0 lines");
 	}
-
 	initStrategy();
-
 }
 
-void Table::initStrategy(){
+AddrWidth Table::getVAddrWidth() const {return getMMU().vAW() - m_offsetWidth;} //MLDTODO Inline? Smth else?
+AddrWidth Table::getPAddrWidth() const {return getMMU().pAW() - m_offsetWidth;}
 
+void Table::initStrategy(){
 	if (m_evictionStrategy == EvictionStrategy::LRU) {
-		// Initially link all nodes ascending.
+		// Initially link all nodes in ascending order.
 		m_head = &(m_lines[0]);
 		m_tail = &(m_lines[m_numLines-1]);
 		m_head->previous = m_tail->next = NULL;
@@ -44,8 +45,19 @@ void Table::initStrategy(){
 	}
 }
 
-Line *Table::find(RAddr processId, RAddr vAddr, LineTag type)
-{
+Line *Table::lookup(RAddr processId, RAddr vAddr, LineTag type){
+	processId.strictExpect(getMMU().procAW());
+	vAddr.strictExpect(m_vWidth);
+
+	Line* line = find(processId, vAddr, type);
+	if(line != NULL) { setPrioHigh(*line); }
+
+	return line;
+}
+
+
+Line *Table::find(RAddr processId, RAddr vAddr, LineTag type){
+	processId.strictExpect(getMMU().procAW());
 	vAddr.strictExpect(m_vWidth);
 
 	auto lambda =
@@ -64,11 +76,7 @@ Line *Table::find(LineTag type)
 Line *Table::find(std::function<bool (Line&)> const &lambda)
 {
 	auto res = std::find_if(m_lines.begin(), m_lines.end(), lambda);
-	if (res == m_lines.end()) {
-		return NULL;
-	} else {
-		return &(*res);
-	}
+	return (res == m_lines.end())? NULL : &(*res);
 }
 
 Addr Table::getIndex(const Line &line) const{
@@ -117,7 +125,7 @@ Result Table::releasePending(RAddr tableLineId){
 Result Table::storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write){
 	vAddr.strictExpect(m_vWidth);
 	pAddr.strictExpect(m_pWidth);
-	processId.strictExpect(RAddr::ProcIdWidth);
+	processId.strictExpect(getMMU().procAW());
 
 	Line &dst = pickDestination();
 	if(dst.locked){
@@ -143,7 +151,7 @@ Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr,
 	pAddr.strictExpect(m_pWidth);
 	tableLineId.strictExpect(m_indexWidth);
 
-	Line &line = m_lines.at(tableLineId.m_value);
+	Line &line = m_lines[tableLineId.m_value];
 
 	//MLDTODO Should this be impossible? Should be impossible anyway! Might as well assert!
 	if(!line.is(LineTag::PENDING)){
@@ -161,6 +169,7 @@ Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr,
 }
 
 Result Table::storePending(RAddr processId, RAddr vAddr, RAddr &d$LineId, Addr &tableLineId){
+	processId.strictExpect(getMMU().procAW());
 	vAddr.strictExpect(m_vWidth);
 
 	Line *dst = find(processId, vAddr, LineTag::PENDING);
@@ -189,7 +198,7 @@ Result Table::storePending(RAddr processId, RAddr vAddr, RAddr &d$LineId, Addr &
 }
 
 void Table::setPrioHigh(Line &line) {
-	if (!line.present){ return; } //MLDTODO Correct check?
+	assert(line.present);
 
 	if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
 		line.accessed = true;
@@ -215,12 +224,15 @@ Line& Table::pickDestination(){
 	Line *dest = find(LineTag::FREE);
 
 	if (dest == NULL) {
-		if (m_evictionStrategy == EvictionStrategy::PSEUDO_RANDOM) {
-			dest = &pickVictim_random();
-		} else if (m_evictionStrategy == EvictionStrategy::ACCESSED) {
-			dest = &pickVictim_accessed();
-		} else if (m_evictionStrategy == EvictionStrategy::LRU) {
-			dest = &pickVictim_lru();
+		switch(m_evictionStrategy){
+		case EvictionStrategy::PSEUDO_RANDOM:
+			dest = &pickVictim_random(); break;
+		case EvictionStrategy::ACCESSED:
+			dest = &pickVictim_accessed(); break;
+		case EvictionStrategy::LRU:
+			dest = &pickVictim_lru(); break;
+		default:
+			UNREACHABLE
 		}
 	}
 
@@ -241,11 +253,7 @@ Line& Table::pickVictim_accessed(){
 	auto lambda = [](Line &line){return (line.is(LineTag::NORMAL) && !line.accessed);};
 	Line *res = find(lambda);
 
-	if(res == NULL){
-		return pickVictim_random();
-	}
-
-	return *res;
+	return (res == NULL) ? pickVictim_random() : *res;
 }
 
 Line& Table::pickVictim_lru(){
@@ -267,6 +275,7 @@ void Table::freeLines(const RAddr &processId, const RAddr *vAddr){ //MLDTODO Doc
 
 
 void Table::freeLine(Line &line){
+	//MLDTODO Figure out how to handle locked lines while invalidating.
 	if(line.locked == true){
 		throw exceptf<std::domain_error>("Attempt to invalidate locked TLB line");
 	}
@@ -274,13 +283,13 @@ void Table::freeLine(Line &line){
 	line.present = false;
 }
 
-Line::Line(AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth):
+Line::Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth):
 	present(false),
 	locked(false),
 	accessed(false),
 	previous(NULL),
 	next(NULL),
-	processId(0, RAddr::ProcIdWidth),
+	processId(0,procWidth),
 	vAddr(0, vAddrWidth),
 	pAddr(0, pAddrWidth),
 	d$lineId(0, d$AddrWidth),
@@ -316,17 +325,42 @@ bool Line::is(const RAddr *cmpProcessId, const RAddr *cmpVAddr, LineTag cmp)
 	return false;
 }
 
+EvictionStrategy getEvictionStrategy(const std::string name){
+	if (name == "PSEUDO_RANDOM" || name == "RANDOM" || name == "R") {
+		return EvictionStrategy::PSEUDO_RANDOM;
+	}
+	if (name == "ACCESSED" || name == "A") {
+		return EvictionStrategy::ACCESSED;
+	}
+	if (name == "LRU") {
+		return EvictionStrategy::LRU;
+	}
+	throw exceptf<SimulationException>("Unknown eviction strategy");
+}
+
+std::ostream& operator<<(std::ostream& os, EvictionStrategy strategy) {
+	switch (strategy) {
+		case EvictionStrategy::PSEUDO_RANDOM: os << "PSEUDO_RANDOM"; break;
+		case EvictionStrategy::ACCESSED: os << "ACCESSED"; break;
+		case EvictionStrategy::LRU:	os << "LRU"; break;
+		default: UNREACHABLE
+	}
+
+	return os;
+}
+
 void Table::Cmd_Info(std::ostream& out, const std::vector<std::string>& /* arguments */) const {
 	out << "The Table blablabla\n\n"; //MLDTODO Maybe add some meaningfull, inspiring and brilliant text
-	out << "  Eviction strategy: " << m_evictionStrategy << "\n";
-	out << "        Offset size: " << unsigned(m_offsetWidth) << " bytes\n";
-	out << "    Number of lines: " << unsigned(m_numLines) << "\n\n";
+	out << "      Eviction strategy: " << m_evictionStrategy << "\n";
+	out << "            Offset size: " << unsigned(m_offsetWidth) << " bytes\n";
+	out << "        Number of lines: " << unsigned(m_numLines) << "\n";
+	out << "  Virtual address width: " << unsigned(m_vWidth) << "\n";
+	out << " Physical address width: " << unsigned(m_pWidth) << "\n";
 	Cmd_Usage(out);
 
 	//MLDTODO Display statistics
 }
 
-//MLDTODO Needs to be rewritten to account for new line types
 void Table::Cmd_Read(std::ostream& out,	const std::vector<std::string>& /* arguments */) const {
 	using namespace std;
 
@@ -343,7 +377,7 @@ void Table::Cmd_Read(std::ostream& out,	const std::vector<std::string>& /* argum
 		out << " | Prev | Next";
 	}
 
-	out << " | " << left << setw(RAddr::getPrintWidth(RAddr::ProcIdWidth)) << "Proc. ID";
+	out << " | " << left << setw(RAddr::getPrintWidth(getMMU().procAW())) << "Proc. ID";
 	out << " | " << left << setw(RAddr::getPrintWidth(getVAddrWidth())) << "vAddr";
 	out << " | " << "Type-specific Fields";
 	out << endl;
@@ -478,30 +512,6 @@ void Table::Cmd_Usage(std::ostream& out) const{
 	out << "    write t(ail)     <index>\n";
 	out << "    write l(ine)     <index> <variable=value>...\n";
 	out << std::endl;
-}
-
-EvictionStrategy getEvictionStrategy(const std::string name){
-	if (name == "PSEUDO_RANDOM" || name == "RANDOM" || name == "R") {
-		return EvictionStrategy::PSEUDO_RANDOM;
-	}
-	if (name == "ACCESSED" || name == "A") {
-		return EvictionStrategy::ACCESSED;
-	}
-	if (name == "LRU") {
-		return EvictionStrategy::LRU;
-	}
-	throw exceptf<SimulationException>("Unknown eviction strategy");
-}
-
-std::ostream& operator<<(std::ostream& os, EvictionStrategy strategy) {
-	switch (strategy) {
-		case EvictionStrategy::PSEUDO_RANDOM: os << "PSEUDO_RANDOM"; break;
-		case EvictionStrategy::ACCESSED: os << "ACCESSED"; break;
-		case EvictionStrategy::LRU:	os << "LRU"; break;
-		default: UNREACHABLE
-	}
-
-	return os;
 }
 
 

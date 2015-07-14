@@ -29,7 +29,8 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_symtable(NULL),
     m_pid(pid),
     m_reginits(),
-    m_bits(),
+    m_bits({ilog2(GetGridSize()), 0, 0}),
+	m_mmu("mmu", *this, m_bits.pid_bits),
     m_familyTable ("families",      *this),
     m_threadTable ("threads",       *this),
     m_registerFile("registers",     *this, clock),
@@ -46,7 +47,6 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_lpout("stdout", *this, std::cout),
     m_lperr("stderr", *this, std::cerr),
     m_oldmmu("oldmmu", *this),
-	m_mmu("mmu", *this),
     m_action("action", *this),
     m_io_if(NULL)
 {
@@ -67,7 +67,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
 
     // Get the size, in bits, of various identifiers.
     // This is used for packing and unpacking various fields.
-    m_bits.pid_bits = ilog2(GetGridSize());
+//    m_bits.pid_bits = ilog2(GetGridSize());
     m_bits.fid_bits = ilog2(m_familyTable.GetFamilies().size());
     m_bits.tid_bits = ilog2(m_threadTable.GetNumThreads());
 

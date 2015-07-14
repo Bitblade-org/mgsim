@@ -4,25 +4,34 @@ include $(srcdir)/cli/Makefile.inc
 include $(srcdir)/demo/Makefile.inc
 include $(srcdir)/Makefile.cacti.inc
 
-bin_PROGRAMS += mgsim mgsim-dyn tinysim tinysim-dyn
+bin_PROGRAMS += mgsim mgsim.dbg mgsim-dyn tinysim tinysim-dyn
 dist_man1_MANS += mgsim.1
 
 BASE_CXXFLAGS = $(AM_CXXFLAGS)
 MGSIM_CXXFLAGS = $(BASE_CXXFLAGS) $(WARN_CXXFLAGS)
 MGSIM_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)
-noinst_LIBRARIES += libmgsim.a libmgsim-dyn.a
+noinst_LIBRARIES += libmgsim.a libmgsim.dbg.a libmgsim-dyn.a
 
 libmgsim_dyn_a_SOURCES = $(SIM_SOURCES) $(ARCH_SOURCES)
 libmgsim_dyn_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS)
 libmgsim_dyn_a_CXXFLAGS = $(SIM_EXTRA_CXXFLAGS) $(ARCH_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS)
-libmgsim_a_SOURCES = $(libmgsim_dyn_a_SOURCES)
-libmgsim_a_CPPFLAGS = $(libmgsim_dyn_a_CPPFLAGS) -DSTATIC_KERNEL=1
-libmgsim_a_CXXFLAGS = $(libmgsim_dyn_a_CXXFLAGS)
+libmgsim_a_SOURCES = $(SIM_SOURCES) $(ARCH_SOURCES)
+libmgsim_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS) -DSTATIC_KERNEL=1
+libmgsim_a_CXXFLAGS = $(SIM_EXTRA_CXXFLAGS) $(ARCH_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS)
+libmgsim_dbg_a_SOURCES = $(SIM_SOURCES) $(ARCH_SOURCES)
+libmgsim_dbg_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS) -DSTATIC_KERNEL=1  -O0 -ggdb3
+libmgsim_dbg_a_CXXFLAGS = $(SIM_EXTRA_CXXFLAGS) $(ARCH_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS) -O0 -ggdb3
+
 
 mgsim_dyn_SOURCES = $(CLI_SOURCES)
 mgsim_dyn_CPPFLAGS = $(CLI_EXTRA_CPPFLAGS) -DMGSIM_CONFIG_PATH=\"$(pkgdatadir)/config.ini\" $(MGSIM_CPPFLAGS)
 mgsim_dyn_CXXFLAGS = $(CLI_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS)
 mgsim_dyn_LDADD = libmgsim-dyn.a
+
+mgsim_dbg_SOURCES = $(mgsim_dyn_SOURCES)
+mgsim_dbg_CPPFLAGS = $(mgsim_dyn_CPPFLAGS) -DSTATIC_KERNEL=1 -O0 -ggdb3
+mgsim_dbg_CXXFLAGS = $(mgsim_dyn_CXXFLAGS) -O0 -ggdb3
+mgsim_dbg_LDADD = libmgsim.dbg.a
 
 mgsim_SOURCES = $(mgsim_dyn_SOURCES)
 mgsim_CPPFLAGS = $(mgsim_dyn_CPPFLAGS) -DSTATIC_KERNEL=1
@@ -49,14 +58,18 @@ MGSIM_CPPFLAGS += -DENABLE_CACTI=1
 MGSIM_CXXFLAGS += $(CACTI_EXTRA_CXXFLAGS)
 mgsim_LDADD += libmgsimcacti.a $(PTHREAD_LIBS)
 mgsim_dyn_LDADD += libmgsimcacti.a $(PTHREAD_LIBS)
+mgsim_dbg_LDADD += libmgsimcacti.a $(PTHREAD_LIBS)
 endif
+
 
 if ENABLE_SDL
 MGSIM_CPPFLAGS += -DUSE_SDL=1
 MGSIM_CXXFLAGS += $(SDL_CFLAGS)
 mgsim_LDADD += $(SDL_LIBS)
 mgsim_dyn_LDADD += $(SDL_LIBS)
+mgsim_dbg_LDADD += $(SDL_LIBS)
 endif
+
 
 ##
 ## Pre-processed sources

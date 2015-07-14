@@ -19,8 +19,8 @@ TLB::TLB(const std::string& name, Object& parent)
 	m_numTables(GetConf("NumberOfTables", size_t)),
 	m_tables(m_numTables),
 	m_enabled(false),
-	m_tableAddr(0, RAddr::PhysWidth),
-	m_managerAddr(0)
+	m_tableAddr(0, getMMU().pAW()),
+	m_managerAddr(0, getMMU().netAW())
 {
 
 	if(m_numTables == 0){
@@ -57,7 +57,7 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr &d$lineId, bo
 
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
-	Line *line = find(processId, vAddr, LineTag::PRESENT);
+	Line *line = doLookup(processId, vAddr, LineTag::PRESENT);
 	if(line == NULL){
 		Addr tableLineId;
 		Result res = m_tables[0]->storePending(processId, vAddr, d$lineId, tableLineId);
@@ -67,11 +67,12 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr &d$lineId, bo
 		}
 
 		RemoteMessage msg;
+		msg.type = msg.Type::MSG_TLB_MISS_MESSAGE;
 		msg.TlbMissMessage.addr = vAddr.m_value;
 		msg.TlbMissMessage.processId = processId.m_value;
 		msg.TlbMissMessage.lineIndex = tableLineId;
 		msg.TlbMissMessage.tlb = TlbType::DTLB;
-		msg.TlbMissMessage.dest = m_managerAddr;
+		msg.TlbMissMessage.dest = m_managerAddr.m_value;
 
 
 		if(!GetDRISC().GetNetwork().SendMessage(msg)){
@@ -92,12 +93,15 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr &d$lineId, bo
 	return Result::SUCCESS;
 }
 
-Line* TLB::find(RAddr processId, RAddr vAddr, LineTag tag){
+Line* TLB::doLookup(RAddr processId, RAddr vAddr, LineTag tag){
+	processId.strictExpect(getMMU().procAW());
+	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
+
 	Line *discoveredEntry = NULL; //MLDTODO Remove after debugging
 
 	for(Table *table : m_tables){
-		RAddr truncatedAddr = vAddr.truncateLsb(table->getVAddrWidth());
-		Line *line = table->find(processId, truncatedAddr, tag);
+		RAddr truncatedAddr = vAddr.truncateLsb(vAddr.m_width - table->getVAddrWidth());
+		Line *line = table->lookup(processId, truncatedAddr, tag);
 		if(line != NULL){
 			if(discoveredEntry != NULL){ //MLDTODO Remove after debugging
 				throw exceptf<std::domain_error>("vAddr %lX exists in multiple tables!", vAddr.m_value);
@@ -120,7 +124,7 @@ void TLB::invalidate(RAddr pid){
 }
 
 void TLB::invalidate(RAddr pid, RAddr addr){
-	addr.strictExpect(RAddr::VirtWidth - getMinOffsetSize());
+	addr.strictExpect(getMMU().vAW() - getMinOffsetSize());
 
 	for(Table *table : m_tables){
 		std::cout << "Truncate to: " << unsigned(table->getVAddrWidth());
@@ -131,8 +135,10 @@ void TLB::invalidate(RAddr pid, RAddr addr){
 }
 
 Result TLB::onInvalidateMsg(RemoteMessage &msg){
-	RAddr addr = RAddr(msg.tlbInvalidate.addr, RAddr::VirtWidth - getMinOffsetSize());
-	RAddr processId = RAddr(msg.tlbInvalidate.processId, RAddr::ProcIdWidth);
+	assert(msg.type == msg.Type::MSG_TLB_INVALIDATE);
+
+	RAddr addr = RAddr(msg.tlbInvalidate.addr, getMMU().vAW() - getMinOffsetSize());
+	RAddr processId = RAddr(msg.tlbInvalidate.processId, getMMU().procAW());
 	if(msg.tlbInvalidate.filterAddr && msg.tlbInvalidate.filterPid){
 		invalidate(processId, addr);
 	}else if(!msg.tlbInvalidate.filterAddr && msg.tlbInvalidate.filterPid){
@@ -145,14 +151,13 @@ Result TLB::onInvalidateMsg(RemoteMessage &msg){
 }
 
 Result TLB::onPropertyMsg(RemoteMessage &msg){
+	assert(msg.type == msg.Type::MSG_TLB_SET_PROPERTY);
 	assert(msg.tlbProperty.tlb == TlbType::DTLB);
 
 	if(msg.tlbProperty.type == TlbPropertyMsgType::ENABLED){
 		assert(msg.tlbProperty.value <= 1);
-		std::cout << "enabled prop: " << msg.tlbProperty.value;
 		m_enabled = msg.tlbProperty.value;
 	}else if(msg.tlbProperty.type == TlbPropertyMsgType::MANAGER_ADDRESS){
-		//MLDTODO Checking
 		m_managerAddr = msg.tlbProperty.value;
 	}else if(msg.tlbProperty.type == TlbPropertyMsgType::PT_ADDRESS){
 		m_tableAddr = msg.tlbProperty.value;
@@ -162,6 +167,7 @@ Result TLB::onPropertyMsg(RemoteMessage &msg){
 }
 
 Result TLB::onStoreMsg(RemoteMessage &msg){
+	assert(msg.type == msg.Type::MSG_DTLB_STORE);
 	assert(msg.dTlbStore.table < m_numTables);
 
 	Table *table = m_tables[msg.dTlbStore.table];
@@ -174,7 +180,7 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 		res = table->storeNormal(lineIndex, msg.dTlbStore.read, msg.dTlbStore.write, pAddr, d$lineId);
 	}else{
 		RAddr vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
-		RAddr processId = RAddr(0, RAddr::ProcIdWidth);
+		RAddr processId = RAddr(0, getMMU().procAW());
 
 		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
 		if(res != Result::SUCCESS){
@@ -257,15 +263,38 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		arg.set(1, m_tableAddr);
 		out << " to " << m_tableAddr << std::endl;
 	}else if(arg.is(0, false, "sim-l", "sim-lookup")){
-		out << "Not yet implemented!" << std::endl; //MLDTODO Implement
+		arg.expect(4);
+		//lookup(procid, vaddr, d$lineid, r, w, paddr, mayunlock)
+		//lookup(procid, vaddr, mayunlock)
+		//lookup(d$lineid, r, w, paddr)
+
+		RAddr procId = arg.getRMAddr(1, getMMU().procAW());
+		RAddr vAddr = arg.getRMAddr(2, getMMU().vAW() - getMinOffsetSize());
+		bool mayUnlock = arg.getBool(3);
+
+		bool r;
+		bool w;
+		RAddr pAddr(0, getMMU().pAW() - getMinOffsetSize());
+		RAddr d$LineIndex(0, getMMU().netAW());
+
+		Result res = lookup(procId, vAddr, d$LineIndex, r, w, pAddr, mayUnlock);
+
+		out << "Simulated lookup with result " << res << std::endl;
+		if(res == Result::SUCCESS){
+			out << "   d$LineIndex: " << d$LineIndex << std::endl;
+			out << "   read: " << r << std::endl;
+			out << "   write: " << w << std::endl;
+			out << "   pAddr: " << pAddr << std::endl;
+		}
 	}else if(arg.is(0, false, "sim-i", "sim-invalidate")){
 		arg.expect(5);
 
 		RemoteMessage msg;
+		msg.type = msg.Type::MSG_TLB_INVALIDATE;
 		arg.set(1, msg.tlbInvalidate.filterPid);
 		arg.set(3, msg.tlbInvalidate.filterAddr);
-		msg.tlbInvalidate.processId = arg.getMAddr(2, RAddr::ProcIdWidth);
-		msg.tlbInvalidate.addr = arg.getMAddr(4, RAddr::VirtWidth);
+		msg.tlbInvalidate.processId = arg.getMAddr(2, getMMU().procAW());
+		msg.tlbInvalidate.addr = arg.getMAddr(4, getMMU().vAW());
 
 		Result res = onInvalidateMsg(msg);
 		out << "Simulated invalidation message with result: " << res << std::endl;
@@ -273,6 +302,7 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		arg.expect(3);
 
 		RemoteMessage msg;
+		msg.type = msg.Type::MSG_TLB_SET_PROPERTY;
 		msg.tlbProperty.tlb = TlbType::DTLB;
 		msg.tlbProperty.type = getTlbPropertyMsgType(arg.getString(1, false));
 
@@ -281,10 +311,10 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 				msg.tlbProperty.value = arg.getBool(2);
 				break;
 			case TlbPropertyMsgType::PT_ADDRESS:
-				msg.tlbProperty.value = arg.getMAddr(2, RAddr::PhysWidth);
+				msg.tlbProperty.value = arg.getMAddr(2, getMMU().pAW());
 				break;
 			case TlbPropertyMsgType::MANAGER_ADDRESS:
-				msg.tlbProperty.value = arg.getMAddr(2); //MLDTODO Check validitiy
+				msg.tlbProperty.value = arg.getMAddr(2, getMMU().netAW());
 				break;
 			default: UNREACHABLE
 		}
@@ -295,9 +325,10 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		arg.expect(6);
 
 		RemoteMessage msg;
+		msg.type = msg.Type::MSG_DTLB_STORE;
 		msg.dTlbStore.table = arg.getMAddr(1);
 		msg.dTlbStore.lineIndex = arg.getMAddr(2);
-		msg.dTlbStore.pAddr = arg.getMAddr(3, RAddr::ProcIdWidth);
+		msg.dTlbStore.pAddr = arg.getMAddr(3, getMMU().procAW());
 		msg.dTlbStore.read = arg.getBool(4);
 		msg.dTlbStore.write = arg.getBool(5);
 

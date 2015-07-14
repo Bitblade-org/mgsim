@@ -17,6 +17,8 @@
 #include <cli/argument.h>
 #include <arch/simtypes.h>
 #include <arch/Memory.h>
+#include <arch/drisc/forward.h>
+
 
 namespace Simulator {
 namespace drisc {
@@ -37,7 +39,7 @@ enum class LineTag : unsigned char {
 };
 
 struct Line{
-	Line(AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth);
+	Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth);
 	bool is(const LineTag cmp);
 	bool is(const RAddr *processId, const RAddr *vAddr, const LineTag cmp);
 	bool	present;
@@ -58,23 +60,31 @@ struct Line{
 };
 
 #define NOTIMPL throw std::logic_error("Not implemented");
-//MLDTODO Not extending MMIOComponent, I consider MMIOComponent deprecated.
+//MLDNOTE Not extending MMIOComponent, I consider MMIOComponent deprecated.
 class Table : public Object, public IMemoryAdmin //MLDQUESTION D$, I$, none of them implement IMemoryAdmin. Should I?
 {
 	//Nomenclature: A (pending) entry is written to a free (= !p && !l) line.
 
 	//MLDTODO Keep statistics
-	//MLDTODO Destructor...
+	/*
+	 * - Number of hits
+	 * - Number of misses
+	 * 		- line ==, etc
+	 * - Number of flushes
+	 * - Number of PID invalidates
+	 * - Number of vAddr+PID invalidates
+	 */
 public:
     Table(const std::string& name, Object& parent); //Lets try this without a clock
     Table(const Table&) = delete;
+    ~Table(){} //Lines will be deleted by vector destructor.
 
     AddrWidth getOffsetWidth() const {return m_offsetWidth;}
-    AddrWidth getVAddrWidth() const {return RAddr::VirtWidth - m_offsetWidth;}
-    AddrWidth getPAddrWidth() const {return RAddr::PhysWidth - m_offsetWidth;}
+    AddrWidth getVAddrWidth() const;
+    AddrWidth getPAddrWidth() const;
     AddrWidth getIndexWidth() const {return m_indexWidth;}
 
-    Line *find(RAddr processId, RAddr vAddr, LineTag type);
+Line *lookup(RAddr processId, RAddr vAddr, LineTag type);
 
     Result getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId);
     Result releasePending(RAddr tableLineId);
@@ -112,6 +122,7 @@ private:
 
     Line *find(const LineTag type);
     Line *find(std::function<bool (Line&)> const&);
+    Line *find(RAddr processId, RAddr vAddr, LineTag type);
     Addr getIndex(const Line &line) const;
 
     void setPrioHigh(Line &entry);
@@ -123,23 +134,23 @@ private:
 
 	void freeLine(Line &line);
 
-   	AddrWidth 				m_offsetWidth;
-   	AddrWidth				m_vWidth;
-   	AddrWidth				m_pWidth;
+   	AddrWidth 	m_offsetWidth;
+   	AddrWidth	m_vWidth;
+   	AddrWidth	m_pWidth;
+   	size_t		m_numLines;
 
    	EvictionStrategy 	m_evictionStrategy;
-   	unsigned int 		m_numLines;
    	std::vector<Line>	m_lines;
 
-   	//MLDNOTE			     e2.prev	   e2.next
-   	//MLDNOTE				   MRU			 LRU
-   	//MLDNOTE			HEAD - [e1] - [e2] - [e3] - TAIL
-   	Line 				*m_head;    	// For Least Recently Used eviction
-   	Line				*m_tail;
-   	AddrWidth				m_indexWidth;   // For Accessed / Pseudo-Random eviction
+   	Line 		*m_head;    	// For Least Recently Used eviction
+   	Line		*m_tail;		// [Head] [Head.next] [...] [Tail.prev] [Tail=LRU]
+   	AddrWidth	m_indexWidth;	// For Accessed / Pseudo-Random eviction
 
    	//MLDNOTE Can't do this due to GCC bug PR60594
    	//std::function<Line&(const Table&)> f_pickVictim;
+
+   	MMU&	getMMU() const { return (MMU&)*GetParent()->GetParent(); } //MLDTODO Could be defined for Object.h?
+    Object& GetDRISCParent() const { return *GetParent()->GetParent()->GetParent(); } //MLDTODO Could be defined for Object.h?
 };
 
 EvictionStrategy getEvictionStrategy(const std::string name);
