@@ -8,6 +8,7 @@
 
 #include <arch/simtypes.h>
 #include <arch/IOBus.h>
+#include <arch/Address.h>
 #include <sim/serialization.h>
 
 
