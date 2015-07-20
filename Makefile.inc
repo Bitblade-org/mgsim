@@ -3,40 +3,50 @@ include $(srcdir)/arch/Makefile.inc
 include $(srcdir)/cli/Makefile.inc
 include $(srcdir)/demo/Makefile.inc
 include $(srcdir)/Makefile.cacti.inc
+include $(srcdir)/manager/Makefile.inc
 
-bin_PROGRAMS += mgsim mgsim.dbg mgsim-dyn tinysim tinysim-dyn
+bin_PROGRAMS += mgsim mgsim.dbg mgsim-dyn tinysim tinysim-dyn mm
 dist_man1_MANS += mgsim.1
 
 BASE_CXXFLAGS = $(AM_CXXFLAGS)
 MGSIM_CXXFLAGS = $(BASE_CXXFLAGS) $(WARN_CXXFLAGS)
 MGSIM_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)
-noinst_LIBRARIES += libmgsim.a libmgsim.dbg.a libmgsim-dyn.a
+noinst_LIBRARIES += libmgsim.a libmgsim.dbg.a libmgsim-dyn.a libmgr.a libmgr.dbg.a
 
 libmgsim_dyn_a_SOURCES = $(SIM_SOURCES) $(ARCH_SOURCES)
 libmgsim_dyn_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS)
 libmgsim_dyn_a_CXXFLAGS = $(SIM_EXTRA_CXXFLAGS) $(ARCH_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS)
+
 libmgsim_a_SOURCES = $(SIM_SOURCES) $(ARCH_SOURCES)
 libmgsim_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS) -DSTATIC_KERNEL=1
 libmgsim_a_CXXFLAGS = $(SIM_EXTRA_CXXFLAGS) $(ARCH_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS)
+
 libmgsim_dbg_a_SOURCES = $(SIM_SOURCES) $(ARCH_SOURCES)
-libmgsim_dbg_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS) -DSTATIC_KERNEL=1  -O0 -ggdb3
+libmgsim_dbg_a_CPPFLAGS = $(SIM_EXTRA_CPPFLAGS) $(ARCH_EXTRA_CPPFLAGS) $(MGSIM_CPPFLAGS) -DSTATIC_KERNEL=1
 libmgsim_dbg_a_CXXFLAGS = $(SIM_EXTRA_CXXFLAGS) $(ARCH_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS) -O0 -ggdb3
 
+libmgr_a_SOURCES = $(MANAGER_SOURCES)
+libmgr_a_CPPFLAGS = $(MGSIM_CPPFLAGS)
+libmgr_a_CFLAGS = -W -Wall -Wextra -Wundef -Wshadow -Wpointer-arith -Wmissing-declarations -Wwrite-strings -std=c11
+
+libmgr_dbg_a_SOURCES = $(MANAGER_SOURCES)
+libmgr_dbg_a_CPPFLAGS = $(MGSIM_CPPFLAGS)
+libmgr_dbg_a_CFLAGS = -O0 -ggdb3 -W -Wall -Wextra -Wundef -Wshadow -Wpointer-arith -Wmissing-declarations -Wwrite-strings -std=c11
 
 mgsim_dyn_SOURCES = $(CLI_SOURCES)
 mgsim_dyn_CPPFLAGS = $(CLI_EXTRA_CPPFLAGS) -DMGSIM_CONFIG_PATH=\"$(pkgdatadir)/config.ini\" $(MGSIM_CPPFLAGS)
 mgsim_dyn_CXXFLAGS = $(CLI_EXTRA_CXXFLAGS) $(MGSIM_CXXFLAGS)
-mgsim_dyn_LDADD = libmgsim-dyn.a
+mgsim_dyn_LDADD = libmgsim-dyn.a libmgr.a
 
 mgsim_dbg_SOURCES = $(mgsim_dyn_SOURCES)
 mgsim_dbg_CPPFLAGS = $(mgsim_dyn_CPPFLAGS) -DSTATIC_KERNEL=1 -O0 -ggdb3
 mgsim_dbg_CXXFLAGS = $(mgsim_dyn_CXXFLAGS) -O0 -ggdb3
-mgsim_dbg_LDADD = libmgsim.dbg.a
+mgsim_dbg_LDADD = libmgsim.dbg.a libmgr.dbg.a
 
 mgsim_SOURCES = $(mgsim_dyn_SOURCES)
 mgsim_CPPFLAGS = $(mgsim_dyn_CPPFLAGS) -DSTATIC_KERNEL=1
 mgsim_CXXFLAGS = $(mgsim_dyn_CXXFLAGS)
-mgsim_LDADD = libmgsim.a
+mgsim_LDADD = libmgsim.a libmgr.a
 
 tinysim_dyn_SOURCES = $(DEMO_SOURCES)
 tinysim_dyn_CPPFLAGS = $(MGSIM_CPPFLAGS) -DMGSIM_CONFIG_PATH=\"$(pkgdatadir)/config.ini\"
