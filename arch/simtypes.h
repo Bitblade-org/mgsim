@@ -105,11 +105,6 @@ struct Float64
 };
 
 #if defined(TARGET_MTALPHA)
-#define ADDR_WIDTH_MAX 64U		//Architecture-dictated maximum width of MAddr
-#define PADDR_WIDTH 16			//Width of PAddr
-typedef uint64_t Addr; 			//Type capable of storing any valid Addr value
-typedef uint8_t  AddrWidth; 	//Type capable of storing any valid Addr width
-
 typedef uint64_t MemAddr;       ///< Address into memory
 typedef uint64_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
@@ -120,13 +115,6 @@ typedef Float64  Float;         ///< Natural floating point type
 #define INTEGER_WIDTH 64
 #define MEMSIZE_MAX UINT64_MAX
 #elif defined(TARGET_MTSPARC) || defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL) || defined(TARGET_OR1K)
-#define ADDR_WIDTH_MAX 32		//Architecture-dictated maximum width of MAddr
-#define PADDR_WIDTH 16			//Width of PAddr
-typedef uint32_t Addr; 		//Type capable of storing any valid MAddr value (Must be unsigned!)
-typedef uint8_t  AddrWidth; 		//Type capable of storing any valid MAddr width
-typedef uint16_t PAddr;			//Type capable of storing any valid PAddr (Process ID) value
-typedef uint8_t  PWidth;		//Type capable of storing any valid PAddr width
-
 typedef uint32_t MemAddr;       ///< Address into memory
 typedef uint32_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
@@ -138,43 +126,10 @@ typedef Float32  Float;         ///< Natural floating point type
 #define MEMSIZE_MAX UINT32_MAX
 #endif
 
-//Restricted Memory Address
-#define RMADDR_STRICT true
-struct RAddr{
-	RAddr():RAddr(0,0){}
-	RAddr(int) = delete;
-	RAddr(Addr v, AddrWidth w);
-
-	Addr 	m_value;
-	AddrWidth 	m_width;
-
-	static bool   isValid     (Addr const a, AddrWidth const w);
-	static void   strictExpect(Addr const a, AddrWidth const w);
-	static void   alwaysExpect(Addr const a, AddrWidth const w);
-	static RAddr truncateLsb (Addr const a, AddrWidth const oldW, AddrWidth const by);
-	static RAddr truncateMsb (Addr const a, AddrWidth const newW);
-	static AddrWidth getPrintWidth(AddrWidth addr);
-
-	RAddr truncateLsb(AddrWidth const by) const {return truncateLsb(m_value, m_width, by);}
-	RAddr truncateMsb(AddrWidth const newW) const {return truncateMsb(m_value, newW);}
-
-	bool isValid() 		const {return isValid(m_value, m_width	);}
-
-	void strictExpect(AddrWidth const w) const; //MLDTODO Change to macro
-	void alwaysExpect(AddrWidth const w) const;
-
-	AddrWidth getRealWidth(){return ilog2(m_value);}
-	AddrWidth getPrintWidth(){return getPrintWidth(m_width);}
-
-	bool operator==(RAddr &other) const {return m_value == other.m_value;}
-	bool operator!=(RAddr &other) const {return m_value != other.m_value;}
-	RAddr& operator=(const Addr &addr);
-
-	SERIALIZE(a) {a & "MAddr" & m_value & m_width;}
+struct RAddrIndices{
+	size_t i;
+	size_t j;
 };
-
-std::ostream& operator<<(std::ostream& os, RAddr ra);
-
 
 typedef Integer  FCapability;   ///< Capability for a family
 typedef Integer  PCapability;   ///< Capability for a place
