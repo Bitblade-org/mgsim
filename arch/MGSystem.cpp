@@ -609,7 +609,8 @@ MGSystem::MGSystem(Config& config, bool quiet)
       m_memory(0),
       m_objdump_cmd(),
       m_bootrom(0),
-      m_selector(0)
+      m_selector(0),
+	  m_jtag(0)
 {
 #ifdef STATIC_KERNEL
     Kernel::InitGlobalKernel();
@@ -702,6 +703,9 @@ MGSystem::MGSystem(Config& config, bool quiet)
     // Create the event selector
     Clock& selclock = kernel.CreateClock(GetTopConf("EventCheckFreq", Clock::Frequency));
     m_selector = new Selector("selector", *m_root, selclock);
+
+    //MLDTODO Remove after debugging!
+    m_jtag = new JTAG("jtag", *m_root);
 
     // Create the I/O Buses
     const size_t numIOBuses = GetTopConf("NumIOBuses", size_t);
@@ -1000,6 +1004,9 @@ MGSystem::MGSystem(Config& config, bool quiet)
              << ru2.GetUserTime() << " us, "
              << ru2.GetMaxResidentSize() << " KiB (approx)" << endl;
     }
+
+    //MLDTODO Remove after testing
+    m_jtag->start();
 }
 
 MGSystem::~MGSystem()

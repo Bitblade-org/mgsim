@@ -4,8 +4,6 @@
 #include <sim/log2.h>
 #include <sim/config.h>
 #include <sim/ctz.h>
-#include "mmu/MMUTester.h"
-
 #include <cassert>
 
 using namespace std;
@@ -50,8 +48,6 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_action("action", *this),
     m_io_if(NULL)
 {
-	//MLDTODO Remove after testing
-	mmu::MMUTester(this->m_mmu);
     RegisterModelProperty(*this, "pid", (uint32_t)pid);
     RegisterModelProperty(*this, "ic.assoc", (uint32_t)m_icache.GetAssociativity());
     RegisterModelProperty(*this, "ic.lsz", (uint32_t)m_icache.GetLineSize());

@@ -25,6 +25,7 @@
 #include <arch/drisc/RegisterFile.h>
 #include <arch/drisc/old/IOMatchUnit.h>
 #include <arch/drisc/mmu/MMU.h>
+#include <arch/dev/JTAG/MMUTester.h>
 
 class Config;
 

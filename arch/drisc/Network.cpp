@@ -7,12 +7,17 @@
 #include <iostream>
 #include <sstream>
 
+//MLDTODO Remove after testing
+#include "../dev/JTAG/MgrTester.h"
+
 using namespace std;
 
 namespace Simulator
 {
 namespace drisc
 {
+
+using namespace mmu;
 
 Network::Network(
     const std::string&    name,
@@ -100,6 +105,13 @@ bool Network::SendMessage(const RemoteMessage& msg)
     case RemoteMessage::MSG_BREAK:        		dmsg.dest = msg.brk.pid; break;
     case RemoteMessage::MSG_TLB_MISS_MESSAGE:	dmsg.dest = msg.TlbMissMessage.dest; break;
     default:                              		dmsg.dest = INVALID_PID; break;
+    }
+
+
+    //MLDTODO Remove after testing
+    if(msg.type == RemoteMessage::MSG_TLB_MISS_MESSAGE && msg.TlbMissMessage.dest == 42){
+    	TestNet::mgrPush(msg);
+    	return true;
     }
 
     assert(dmsg.dest != INVALID_PID);

@@ -11,6 +11,8 @@
 #include <string>
 #include <map>
 
+#include <arch/dev/JTAG/JTAG.h> //MLDTODO Remove after testing!
+
 namespace Simulator {
 
     class ActiveROM;
@@ -38,6 +40,9 @@ namespace Simulator {
         std::string                 m_objdump_cmd;
         ActiveROM*                  m_bootrom;
         Selector*                   m_selector;
+
+        //MLDTODO Remove after testing
+        JTAG*			m_jtag;
 
         // Writes the current configuration into memory and returns its address
         MemAddr WriteConfiguration();

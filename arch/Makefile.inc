@@ -63,7 +63,18 @@ DEVICE_SRC = \
         arch/dev/SMC.h \
         arch/dev/SMC.cpp \
         arch/dev/UART.h \
-        arch/dev/UART.cpp
+        arch/dev/UART.cpp \
+        arch/dev/JTAG/JTAG.cpp \
+        arch/dev/JTAG/JTAG.h \
+        arch/dev/JTAG/MgrTester.cpp \
+        arch/dev/JTAG/MgrTester.h \
+        arch/dev/JTAG/MMUTester.h \
+        arch/dev/JTAG/MMUTester.cpp \
+        arch/dev/JTAG/pageTableTypes.h \
+        arch/dev/JTAG/PTBuilder.cpp \
+        arch/dev/JTAG/PTBuilder.h
+        
+        
 BUILT_SOURCES += arch/dev/RPC.h
 
 PROCESSOR_SRC = \
@@ -71,9 +82,7 @@ PROCESSOR_SRC = \
 	arch/drisc/old/IOMatchUnit.cpp \
 	arch/drisc/old/MMUInterface.cpp \
 	arch/drisc/old/MMUInterface.h \
-	arch/drisc/mmu/MMUTester.h \
-	arch/drisc/mmu/MMUTester.cpp \
-	arch/drisc/mmu/MMU.cpp \
+    	arch/drisc/mmu/MMU.cpp \
 	arch/drisc/mmu/MMU.h \
 	arch/drisc/mmu/Table.cpp \
 	arch/drisc/mmu/Table.h \
@@ -118,6 +127,8 @@ PROCESSOR_SRC = \
 	arch/drisc/ISA.mips.h \
         arch/drisc/ISA.or1k.h \
 	arch/drisc/MemoryStage.cpp \
+	arch/drisc/RemoteMessage.p.h \
+	arch/drisc/RemoteMessage.h \
 	arch/drisc/Network.cpp \
 	arch/drisc/Network.p.h \
 	arch/drisc/Network.h \
@@ -137,6 +148,7 @@ PROCESSOR_SRC = \
 	arch/drisc/PerfCounters.cpp
 BUILT_SOURCES += \
 	arch/drisc/Allocator.h \
+	arch/drisc/RemoteMessage.h \
 	arch/drisc/Network.h \
 	arch/drisc/IOBusInterface.h \
 	arch/drisc/IODirectCacheAccess.h \
@@ -161,7 +173,9 @@ COMMON_SRC = \
 	arch/symtable.h \
 	arch/symtable.cpp \
 	arch/VirtualMemory.cpp \
-	arch/VirtualMemory.h
+	arch/VirtualMemory.h \
+	arch/Address.cpp \
+    arch/Address.h
 
 if ENABLE_MEM_ZLCDMA
 MEMORY_SRC += \
