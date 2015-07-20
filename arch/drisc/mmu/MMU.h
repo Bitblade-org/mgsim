@@ -20,8 +20,8 @@ public:
     MMU(const MMU &mmu) = delete;
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
-    TLB& getITLB(){return m_dtlb;}
-    TLB& getDTlb(){return m_itlb;}
+    TLB& getITLB(){return m_itlb;}
+    TLB& getDTlb(){return m_dtlb;}
 
     AddrWidth getPAddrWidth() const {return m_pAddrWidth;}
     AddrWidth pAW() const {return getPAddrWidth();}

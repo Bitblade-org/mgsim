@@ -46,7 +46,7 @@ TLB::~TLB(){
 // DELAYED: Address not in TLB, expecting refill
 // FAILED:  Stalled or Address not in TLB and unable to transmit refill request
 // domain_error: TLB is disabled
-Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr &d$lineId, bool &r, bool &w, RAddr &pAddr, bool mayUnlock){
+Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bool& r, bool& w, RAddr& pAddr, bool mayUnlock){
 	if(!m_enabled){
 		throw exceptf<std::domain_error>("TLB cannot handle lookups while disabled");
 	}
@@ -200,7 +200,7 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 		//MLDTODO-DOC Continuatie gegarandeerd zolang een line enkel vanaf netwerk gelocked kan worden. (Line van table <> 0 kan niet pending zijn)
 	}
 
-	std::cout << "INFORM D$, LINEID " << d$lineId << std::endl; //MLDTODO Inform D$
+	TestNet::d$Push(d$lineId.m_value); //MLDTODO Inform D$
 
 	return Result::SUCCESS;
 }
@@ -224,7 +224,8 @@ void TLB::Cmd_Usage(std::ostream& out) const{
 	out << std::endl;
 	out << "Simulate incomming messages:\n";
 	out << "    From Pipeline:\n";
-	out << "         write sim-l(ookup)     <values>\n";
+	out << "         write sim-l(ookup)\n";
+	out << "            <processId> <vAddr> <mayUnlock>\n";
 	out << std::endl;
 	out << "    From Manager:\n";
 	out << "         write sim-i(nvalidate)\n";
@@ -269,7 +270,8 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		//lookup(d$lineid, r, w, paddr)
 
 		RAddr procId = arg.getRMAddr(1, getMMU().procAW());
-		RAddr vAddr = arg.getRMAddr(2, getMMU().vAW() - getMinOffsetSize());
+		RAddr vAddr = arg.getRMAddr(2, getMMU().vAW());
+		vAddr >>= getMinOffsetSize();
 		bool mayUnlock = arg.getBool(3);
 
 		bool r;
