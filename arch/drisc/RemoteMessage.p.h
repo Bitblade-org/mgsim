@@ -2,8 +2,17 @@
 #ifndef ARCH_DRISC_REMOTEMESSAGE_P_H_
 #define ARCH_DRISC_REMOTEMESSAGE_P_H_
 
+#include <cstdint>
+#include <string>
+
+#include <sim/serialization.h>
+#include <arch/Address.h>
+#include <arch/simtypes.h>
+
 namespace Simulator{
 namespace drisc{
+
+//MLDQUESTION Hoe zorg ik dat RemoteMessage.h gegenereert wordt?
 
 	// {% from "sim/macros.p.h" import gen_variant,gen_struct %}
 

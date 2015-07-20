@@ -5,14 +5,14 @@
 #include <cstdint>
 #include <string>
 
-#include "../../sim/serialization.h"
-#include "../Address.h"
-#include "../simtypes.h"
-
-
+#include <sim/serialization.h>
+#include <arch/Address.h>
+#include <arch/simtypes.h>
 
 namespace Simulator{
 namespace drisc{
+
+//MLDQUESTION Hoe zorg ik dat RemoteMessage.h gegenereert wordt?
 
 	// 
 

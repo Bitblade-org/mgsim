@@ -418,7 +418,7 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
     request.wid       = tid;//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
     //MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
     //MLDNOTE Beginnen met een stall.
-    //MLDTODO Hoort ook weer in scriptie.
+    //MLDTODO-DOC Hoort ook weer in scriptie.
 
     COMMIT{
     std::copy((char*)data, ((char*)data)+size, request.data.data+offset);

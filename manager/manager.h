@@ -12,7 +12,12 @@
 #include "SPSC_queue.h"
 #include "managerResp.h"
 
-#define TABLE_OFFSET 4
+
+//MLDTODO Manager parametriseren
+
+//MLDQUESTION Hoe extra instructies definieren?
+//MLDQUESTION Hoe oude geheugenmanager checks uitschakelen (voor manager)? (Invalid access by memory....)
+//MLDQUESTION Hoe manager draaien naast test binary? ("os" binary die beide initialiseert!)
 
 void out_RefillMessage(const tlbRefillMsg *msg);
 
@@ -41,17 +46,8 @@ reqQueue_t* getQueue(void);
  */
 pt_t* firstPt(pt_t* ptr);
 
-/*
- * Temporary entry points for Manager requests.
- * These functions construct request messages and pass them on to in_netMsg.
- *
- * Return value equals that of in_netMsg
- */
-int in_TlbMiss(uint8_t tlbType, uint8_t lineIndex, uint16_t processId, uint64_t vAddr, uint16_t dest );
-int in_Invalidate(uint8_t reqType, uint8_t filterPid, uint8_t filterVAddr, uint16_t processId, uint64_t vAddr);
 
-
-/*
+/* //MLDQUESTION Netwerk berichten ontvangen & versturen?
  * Entry point for request messages
  *
  * COPIES the message to the queue,
@@ -77,7 +73,8 @@ int out_invalidate(void);
 
 
 
-/*
+/*//MLDQUESTION Extra instructie nodig? Hoe?
+ *
  * We need untranslated access to the memory
  */
 int disableDTlb(void);
@@ -85,13 +82,27 @@ int disableDTlb(void);
 
 /*
  * main loop
+ * Acts as a "clock-source" when running as software within the simulator.
+ * (Repeatedly) Calls handleReq() and handles a possible error code.
+ *
+ * Note: All different clock sources should call handleReq()
  */
 void loop(void);
+
+/*
+ * onClockTick
+ */
 int handleReq();
+
+
 int handleInvalidation(managerReq_t* req);
 int handleMiss(managerReq_t* req);
 
 int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels);
+
+/*
+ * For debugging
+ */
 void printTable(pt_t* t);
 
 #endif /* MANAGER_MANAGER_H_ */
