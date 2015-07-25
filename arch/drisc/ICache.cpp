@@ -244,11 +244,12 @@ Result ICache::Fetch(MemAddr address, MemSize size, TID* tid, CID* cid)
 {
     // Check that we're fetching executable memory
     auto& cpu = GetDRISC();
-    if (!cpu.CheckPermissions(address, size, IMemory::PERM_EXECUTE))
-    {
-        throw exceptf<SecurityException>(*this, "Fetch (%#016llx, %zd): Attempting to execute from non-executable memory",
-                                         (unsigned long long)address, (size_t)size);
-    }
+    //MLDNOTE Permissie fysiek geheugen.
+//    if (!cpu.CheckPermissions(address, size, IMemory::PERM_EXECUTE))
+//    {
+//        throw exceptf<SecurityException>(*this, "Fetch (%#016llx, %zd): Attempting to execute from non-executable memory",
+//                                         (unsigned long long)address, (size_t)size);
+//    }
 
     // Validate input
     size_t offset = (size_t)(address % m_lineSize);
