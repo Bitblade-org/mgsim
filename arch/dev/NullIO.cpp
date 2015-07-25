@@ -31,6 +31,7 @@ namespace Simulator
 
     bool NullIO::RegisterClient(IODeviceID id, IIOBusClient& client)
     {
+    	//MLDNOTE BUG! Some parts of MGSim expect the largest ID to equal the number of devices - 1.
         if (id >= m_clients.size())
         {
             m_clients.resize(id + 1, NULL);
@@ -114,7 +115,7 @@ namespace Simulator
         StorageTraceSet res;
         for (auto p : m_clients)
         {
-            res ^= p->GetReadRequestTraces() * opt(m_clients[from]->GetReadResponseTraces());
+           	res ^= p->GetReadRequestTraces() * opt(m_clients[from]->GetReadResponseTraces());
         }
         return res;
     }
@@ -124,7 +125,7 @@ namespace Simulator
         StorageTraceSet res;
         for (auto p : m_clients)
         {
-            res ^= p->GetWriteRequestTraces();
+           	res ^= p->GetWriteRequestTraces();
         }
         return res;
     }
@@ -134,7 +135,7 @@ namespace Simulator
         StorageTraceSet res;
         for (auto p : m_clients)
         {
-            res ^= p->GetReadResponseTraces();
+           	res ^= p->GetReadResponseTraces();
         }
         return res;
     }
