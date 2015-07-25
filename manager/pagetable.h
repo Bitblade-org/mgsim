@@ -1,9 +1,9 @@
 #ifndef MANAGER_PAGETABLE_H_
 #define MANAGER_PAGETABLE_H_
 
-#include <stdint.h>
+#include <stddef.h>
 
-#include "../manager/defines.h"
+#include "defines.h"
 
 struct __attribute__((packed)) pte_tableptr{ //MLDTODO Use C packed equivalent
 	uint64_t p		: 1;	// Present bit

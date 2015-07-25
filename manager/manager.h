@@ -3,15 +3,21 @@
 
 #include <stddef.h>
 #include <assert.h>
-#include <stdint.h>
 #include <stdio.h>
+#include <mtconf.h>
 
 #include "defines.h"
-#include "managerReq.h"
 #include "pagetable.h"
-#include "SPSC_queue.h"
-#include "managerResp.h"
+#include "MgtMsg.h"
 
+/*
+ * Exit values:
+ * 	-1			General error
+ * 	-8...-15	Wrong message type T where T=n*-1-8
+ * 	-16			Page walk error
+ */
+
+//MLDTODO ProcId -> ContexId?
 
 //MLDTODO Manager parametriseren
 
@@ -19,58 +25,38 @@
 //MLDQUESTION Hoe oude geheugenmanager checks uitschakelen (voor manager)? (Invalid access by memory....)
 //MLDQUESTION Hoe manager draaien naast test binary? ("os" binary die beide initialiseert!)
 
-void out_RefillMessage(const tlbRefillMsg *msg);
-
-
-/*
- * Simple implementation for the manager.
- *
- * The implementation will handle requests in-order.
- * Not only does this imply laziness on the programmers part, it also
- * guarantees FIFO request handling.
- *
- * The queue (single producer, single consumer) will be of a fixed size,
- * making thread-safety almost trivial, even using a lockless restriction.
- * At least, that's what I'm going with. Assuming there is a much better way
- * in SL, I'm not putting much effort in the queue.
- */
-
-/*
- * Statically stores the queue
- */
-reqQueue_t* getQueue(void);
+#define NOTIFICATION_CHANNEL 2
 
 /*
  * Statically stores the pointer to the first PT
  * can be updated by providing a non-null value for ptr
  */
-pt_t* firstPt(pt_t* ptr);
+pt_t* first_pt(pt_t* ptr);
 
 
-/* //MLDQUESTION Netwerk berichten ontvangen & versturen?
+/*
  * Entry point for request messages
  *
- * COPIES the message to the queue,
- * so the msg pointer only needs to be valid during the call.
+ * COPIES the message to the address pointed to by the
+ * supplied pointer.
  *
- * Returns 1 if request has been queued.
- * Returns 0 if req has not been queued due too full queue.
- * Returns <0 on error.
+ * Returns 1 if a message was received.
+ * Returns 0 if no message was received. (Currently impossible)
+ * Returns <0 on error. (Currently impossible)
  */
-int in_netMsg(managerReq_t* const msg);
+int receive_net_msg(MgtMsg_t* const msg, volatile uint64_t* from);
 
 
 /*
  * Send responses
  *
+ * dst must be at least 1 below UINT64_MAX
  *
- * Returns 1 if request has been sent/buffered
- * Returns 0 if req has not been sent/buffered due too full buffer.
- * Returns <0 on error.
+ * Returns 1 if request has been sent
+ * Returns 0 if req could not been sent due too full buffer. (Currently impossible)
+ * Returns <0 on error. (Currently impossible)
  */
-int out_TlbRefill(void);
-int out_invalidate(void);
-
+int send_net_msg(MgtMsg_t* const msg, volatile uint64_t* dst);
 
 
 /*//MLDQUESTION Extra instructie nodig? Hoe?
@@ -81,22 +67,14 @@ int disableDTlb(void);
 
 
 /*
- * main loop
- * Acts as a "clock-source" when running as software within the simulator.
- * (Repeatedly) Calls handleReq() and handles a possible error code.
- *
- * Note: All different clock sources should call handleReq()
+ * Main function
  */
-void loop(void);
+int main();
 
-/*
- * onClockTick
- */
-int handleReq();
-
-
-int handleInvalidation(managerReq_t* req);
-int handleMiss(managerReq_t* req);
+int handleMsg(MgtMsg_t* msg);
+int handleInvalidation(MgtMsg_t* req);
+int handleSetPT(MgtMsg_t* msg);
+int handleMiss(MgtMsg_t* req);
 
 int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels);
 
