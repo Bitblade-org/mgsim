@@ -610,7 +610,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
       m_objdump_cmd(),
       m_bootrom(0),
       m_selector(0),
-	  m_jtag(0)
+	  m_jtag(0) //MLDTODO Remove after testing
 {
 #ifdef STATIC_KERNEL
     Kernel::InitGlobalKernel();
@@ -703,9 +703,6 @@ MGSystem::MGSystem(Config& config, bool quiet)
     // Create the event selector
     Clock& selclock = kernel.CreateClock(GetTopConf("EventCheckFreq", Clock::Frequency));
     m_selector = new Selector("selector", *m_root, selclock);
-
-    //MLDTODO Remove after debugging!
-    m_jtag = new JTAG("jtag", *m_root);
 
     // Create the I/O Buses
     const size_t numIOBuses = GetTopConf("NumIOBuses", size_t);
@@ -846,6 +843,10 @@ MGSystem::MGSystem(Config& config, bool quiet)
             RPCInterface* rpc = new RPCInterface(name, *m_root, iobus, devid, *uif);
             m_devices[i] = rpc;
             RegisterModelObject(*rpc, "rpc");
+        } else if (dev_type == "JTAG"){ //MLDTODO Remove after testing!
+        	m_jtag = new JTAG(name, *m_root, iobus, devid);
+        	m_devices[i] = m_jtag;
+        	RegisterModelObject(*m_jtag, "jtag");
         } else {
             throw runtime_error("Unknown I/O device type: " + dev_type);
         }
@@ -1006,7 +1007,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
     }
 
     //MLDTODO Remove after testing
-    m_jtag->start();
+    if(m_jtag != NULL){ m_jtag->start(); }
 }
 
 MGSystem::~MGSystem()
