@@ -127,8 +127,6 @@ PROCESSOR_SRC = \
 	arch/drisc/ISA.mips.h \
         arch/drisc/ISA.or1k.h \
 	arch/drisc/MemoryStage.cpp \
-	arch/drisc/RemoteMessage.p.h \
-	arch/drisc/RemoteMessage.h \
 	arch/drisc/Network.cpp \
 	arch/drisc/Network.p.h \
 	arch/drisc/Network.h \
@@ -148,7 +146,6 @@ PROCESSOR_SRC = \
 	arch/drisc/PerfCounters.cpp
 BUILT_SOURCES += \
 	arch/drisc/Allocator.h \
-	arch/drisc/RemoteMessage.h \
 	arch/drisc/Network.h \
 	arch/drisc/IOBusInterface.h \
 	arch/drisc/IODirectCacheAccess.h \

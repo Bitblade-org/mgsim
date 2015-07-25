@@ -7,17 +7,12 @@
 #include <iostream>
 #include <sstream>
 
-//MLDTODO Remove after testing
-#include "../dev/JTAG/MgrTester.h"
-
 using namespace std;
 
 namespace Simulator
 {
 namespace drisc
 {
-
-using namespace mmu;
 
 Network::Network(
     const std::string&    name,
@@ -29,7 +24,6 @@ Network::Network(
     m_regFile    (parent.GetRegisterFile()),
     m_familyTable(parent.GetFamilyTable()),
     m_allocator  (parent.GetAllocator()),
-	m_mmu		 (parent.getMMU()),
 
     m_prev(NULL),
     m_next(NULL),
@@ -95,23 +89,15 @@ bool Network::SendMessage(const RemoteMessage& msg)
     // Get destination
     switch (msg.type)
     {
-    case RemoteMessage::MSG_ALLOCATE:     		dmsg.dest = msg.allocate.place.pid; break;
-    case RemoteMessage::MSG_SET_PROPERTY: 		dmsg.dest = msg.property.fid.pid; break;
-    case RemoteMessage::MSG_CREATE:       		dmsg.dest = msg.create.fid.pid; break;
-    case RemoteMessage::MSG_DETACH:       		dmsg.dest = msg.detach.fid.pid; break;
-    case RemoteMessage::MSG_SYNC:         		dmsg.dest = msg.sync.fid.pid; break;
-    case RemoteMessage::MSG_RAW_REGISTER: 		dmsg.dest = msg.rawreg.pid; break;
-    case RemoteMessage::MSG_FAM_REGISTER: 		dmsg.dest = msg.famreg.fid.pid; break;
-    case RemoteMessage::MSG_BREAK:        		dmsg.dest = msg.brk.pid; break;
-    case RemoteMessage::MSG_TLB_MISS_MESSAGE:	dmsg.dest = msg.TlbMissMessage.dest; break;
-    default:                              		dmsg.dest = INVALID_PID; break;
-    }
-
-
-    //MLDTODO Remove after testing
-    if(msg.type == RemoteMessage::MSG_TLB_MISS_MESSAGE && msg.TlbMissMessage.dest == 42){
-    	TestNet::mgrPush(msg);
-    	return true;
+    case RemoteMessage::MSG_ALLOCATE:     dmsg.dest = msg.allocate.place.pid; break;
+    case RemoteMessage::MSG_SET_PROPERTY: dmsg.dest = msg.property.fid.pid; break;
+    case RemoteMessage::MSG_CREATE:       dmsg.dest = msg.create.fid.pid; break;
+    case RemoteMessage::MSG_DETACH:       dmsg.dest = msg.detach.fid.pid; break;
+    case RemoteMessage::MSG_SYNC:         dmsg.dest = msg.sync.fid.pid; break;
+    case RemoteMessage::MSG_RAW_REGISTER: dmsg.dest = msg.rawreg.pid; break;
+    case RemoteMessage::MSG_FAM_REGISTER: dmsg.dest = msg.famreg.fid.pid; break;
+    case RemoteMessage::MSG_BREAK:        dmsg.dest = msg.brk.pid; break;
+    default:                              dmsg.dest = INVALID_PID; break;
     }
 
     assert(dmsg.dest != INVALID_PID);
@@ -525,7 +511,6 @@ Result Network::DoDelegationOut()
     return SUCCESS;
 }
 
-//MLDTODO Toevoegen TLB messages. Tijdelijk alle messages over Delegation.
 Result Network::DoDelegationIn()
 {
     // Handle incoming message from the delegation network
@@ -541,29 +526,6 @@ Result Network::DoDelegationIn()
 
     switch (msg.type)
     {
-    case RemoteMessage::MSG_TLB_MISS_MESSAGE:
-    	//MLDTODO Handle
-    	std::cout << "TLB_MISS_MESSAGE NEEDS TO BE HANDLED!" << std::endl;
-    	std::cout << msg.str() << std::endl;
-    	break;
-    case RemoteMessage::MSG_TLB_SET_PROPERTY:
-    	//MLDTODO Forward in family?
-    	//MLDTODO Sync?
-    	if(msg.tlbProperty.tlb == TlbType::DTLB){
-    		return this->m_mmu.getDTlb().onPropertyMsg(msg);
-    	}else{
-    		return this->m_mmu.getITLB().onPropertyMsg(msg);
-    	}
-    	break;
-    case RemoteMessage::MSG_DTLB_STORE:
-    	return this->m_mmu.getDTlb().onStoreMsg(msg);
-    	break;
-    case RemoteMessage::MSG_TLB_INVALIDATE:
-    	//MLDTODO Forward in family?
-    	//MLDTODO Sync?
-    	this->m_mmu.onInvalidateMsg(msg);
-    	return Result::SUCCESS;
-
     case RemoteMessage::MSG_ALLOCATE:
         if (!msg.allocate.bundle &&
             msg.allocate.type == ALLOCATE_BALANCED && msg.allocate.place.size > 1)
@@ -1022,15 +984,6 @@ string RemoteMessage::str() const
     switch (type)
     {
     case MSG_NONE: ss << "(no message)"; break;
-    case MSG_TLB_MISS_MESSAGE:
-    	ss << "[tlbMiss"
-		   << " tlb " << TlbMissMessage.tlb
-		   << " addr " << TlbMissMessage.addr
-		   << " dest " << TlbMissMessage.dest
-		   << " line " << TlbMissMessage.lineIndex
-		   << " procId " << TlbMissMessage.processId
-		   << "]";
-    	break;
     case MSG_ALLOCATE:
         ss << "[allocate"
            << " pid " << allocate.place.str()

@@ -8,7 +8,6 @@
 #include <iomanip>
 #include <sim/kernel.h>
 #include <arch/Address.h>
-#include <arch/drisc/RemoteMessage.h>
 #include "RefillMessage.h"
 #include <arch/IOBus.h>
 #include "sim/flag.h"
