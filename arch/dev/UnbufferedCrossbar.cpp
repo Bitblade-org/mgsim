@@ -1,4 +1,4 @@
-#include "NullIO.h"
+#include "UnbufferedCrossbar.h"
 #include <sim/except.h>
 
 #include <iomanip>
@@ -10,12 +10,12 @@ namespace Simulator
 {
 
 
-    NullIO::NullIO(const std::string& name, Object& parent, Clock& clock)
+    UnbufferedCrossbar::UnbufferedCrossbar(const std::string& name, Object& parent, Clock& clock)
         : Object(name, parent), m_clock(clock), m_clients()
     {
     }
 
-    void NullIO::CheckEndPoints(IODeviceID from, IODeviceID to) const
+    void UnbufferedCrossbar::CheckEndPoints(IODeviceID from, IODeviceID to) const
     {
         if (from >= m_clients.size() || m_clients[from] == NULL)
         {
@@ -29,7 +29,7 @@ namespace Simulator
 
     }
 
-    bool NullIO::RegisterClient(IODeviceID id, IIOBusClient& client)
+    bool UnbufferedCrossbar::RegisterClient(IODeviceID id, IIOBusClient& client)
     {
     	//MLDNOTE BUG! Some parts of MGSim expect the largest ID to equal the number of devices - 1.
         if (id >= m_clients.size())
@@ -44,7 +44,7 @@ namespace Simulator
         return true;
     }
 
-    bool NullIO::SendReadRequest(IODeviceID from, IODeviceID to, MemAddr address, MemSize size)
+    bool UnbufferedCrossbar::SendReadRequest(IODeviceID from, IODeviceID to, MemAddr address, MemSize size)
     {
         CheckEndPoints(from, to);
 
@@ -52,7 +52,7 @@ namespace Simulator
         return m_clients[to]->OnReadRequestReceived(from, address, size);
     }
 
-    bool NullIO::SendReadResponse(IODeviceID from, IODeviceID to, MemAddr address, const IOData& data)
+    bool UnbufferedCrossbar::SendReadResponse(IODeviceID from, IODeviceID to, MemAddr address, const IOData& data)
     {
         CheckEndPoints(from, to);
 
@@ -60,7 +60,7 @@ namespace Simulator
         return m_clients[to]->OnReadResponseReceived(from, address, data);
     }
 
-    bool NullIO::SendWriteRequest(IODeviceID from, IODeviceID to, MemAddr address, const IOData& data)
+    bool UnbufferedCrossbar::SendWriteRequest(IODeviceID from, IODeviceID to, MemAddr address, const IOData& data)
     {
         CheckEndPoints(from, to);
 
@@ -68,7 +68,7 @@ namespace Simulator
         return m_clients[to]->OnWriteRequestReceived(from, address, data);
     }
 
-    bool NullIO::SendActiveMessage(IODeviceID from, IODeviceID to, MemAddr address, Integer arg)
+    bool UnbufferedCrossbar::SendActiveMessage(IODeviceID from, IODeviceID to, MemAddr address, Integer arg)
     {
         CheckEndPoints(from, to);
 
@@ -76,7 +76,7 @@ namespace Simulator
         return m_clients[to]->OnActiveMessageReceived(from, address, arg);
     }
 
-    bool NullIO::SendInterruptRequest(IODeviceID from, IONotificationChannelID which)
+    bool UnbufferedCrossbar::SendInterruptRequest(IODeviceID from, IONotificationChannelID which)
     {
         if (from >= m_clients.size() || m_clients[from] == NULL)
         {
@@ -93,7 +93,7 @@ namespace Simulator
         return res;
     }
 
-    bool NullIO::SendNotification(IODeviceID from, IONotificationChannelID which, Integer tag)
+    bool UnbufferedCrossbar::SendNotification(IODeviceID from, IONotificationChannelID which, Integer tag)
     {
         if (from >= m_clients.size() || m_clients[from] == NULL)
         {
@@ -110,7 +110,7 @@ namespace Simulator
         return res;
     }
 
-    StorageTraceSet NullIO::GetReadRequestTraces(IODeviceID from) const
+    StorageTraceSet UnbufferedCrossbar::GetReadRequestTraces(IODeviceID from) const
     {
         StorageTraceSet res;
         for (auto p : m_clients)
@@ -120,7 +120,7 @@ namespace Simulator
         return res;
     }
 
-    StorageTraceSet NullIO::GetWriteRequestTraces() const
+    StorageTraceSet UnbufferedCrossbar::GetWriteRequestTraces() const
     {
         StorageTraceSet res;
         for (auto p : m_clients)
@@ -130,7 +130,7 @@ namespace Simulator
         return res;
     }
 
-    StorageTraceSet NullIO::GetReadResponseTraces() const
+    StorageTraceSet UnbufferedCrossbar::GetReadResponseTraces() const
     {
         StorageTraceSet res;
         for (auto p : m_clients)
@@ -140,7 +140,7 @@ namespace Simulator
         return res;
     }
 
-    StorageTraceSet NullIO::GetInterruptRequestTraces() const
+    StorageTraceSet UnbufferedCrossbar::GetInterruptRequestTraces() const
     {
         StorageTraceSet res;
         for (auto p : m_clients)
@@ -150,7 +150,7 @@ namespace Simulator
         return res;
     }
 
-    StorageTraceSet NullIO::GetNotificationTraces() const
+    StorageTraceSet UnbufferedCrossbar::GetNotificationTraces() const
     {
         StorageTraceSet res;
         for (auto p : m_clients)
@@ -160,7 +160,7 @@ namespace Simulator
         return res;
     }
 
-    StorageTraceSet NullIO::GetActiveMessageTraces() const
+    StorageTraceSet UnbufferedCrossbar::GetActiveMessageTraces() const
     {
         StorageTraceSet res;
         for (auto p : m_clients)
@@ -170,7 +170,7 @@ namespace Simulator
         return res;
     }
 
-    IODeviceID NullIO::GetNextAvailableDeviceID() const
+    IODeviceID UnbufferedCrossbar::GetNextAvailableDeviceID() const
     {
         for (size_t i = 0; i < m_clients.size(); ++i)
             if (m_clients[i] == NULL)
@@ -179,7 +179,7 @@ namespace Simulator
         return m_clients.size();
     }
 
-    void NullIO::Initialize()
+    void UnbufferedCrossbar::Initialize()
     {
         for (auto c : m_clients)
             if (c != NULL)
@@ -187,7 +187,7 @@ namespace Simulator
 
     }
 
-    IODeviceID NullIO::GetDeviceIDByName(const std::string& name_) const
+    IODeviceID UnbufferedCrossbar::GetDeviceIDByName(const std::string& name_) const
     {
         string name(name_);
         transform(name.begin(), name.end(), name.begin(), ::tolower);
@@ -200,7 +200,7 @@ namespace Simulator
         throw exceptf<InvalidArgumentException>(*this, "No such device: %s", name.c_str());
     }
 
-    Object& NullIO::GetDeviceByName(const std::string& name_) const
+    Object& UnbufferedCrossbar::GetDeviceByName(const std::string& name_) const
     {
         string name(name_);
         transform(name.begin(), name.end(), name.begin(), ::tolower);
@@ -213,11 +213,11 @@ namespace Simulator
         throw exceptf<InvalidArgumentException>(*this, "No such device: %s", name.c_str());
     }
 
-    IODeviceID NullIO::GetLastDeviceID() const
+    IODeviceID UnbufferedCrossbar::GetLastDeviceID() const
     {
         return m_clients.size();
     };
-    void NullIO::GetDeviceIdentity(IODeviceID which, IODeviceIdentification &id) const
+    void UnbufferedCrossbar::GetDeviceIdentity(IODeviceID which, IODeviceIdentification &id) const
     {
         if (which >= m_clients.size() || m_clients[which] == NULL)
         {
@@ -232,10 +232,10 @@ namespace Simulator
         }
     }
 
-    void NullIO::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*args*/) const
+    void UnbufferedCrossbar::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*args*/) const
     {
         out <<
-            "The Null I/O bus implements a zero-latency bus between\n"
+            "The unbuffered crossbar implements a zero-latency bus between\n"
             "the components connected to it.\n\n"
             "The following components are registered:\n";
         if (m_clients.empty())
