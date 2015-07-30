@@ -162,7 +162,7 @@ bool TLB::OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData&
 // domain_error: TLB is disabled
 Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bool& r, bool& w, RAddr& pAddr, bool mayUnlock){
 
-	if(!m_enabled || (vAddr >> 63)){ //MLDTODO Generalise
+	if(!m_enabled || (vAddr >> 63).m_value){ //MLDTODO Generalise
 		r = w = 1;
 		pAddr = vAddr.m_value;
 		return Result::SUCCESS;

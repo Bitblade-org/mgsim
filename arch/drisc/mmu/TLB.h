@@ -12,9 +12,10 @@
 #include <cli/argument.h>
 #include <arch/simtypes.h>
 #include <arch/IOBus.h>
-#include "sim/process.h"
+#include "sim/kernel.h"
 #include "manager/MgtMsg.h"
 #include "sim/flag.h"
+#include "sim/buffer.h"
 
 
 #include "Table.h"
