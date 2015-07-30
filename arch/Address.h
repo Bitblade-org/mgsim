@@ -56,6 +56,8 @@ struct RAddr{
 
 	void strictExpect(AddrWidth const w) const; //MLDTODO Change to macro
 	void alwaysExpect(AddrWidth const w) const;
+	void alwaysExpect() const {alwaysExpect(m_width);}
+	void strictExpect() const {strictExpect(m_width);}
 
 	AddrWidth getRealWidth(){return ilog2(m_value);}
 	AddrWidth getPrintWidth(){return getPrintWidth(m_width);}
