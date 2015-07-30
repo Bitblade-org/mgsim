@@ -3,7 +3,8 @@
 namespace Simulator{
 
 Arguments::Arguments(const std::vector<std::string> &arguments):
-m_source(arguments)
+m_source(arguments),
+m_namedValues()
 {
 	for(size_t i=0; i<arguments.size(); i++){
 		std::string str = arguments[i];
