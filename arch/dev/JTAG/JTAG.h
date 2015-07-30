@@ -26,13 +26,7 @@ class TestNet: public Object{
 
 public:
 	TestNet(const std::string& name, Object& parent);
-	//static void mgrPush(const RemoteMessage &msg);
-	//static void netPushRefill(const tlbRefillMsg &msg);
-	static tlbRefillMsg netPopRefill();
 	static void d$Push(Addr line);
-
-private:
-	static tlbRefillMsg s_netMsg;
 };
 
 class MMUTester;

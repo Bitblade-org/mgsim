@@ -19,9 +19,6 @@ void MMUTester::start(){
 
 }
 
-Result MMUTester::doStore(int lineIndex, bool r, bool w, RAddr pAddr, int table){
-	return Result::FAILED;
-}
 
 
 } /* namespace Simulator */

@@ -256,30 +256,6 @@ TestNet::TestNet(const std::string& name, Object& parent):
 		Object(name, parent)
 {}
 
-//void TestNet::mgrPush(const RemoteMessage &msg){
-//	assert(msg.type == RemoteMessage::MSG_TLB_MISS_MESSAGE);
-//	assert(msg.TlbMissMessage.dest == 42);
-//
-//	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Relaying message to MgrTester: " << msg.str() << std::endl;
-//
-//	JTAG::getJTAG().getMgrTester().in_MissMessage(msg);
-//}
-
-
-//void TestNet::netPushRefill(const tlbRefillMsg &msg){
-//
-//	s_netMsg = tlbRefillMsg(msg);
-//
-//	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Refill message posted to testing \"network\"" << std::endl;
-//}
-
-tlbRefillMsg TestNet::netPopRefill(){
-
-	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Refill message relayed from testing \"network\"" << std::endl;
-
-	return s_netMsg;
-}
-
 void TestNet::d$Push(Addr line){
 	std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ about progress for line " << line << std::endl;
 }

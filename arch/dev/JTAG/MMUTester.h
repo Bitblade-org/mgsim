@@ -22,20 +22,10 @@ public:
 	void start();
 
 	MMUTester& operator=(const MMUTester&) = delete;
-	Result doStore(int lineIndex, bool r, bool w, RAddr pAddr, int table);
 
 private:
 	MMU* m_mmu;
 	TLB* m_dTlb;	//D-TLB
-
-
-
-	void mmuFiller();
-
-	//void doSet(TlbPropertyMsgType type, TlbType tlbType, Addr value);
-	Result doLookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bool& r, bool& w, RAddr& pAddr, bool mayUnlock);
-	void doLookupAndStore(RAddr const processId, RAddr const vAddr, bool r, bool w, RAddr pAddr, int table);
-
 
 
 
