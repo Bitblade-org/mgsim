@@ -202,8 +202,7 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     }
 #endif
 
-    // Check that we're reading readable memory
-    auto& cpu = GetDRISC();
+// 	  Check that we're reading readable memory
 //    if (!cpu.CheckPermissions(address, size, IMemory::PERM_READ))
 //    {
 //        throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory",
@@ -239,7 +238,7 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     }
 
     // Update last line access
-    COMMIT{ line->access = cpu.GetCycleNo(); }
+    COMMIT{ line->access = GetDRISC().GetCycleNo(); }
 
 
     if(result == SUCCESS)
