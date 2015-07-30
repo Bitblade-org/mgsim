@@ -8,6 +8,7 @@
 #include <arch/Memory.h>
 #include <arch/drisc/forward.h>
 #include <arch/simtypes.h>
+#include "arch/drisc/mmu/MMU.h"
 
 namespace Simulator
 {
@@ -95,9 +96,10 @@ private:
     IBankSelector*       m_selector;        ///< Mapping of cache line addresses to tags and set indices.
     Buffer<ReadResponse>  m_read_responses; ///< Incoming buffer for read responses from memory bus.
     Buffer<WriteResponse> m_write_responses;///< Incoming buffer for write acknowledgements from memory bus.
-    Buffer<WritebackRequest> m_writebacks; ///< Incoming buffer for register writebacks after load.
+    Buffer<WritebackRequest> m_writebacks;  ///< Incoming buffer for register writebacks after load.
     Buffer<Request>      m_outgoing;        ///< Outgoing buffer to memory bus.
     WritebackState       m_wbstate;         ///< Writeback state
+    mmu::MMU*			 m_mmu;				///< Memory Management Unit
 
 
     // Statistics

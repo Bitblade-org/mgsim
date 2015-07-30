@@ -33,6 +33,7 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     InitBuffer(m_writebacks, clock, "ReadWritebacksBufferSize"),
     InitBuffer(m_outgoing, clock, "OutgoingBufferSize"),
     m_wbstate(),
+	m_mmu(&parent.getMMU()),
     InitSampleVariable(numRHits, SVC_CUMULATIVE),//MLDTODO Registreren variabelen voorbeeld
     InitSampleVariable(numDelayedReads, SVC_CUMULATIVE),
     InitSampleVariable(numEmptyRMisses, SVC_CUMULATIVE),
@@ -187,6 +188,20 @@ Result DCache::FindLine(MemAddr address, Line* &line, bool check_only)
 
 Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
 {
+
+    ContextId contextId = 0; //MLDTODO Figure out where to get contextid from
+
+	//MLDTODO Remove after testing
+	COMMIT{
+		if((address >> 63) == 0){ //Ignore TLS
+			if(address >= 0x100000){
+				std::cout << "DCache::Read, address:" << std::hex << address << ", size:" << size << std::endl;\
+			}
+		}
+	}
+	//end remove
+
+
     size_t offset = (size_t)(address % m_lineSize);
     if (offset + size > m_lineSize)
     {
@@ -217,8 +232,6 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         return FAILED;
     }
 
-    //MLDTODO Perform TLB request
-
     Line*  line;
     Result result = FindLine(address - offset, line, false);
     // SUCCESS - A line with the address was found
@@ -229,16 +242,48 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     if (result == FAILED)
     {
         // Cache-miss and no free line
-        // DeadlockWrite() is done in FindLine
 
-    	//MLDNOTE (first) LOAD, MISS, WAITING, != tag
-    	//MLDTODO Handle TLB request result
-        ++m_numHardConflicts;
+    	// MLDNOTE LOAD, MISS, WAITING, != tag
+        /* OK CASE L3 & CASE L7 (1st)
+         * MLDOPT Push thread to D$-EVENT-HEAD.
+         * MLDOPT Suspend thread.
+         * OK return FAILED
+         */
+
+    	++m_numHardConflicts;
+        // DeadlockWrite() is done in FindLine
+        return FAILED;
+    }
+
+    if (!m_mmu->getDTlb().invoke()){
+        DeadlockWrite("Unable to acquire port for D-TLB read access (%#016llx, %zd)",
+                      (unsigned long long)address, (size_t)size);
+
         return FAILED;
     }
 
     // Update last line access
     COMMIT{ line->access = GetDRISC().GetCycleNo(); }
+
+
+    RAddr rContId = RAddr(contextId, m_mmu->procAW());
+    RAddr vAddr = RAddr(address, m_mmu->vAW());
+    RAddr pAddr = RAddr(0, m_mmu->pAW());
+    RAddr d$line = RAddr((((uintptr_t)line) - ((uintptr_t)&m_lines.front())) / sizeof(Line), 64);
+    bool r, w;
+
+    Result tlbResult = m_mmu->getDTlb().lookup(rContId, vAddr, d$line, r, w, pAddr, false);
+
+    if(tlbResult == FAILED){
+        //MLDNOTE D-TLB FAILED
+        /* MLDTODO CASE F
+         * MLDTODO Push thread to REFILL-HEAD.
+         * MLDTODO Suspend thread.
+         */
+
+    	return FAILED; //MLDTODO Temporary
+    }
+
 
 
     if(result == SUCCESS)
@@ -257,26 +302,61 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
 
         if (i == size)
         {
-            // Data is entirely in the cache, copy it
-        	//MLDNOTE LOAD, HIT
-        	//MLDTODO Handle TLB request result
-            COMMIT
-            {
-                memcpy(data, line->data + offset, (size_t)size);
-                ++m_numRHits;
-            }
-            return SUCCESS;
+        	if(tlbResult == SUCCESS){
+        		//MLDTODO Validate access bits
+
+            	//MLDNOTE LOAD, HIT
+                /* CASE L1
+                 * OK Load from D$
+                 * OK return SUCCESS
+                 */
+
+            	COMMIT
+                {
+                    // Data is entirely in the cache, copy it
+                    memcpy(data, line->data + offset, (size_t)size);
+                    ++m_numRHits;
+                }
+                return SUCCESS;
+        	}
+
+            /* MLDTODO CASE L5
+             * MLDTODO Provide 'magic' D$-line-ref to DTLB.
+             * MLDTODO Push thread to M-REFILL-HEAD.
+             * MLDTODO Suspend thread.
+             */
+        	return FAILED; //MLDTODO Temporary
+
         }
 
         // Data is not entirely in the cache; it should be loading from memory
         if (line->state != LINE_LOADING)
         {
-        	//MLDNOTE (second) LOAD, MISS, WAITING, != tag
-        	//MLDTODO Handle TLB request result
-            assert(line->state == LINE_INVALID);
+            /* OK CASE L3 & CASE L7 (2nd)
+             * MLDOPT Push thread to D$-EVENT-HEAD.
+             * MLDOPT Suspend thread.
+             * OK return FAILED
+             */
+        	assert(line->state == LINE_INVALID);
             ++m_numInvalidRMisses;
             return FAILED;
+
+            //MLDTODO What does invalid mean? Continuation guarantee? OPT?
         }
+
+    	if(tlbResult != SUCCESS){
+            /* MLDTODO CASE L6
+             * OK Add register to head of linked list.
+             * MLDTODO Provide D$-line-ref to TLB.
+             * OK return DELAYED
+             */
+    	}
+
+    	//MLDNOTE (first) LOAD, MISS, WAITING, == tag
+        /* OK CASE L2
+         * OK Add register to head of linked list.
+         * OK return DELAYED
+         */
 
         COMMIT{
         	++m_numLoadingRMisses;
@@ -288,18 +368,34 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     else if (result == DELAYED)
     {
     	//MLDNOTE LOAD, MISS, AVAIL
-    	//MLDTODO Handle TLB request result
-        // A new line has been allocated; send the request to memory
 
-        Request request;
-        request.write     = false;
-        request.address   = address - offset;
-        if (!m_outgoing.Push(request))
-        {
-            ++m_numStallingRMisses;
-            DeadlockWrite("Unable to push request to outgoing buffer");
-            return FAILED;
-        }
+    	// A new line has been allocated; send the request to memory
+
+    	if(tlbResult == SUCCESS){
+            /* OK CASE L4
+             * OK Set line invalid.
+             * OK Add register to head of linked list.
+             * OK Send request to mem.
+             * OK return DELAYED
+             */
+            Request request;
+            request.write     = false;
+            request.address   = address - offset; //MLDTODO pAddr
+            if (!m_outgoing.Push(request))
+            {
+                ++m_numStallingRMisses;
+                DeadlockWrite("Unable to push request to outgoing buffer");
+                return FAILED;
+            }
+            //MLDTODO What to do with response? Going to be PA, not VA
+    	}
+
+        /* CASE L8
+         * OK Set line invalid.
+         * OK Add register to head of linked list.
+         * MLDTODO Provide D$-line-ref to TLB.
+         * OK return DELAYED
+         */
 
         COMMIT {
             if (line->state == LINE_EMPTY){
