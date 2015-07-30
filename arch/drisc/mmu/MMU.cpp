@@ -15,15 +15,14 @@ MMU::MMU(const std::string& name, Object& parent, AddrWidth netAddrWidth)
 	m_vAddrWidth(GetConf("VirtualAddressWidth", size_t)),
 	m_procAddrWidth(GetConf("ProcessIdWidth", size_t)),
 	m_netAddrWidth(netAddrWidth),
-	m_dtlb("dtlb", *this),
-	m_itlb("itlb", *this)
+	m_dtlb(0),
+	m_itlb(0)
 {}
 
-void MMU::onInvalidateMsg(RemoteMessage &msg){
-	m_dtlb.onInvalidateMsg(msg);
-	m_itlb.onInvalidateMsg(msg);
+void MMU::initializeIO(IIOBus* iobus){
+	m_itlb = new TLB("itlb", *this, iobus);
+	m_dtlb = new TLB("dtlb", *this, iobus);
 }
-
 
 void MMU::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*arguments*/) const{
     out << "The MMU blablabla\n\n";

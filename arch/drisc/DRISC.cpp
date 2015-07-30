@@ -155,11 +155,14 @@ void DRISC::ConnectIO(IIOBus* iobus)
 
     // This processor also supports I/O
     IODeviceID devid = GetConfOpt("DeviceID", IODeviceID, iobus->GetNextAvailableDeviceID());
-
+    //MLDTODO Remove print after testing
+    std::cout << "Initializing IO interface on id " << devid << " for " << GetName() << std::endl;
     m_io_if = new IOInterface("io_if", *this, m_clock, *iobus, devid);
 
     if (m_memory != NULL)
         m_io_if->ConnectMemory(m_memory);
+
+    m_mmu.initializeIO(iobus);
 
     MMIOComponent& async_if = m_io_if->GetAsyncIOInterface();
     async_if.Connect(m_mmio, IOMatchUnit::READWRITE);

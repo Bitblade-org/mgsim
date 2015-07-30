@@ -18,10 +18,11 @@ class MMU :	public Object, public Inspect::Interface<Inspect::Info>{
 public:
     MMU(const std::string& name, Object& parent, AddrWidth netAddrWidth);
     MMU(const MMU &mmu) = delete;
-    void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 
-    TLB& getITLB(){return m_itlb;}
-    TLB& getDTlb(){return m_dtlb;}
+    void initializeIO(IIOBus* iobus);
+
+    TLB& getITLB(){return *m_itlb;}
+    TLB& getDTlb(){return *m_dtlb;}
 
     AddrWidth getPAddrWidth() const {return m_pAddrWidth;}
     AddrWidth pAW() const {return getPAddrWidth();}
@@ -32,16 +33,16 @@ public:
     AddrWidth getNetAddrWidth() const {return m_netAddrWidth;}
     AddrWidth netAW() const {return getNetAddrWidth();}
 
-
+    MMU& operator=(const MMU&) = delete;
     void onInvalidateMsg(RemoteMessage &msg);
-
+    void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
 private:
     const AddrWidth	m_pAddrWidth;
     const AddrWidth	m_vAddrWidth;
     const AddrWidth	m_procAddrWidth;
     const AddrWidth m_netAddrWidth;
-    TLB				m_dtlb;
-    TLB				m_itlb;
+    TLB*			m_dtlb;
+    TLB*			m_itlb;
 
     Object& GetDRISCParent() const { return *GetParent(); } //MLDTODO Could be defined for Object.h
 };

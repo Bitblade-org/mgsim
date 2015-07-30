@@ -1,11 +1,13 @@
 #include "TLB.h"
 
 #include <stddef.h>
+#include <cstring>
 
-#include <sim/config.h>
+#include "sim/config.h"
 #include <algorithm>
 #include <assert.h>
-#include <arch/drisc/DRISC.h>
+#include "arch/drisc/DRISC.h"
+#include "sim/inputconfig.h"
 
 
 namespace Simulator {
@@ -13,14 +15,42 @@ namespace drisc {
 namespace mmu {
 
 //MLDTODO-DOC On reserve of +L-P entry: What to do if the pickDestination algo returns a locked entry? Nothing for now...
+bool TLB::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size){
+	std::cout << "Unexpected read request on " << GetName() << "from device " << from << ", Address " << address << ", size " << size << std::endl;
 
-TLB::TLB(const std::string& name, Object& parent)
+    IOData iodata;
+    iodata.size = size;
+    if(address > 24){
+        memset(iodata.data, 0, size);
+    }else{
+        memset(iodata.data, 255, size);
+    }
+    if (!m_ioBus.SendReadResponse(m_ioDevId, from, address, iodata))
+    {
+        DeadlockWrite("Unable to send ROM read response to I/O bus");
+        return false;
+    }
+    return true;
+	return true;
+}
+
+TLB::TLB(const std::string& name, Object& parent, IIOBus* iobus)
 	: Object(name, parent),
+	InitProcess(p_transmit, doTransmit),
+	m_fifo_out("m_fifo_out", *this, iobus->GetClock(), 10, 4),
+
+	InitProcess(p_receive, doReceive),
+	InitBuffer(m_fifo_in, iobus->GetClock(), "inFifoSize"),
+	InitStorage(m_receiving, iobus->GetClock(), false),
+	m_mgtMsgBuffer(),
+	InitProcess(p_dummy, DoNothing),
+
+	m_ioDevId(GetConfOpt("DeviceID", IODeviceID, iobus->GetNextAvailableDeviceID())),
+	m_ioBus(*iobus),
+	m_mgtAddr({0,2}),
 	m_numTables(GetConf("NumberOfTables", size_t)),
 	m_tables(m_numTables),
-	m_enabled(false),
-	m_tableAddr(0, getMMU().pAW()),
-	m_managerAddr(0, getMMU().netAW())
+	m_enabled(false)
 {
 
 	if(m_numTables == 0){
@@ -35,6 +65,14 @@ TLB::TLB(const std::string& name, Object& parent)
 		}
 		m_tables[i] = table;
 	}
+
+	m_ioBus.RegisterClient(m_ioDevId, *this);
+
+    m_fifo_out.Sensitive(p_transmit);
+    m_fifo_in.Sensitive(p_dummy);
+    m_receiving.Sensitive(p_receive);
+
+    std::cout << "TLB " << GetName() << " initialised with IO devID " << m_ioDevId << std::endl;
 }
 
 TLB::~TLB(){
@@ -42,19 +80,95 @@ TLB::~TLB(){
 	std::for_each(m_tables.begin(), m_tables.end(), lambda);
 }
 
+Result TLB::doTransmit(){
+	IoMsg item = m_fifo_out.Front();
+	m_fifo_out.Pop();
+
+	if(!m_ioBus.SendNotification(item.addr.devid, item.addr.chan, item.payload)){
+		DeadlockWrite_("Could not send message");
+		return Result::FAILED;
+	}
+
+	COMMIT{
+		std::cout << "Transmitted IoMsg" << std::endl;
+	}
+
+	return Result::SUCCESS;
+}
+
+Result TLB::doReceive(){
+	if(m_fifo_in.Empty()){
+		return m_receiving.Clear() ? Result::SUCCESS : Result::FAILED;
+	}
+
+	IoMsg item = m_fifo_in.Front();
+	m_fifo_in.Pop();
+	unsigned addr = item.addr.chan / 8;
+
+	assert(addr <= 1);
+	assert(item.addr.devid == m_mgtAddr.devid);
+
+		m_mgtMsgBuffer.data.part[addr] = item.payload;
+
+		if(addr == 0){
+			return handleMgtMsg(m_mgtMsgBuffer);
+		}
+
+	return Result::SUCCESS;
+}
+
+Result TLB::handleMgtMsg(MgtMsg msg){
+	if(msg.type == (uint64_t)MgtMsgType::REFILL){
+		return onStoreMsg(msg);
+	}else if(msg.type == (uint64_t)MgtMsgType::INVALIDATE){
+		return onInvalidateMsg(msg);
+	}else if(msg.type == (uint64_t)MgtMsgType::SET){
+		return onPropertyMsg(msg);
+	}else{
+		UNREACHABLE
+	}
+}
+
+//MLDTODO BUG push twee berichten waar maar ruimte voor een...
+bool TLB::sendMgtMsg(MgtMsg msg){
+	IoMsg msg0, msg1;
+
+	msg0.addr = msg1.addr = m_mgtAddr;
+	msg0.payload = msg.data.part[0];
+	msg1.payload = msg.data.part[1];
+
+	if(!m_fifo_out.Push(msg1) || !m_fifo_out.Push(msg0)){
+		return false;
+	}
+
+	return true;
+}
+
+bool TLB::OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData& data){
+	IoMsg msg;
+	msg.addr.devid = from;
+	msg.addr.chan = address;
+	msg.payload = *((uint64_t*)data.data);
+
+	if(!m_fifo_in.Push(msg)){ return false; }
+
+	m_receiving.Set();
+	return true;
+}
+
 // SUCCESS: Address in TLB
 // DELAYED: Address not in TLB, expecting refill
 // FAILED:  Stalled or Address not in TLB and unable to transmit refill request
 // domain_error: TLB is disabled
 Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bool& r, bool& w, RAddr& pAddr, bool mayUnlock){
-	if(!m_enabled){
-		throw exceptf<std::domain_error>("TLB cannot handle lookups while disabled");
+
+	if(!m_enabled || (vAddr >> 63)){ //MLDTODO Generalise
+		r = w = 1;
+		pAddr = vAddr.m_value;
+		return Result::SUCCESS;
 	}
 
-	if(!processId.isValid()){
-		throw std::invalid_argument("Process ID is not valid");
-	}
-
+	processId.strictExpect();
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
 	Line *line = doLookup(processId, vAddr, LineTag::PRESENT);
@@ -62,20 +176,17 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bo
 		Addr tableLineId;
 		Result res = m_tables[0]->storePending(processId, vAddr, d$lineId, tableLineId);
 
-		if(res == Result::FAILED){
-			return Result::FAILED;
-		}
+		if(res == Result::FAILED){ return Result::FAILED; }
 
-		RemoteMessage msg;
-		msg.type = msg.Type::MSG_TLB_MISS_MESSAGE;
-		msg.TlbMissMessage.addr = vAddr.m_value;
-		msg.TlbMissMessage.processId = processId.m_value;
-		msg.TlbMissMessage.lineIndex = tableLineId;
-		msg.TlbMissMessage.tlb = TlbType::DTLB;
-		msg.TlbMissMessage.dest = m_managerAddr.m_value;
+		MgtMsg msg;
+		msg.type = (uint64_t)MgtMsgType::MISS;
+		msg.mReq.vAddr = vAddr.m_value;
+		msg.mReq.contextId = processId.m_value;
+		msg.mReq.lineIndex = tableLineId;
+		msg.mReq.tlbType = (uint64_t)manager::TlbType::DTLB;
+		msg.mReq.caller = m_ioDevId;
 
-
-		if(!GetDRISC().GetNetwork().SendMessage(msg)){
+		if(!sendMgtMsg(msg)){
 			return Result::FAILED;
 		}
 
@@ -88,7 +199,7 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bo
 
 	r = line->read;
 	w = line->write;
-	pAddr = line->pAddr;
+	pAddr = line->pAddr << (getMMU().pAW() - line->pAddr.m_width);
 
 	return Result::SUCCESS;
 }
@@ -134,50 +245,55 @@ void TLB::invalidate(RAddr pid, RAddr addr){
 	}
 }
 
-Result TLB::onInvalidateMsg(RemoteMessage &msg){
-	assert(msg.type == msg.Type::MSG_TLB_INVALIDATE);
+Result TLB::onInvalidateMsg(MgtMsg &msg){
+	RAddr addr = RAddr(msg.iReq.vAddr, getMMU().vAW() - getMinOffsetSize());
+	RAddr context = RAddr(msg.iReq.contextId, getMMU().procAW());
 
-	RAddr addr = RAddr(msg.tlbInvalidate.addr, getMMU().vAW() - getMinOffsetSize());
-	RAddr processId = RAddr(msg.tlbInvalidate.processId, getMMU().procAW());
-	if(msg.tlbInvalidate.filterAddr && msg.tlbInvalidate.filterPid){
-		invalidate(processId, addr);
-	}else if(!msg.tlbInvalidate.filterAddr && msg.tlbInvalidate.filterPid){
-		invalidate(processId);
-	}else if(!msg.tlbInvalidate.filterAddr && !msg.tlbInvalidate.filterPid){
-		invalidate();
+	if(msg.iReq.filterVAddr && msg.iReq.filterContext){
+		COMMITCLI{ invalidate(context, addr); }
+	}else if(!msg.iReq.filterVAddr && msg.iReq.filterContext){
+		COMMITCLI{ invalidate(context); }
+	}else if(!msg.iReq.filterVAddr && !msg.iReq.filterContext){
+		COMMITCLI{invalidate(); }
+	}else{
+		UNREACHABLE
 	}
 
 	return Result::SUCCESS;
 }
 
-Result TLB::onPropertyMsg(RemoteMessage &msg){
-	assert(msg.type == msg.Type::MSG_TLB_SET_PROPERTY);
-	assert(msg.tlbProperty.tlb == TlbType::DTLB);
+Result TLB::onPropertyMsg(MgtMsg &msg){
+	assert(msg.type == (uint64_t)MgtMsgType::SET);
 
-	if(msg.tlbProperty.type == TlbPropertyMsgType::ENABLED){
-		assert(msg.tlbProperty.value <= 1);
-		m_enabled = msg.tlbProperty.value;
-	}else if(msg.tlbProperty.type == TlbPropertyMsgType::MANAGER_ADDRESS){
-		m_managerAddr = msg.tlbProperty.value;
-	}else if(msg.tlbProperty.type == TlbPropertyMsgType::PT_ADDRESS){
-		m_tableAddr = msg.tlbProperty.value;
+	if(msg.set.property == (uint64_t)manager::SetType::SET_STATE_ON_TLB){
+		assert(msg.set.val0 <= 1);
+		COMMITCLI{	m_enabled = msg.set.val0; }
+	}else if(msg.set.property == (uint64_t)manager::SetType::SET_MGT_ADDR_ON_TLB){
+		COMMITCLI{
+			m_mgtAddr.devid = msg.set.val0;
+			m_mgtAddr.chan = msg.set.val1;
+		}
+	}else{
+		UNREACHABLE
 	}
 
 	return Result::SUCCESS;
 }
 
-Result TLB::onStoreMsg(RemoteMessage &msg){
-	assert(msg.type == msg.Type::MSG_DTLB_STORE);
-	assert(msg.dTlbStore.table < m_numTables);
+Result TLB::onStoreMsg(MgtMsg &msg){
+	assert(msg.type == (uint64_t)MgtMsgType::REFILL);
+	assert(msg.refill.table < m_numTables);
 
-	Table *table = m_tables[msg.dTlbStore.table];
+	Table *table = m_tables[msg.refill.table];
 	RAddr d$lineId;
-	RAddr pAddr = RAddr(msg.dTlbStore.pAddr, table->getPAddrWidth());
-	RAddr lineIndex = RAddr(msg.dTlbStore.lineIndex, m_tables[0]->getIndexWidth());
+	RAddr pAddr = RAddr(msg.refill.pAddr, table->getPAddrWidth());
+	RAddr lineIndex = RAddr(msg.refill.lineIndex, m_tables[0]->getIndexWidth());
 
 	Result res;
-	if(msg.dTlbStore.table == 0){
-		res = table->storeNormal(lineIndex, msg.dTlbStore.read, msg.dTlbStore.write, pAddr, d$lineId);
+	if(msg.refill.table == 0){
+		COMMITCLI{ //MLDTODO Place commit section in storeNormal
+			res = table->storeNormal(lineIndex, msg.dRefill.read, msg.dRefill.write, pAddr, d$lineId);
+		}
 	}else{
 		RAddr vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
 		RAddr processId = RAddr(0, getMMU().procAW());
@@ -189,9 +305,11 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 
 		vAddr = vAddr.truncateLsb(table->getOffsetWidth() - m_tables[0]->getOffsetWidth());
 
-		res = table->storeNormal(processId, vAddr, pAddr, msg.dTlbStore.read, msg.dTlbStore.write);
-		if(res == Result::SUCCESS){
-			m_tables[0]->releasePending(lineIndex);
+		COMMITCLI{ //MLDTODO Place commit section in storeNormal
+			res = table->storeNormal(processId, vAddr, pAddr, msg.dRefill.read, msg.dRefill.write);
+			if(res == Result::SUCCESS){
+				m_tables[0]->releasePending(lineIndex);
+			}
 		}
 	}
 
@@ -200,7 +318,9 @@ Result TLB::onStoreMsg(RemoteMessage &msg){
 		//MLDTODO-DOC Continuatie gegarandeerd zolang een line enkel vanaf netwerk gelocked kan worden. (Line van table <> 0 kan niet pending zijn)
 	}
 
-	TestNet::d$Push(d$lineId.m_value); //MLDTODO Inform D$
+	COMMIT{
+		TestNet::d$Push(d$lineId.m_value); //MLDTODO Inform D$
+	}
 
 	return Result::SUCCESS;
 }
@@ -211,8 +331,7 @@ void TLB::Cmd_Info(std::ostream& out, const std::vector<std::string>& /* argumen
     out << "The TLB blablabla\n\n";
     out << "  Number of tables: " << unsigned(m_numTables) << "\n";
     out << "             State: " << (m_enabled ? "enabled." : "DISABLED!") << "\n";
-    out << "Page table address: " << m_tableAddr << "\n";
-    out << "   Manager address: " << m_managerAddr << "\n\n";
+    out << "   Manager address: " << m_mgtAddr.devid << " : " << m_mgtAddr.chan << "\n\n";
     Cmd_Usage(out);
 }
 
@@ -220,7 +339,6 @@ void TLB::Cmd_Usage(std::ostream& out) const{
 	out << "Supported operations:\n";
 	out << "    write s(tatus)         <1|ENABLED|0|DISABLED>\n";
 	out << "    write m(anagerAddr)    <value>\n";
-	out << "    write p(ta)     	   <value>\n";
 	out << std::endl;
 	out << "Simulate incomming messages:\n";
 	out << "    From Pipeline:\n";
@@ -232,7 +350,7 @@ void TLB::Cmd_Usage(std::ostream& out) const{
 	out << "            <filterPid> <ProcessId> <filterAddr> <Addr>\n";
 	out << std::endl;
 	out << "         write sim-p(roperty)\n";
-	out << "            <ENABLED|PTA|MA> <value>\n";
+	out << "            <ENABLED|MA> <value> [value]\n";
 	out << std::endl;
 	out << "         write sim-s(tore)\n";
 	out << "            <TableId> <LineId> <PAddr> <read> <write>\n";
@@ -254,15 +372,11 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		arg.set(1, m_enabled);
 		out << m_enabled << std::endl;
 	}else if(arg.is(0, false, "m", "manageraddr")){
-		arg.expect(2);
-		out << "Changed Manager Address from " << m_managerAddr;
-		arg.set(1, m_managerAddr);
-		out << " to " << m_managerAddr << std::endl;
-	}else if(arg.is(0, false, "p", "pta")){
-		arg.expect(2);
-		out << "Changed Page Table Address from " << m_tableAddr;
-		arg.set(1, m_tableAddr);
-		out << " to " << m_tableAddr << std::endl;
+		arg.expect(3);
+		out << "Changed Manager Address from " << m_mgtAddr.devid << ":" << m_mgtAddr.chan;
+		m_mgtAddr.devid = arg.getUnsigned(1);
+		m_mgtAddr.chan = arg.getUnsigned(2);
+		out << " to " << m_mgtAddr.devid << ":" << m_mgtAddr.chan << std::endl;
 	}else if(arg.is(0, false, "sim-l", "sim-lookup")){
 		arg.expect(4);
 		//lookup(procid, vaddr, d$lineid, r, w, paddr, mayunlock)
@@ -290,35 +404,32 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		}
 	}else if(arg.is(0, false, "sim-i", "sim-invalidate")){
 		arg.expect(5);
+		MgtMsg msg;
+		msg.type = (uint64_t)MgtMsgType::INVALIDATE;
+		msg.iReq.filterContext = arg.getBool(1);
+		msg.iReq.filterVAddr = arg.getBool(3);
 
-		RemoteMessage msg;
-		msg.type = msg.Type::MSG_TLB_INVALIDATE;
-		arg.set(1, msg.tlbInvalidate.filterPid);
-		arg.set(3, msg.tlbInvalidate.filterAddr);
-		msg.tlbInvalidate.processId = arg.getMAddr(2, getMMU().procAW());
-		msg.tlbInvalidate.addr = arg.getMAddr(4, getMMU().vAW());
+		msg.iReq.contextId = arg.getMAddr(2, getMMU().procAW());
+		msg.iReq.vAddr = arg.getMAddr(4, getMMU().vAW());
 
 		Result res = onInvalidateMsg(msg);
 		out << "Simulated invalidation message with result: " << res << std::endl;
 	}else if(arg.is(0, false, "sim-p", "sim-property")){
 		arg.expect(3);
 
-		RemoteMessage msg;
-		msg.type = msg.Type::MSG_TLB_SET_PROPERTY;
-		msg.tlbProperty.tlb = TlbType::DTLB;
-		msg.tlbProperty.type = getTlbPropertyMsgType(arg.getString(1, false));
+		MgtMsg msg;
+		msg.type = (uint64_t)MgtMsgType::SET;
+		std::string property = arg.getString(1, false);
 
-		switch (msg.tlbProperty.type) {
-			case TlbPropertyMsgType::ENABLED:
-				msg.tlbProperty.value = arg.getBool(2);
-				break;
-			case TlbPropertyMsgType::PT_ADDRESS:
-				msg.tlbProperty.value = arg.getMAddr(2, getMMU().pAW());
-				break;
-			case TlbPropertyMsgType::MANAGER_ADDRESS:
-				msg.tlbProperty.value = arg.getMAddr(2, getMMU().netAW());
-				break;
-			default: UNREACHABLE
+		if (property == "ENABLED" || property == "E") {
+			msg.set.property = (uint64_t)manager::SetType::SET_STATE_ON_TLB;
+			msg.set.val0 = arg.getBool(2);
+		}else if (property == "MANAGER_ADDRESS" || property == "MANAGER" || property == "MA") {
+			msg.set.property = (uint64_t)manager::SetType::SET_MGT_ADDR_ON_TLB;
+			msg.set.val0 = arg.getMAddr(2, getMMU().netAW());
+			msg.set.val1 = arg.getUnsigned(3);
+		}else{
+			UNREACHABLE
 		}
 
 		Result res = onPropertyMsg(msg);
@@ -326,13 +437,13 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 	}else if(arg.is(0, false, "sim-s", "sim-store")){
 		arg.expect(6);
 
-		RemoteMessage msg;
-		msg.type = msg.Type::MSG_DTLB_STORE;
-		msg.dTlbStore.table = arg.getMAddr(1);
-		msg.dTlbStore.lineIndex = arg.getMAddr(2);
-		msg.dTlbStore.pAddr = arg.getMAddr(3, getMMU().procAW());
-		msg.dTlbStore.read = arg.getBool(4);
-		msg.dTlbStore.write = arg.getBool(5);
+		MgtMsg msg;
+		msg.type = (uint64_t)MgtMsgType::REFILL;
+		msg.refill.table = arg.getMAddr(1);
+		msg.refill.lineIndex = arg.getMAddr(2);
+		msg.refill.pAddr = arg.getMAddr(3, getMMU().procAW());
+		msg.dRefill.read = arg.getBool(4);
+		msg.dRefill.write = arg.getBool(5);
 
 		Result res = onStoreMsg(msg);
 		out << "Simulated store message with result: " << res << std::endl;
