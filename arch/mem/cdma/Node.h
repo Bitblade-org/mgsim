@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef CDMA_NODE_H
 #define CDMA_NODE_H
 
@@ -33,6 +34,7 @@ class CDMA::Node : public CDMA::Object
 protected:
     friend class CDMA::Directory;
     friend class CDMA::RootDirectory;
+    template<typename T> friend struct Serialization::serialize_trait;
 
     /// This is the message that gets sent around
     union Message
@@ -57,6 +59,7 @@ protected:
             size_t       client;        ///< Sending client (UP)
             WClientID    wid;           ///< Sending entity on client (family/thread) (UP)
             unsigned int tokens;        ///< Number of tokens in this message (RDT, EV)
+            // (See also serializer below!!)
         };
 
         /// For memory management
@@ -106,7 +109,7 @@ protected:
     void Print(std::ostream& out) const;
 
     /// Construct the node
-    Node(const std::string& name, CDMA& parent, Clock& clock, NodeID id, Config& config);
+    Node(const std::string& name, CDMA& parent, Clock& clock, NodeID id);
     Node(const Node&) = delete;
     Node& operator=(const Node&) = delete;
     virtual ~Node();
@@ -120,6 +123,31 @@ public:
     void Connect(Node* next, Node* prev);
     virtual size_t GetNumLines() const;
 };
+
+namespace Serialization
+{
+    template<>
+    struct serialize_trait<CDMA::Node::Message*>
+    {
+        template<typename A>
+        static void serialize(A& arch, CDMA::Node::Message* &p)
+        {
+            if (p == NULL)
+                p = new CDMA::Node::Message;
+            arch & "[cn";
+            arch & p->type;
+            arch & p->dirty;
+            arch & p->ignore;
+            arch & p->address;
+            arch & p->data;
+            arch & p->sender;
+            arch & p->client;
+            arch & p->wid;
+            arch & p->tokens;
+            arch & "]";
+        }
+    };
+}
 
 }
 #endif

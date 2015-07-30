@@ -1,10 +1,11 @@
+// -*- c++ -*-
 #ifndef ICACHE_H
 #define ICACHE_H
 
-#include <sim/kernel.h>
-#include <sim/inspect.h>
-#include <sim/storage.h>
-#include <arch/Memory.h>
+#include "sim/kernel.h"
+#include "sim/inspect.h"
+#include "sim/buffer.h"
+#include "arch/Memory.h"
 #include "forward.h"
 
 namespace Simulator
@@ -34,6 +35,8 @@ class ICache : public Object, public IMemoryCallback, public Inspect::Interface<
         unsigned long references;   ///< Number of references to this line
         LineState     state;        ///< The state of the line
         bool          creation;             ///< Is the family creation process waiting on this line?
+
+        SERIALIZE(arch) { arch & "l" & tag & access & waiting & references & state & creation; }
     };
 
     Result Fetch(MemAddr address, MemSize size, TID* tid, CID* cid);
@@ -55,19 +58,19 @@ class ICache : public Object, public IMemoryCallback, public Inspect::Interface<
     size_t            m_assoc;
 
     // Statistics:
-    uint64_t             m_numHits;
-    uint64_t             m_numDelayedReads;
-    uint64_t             m_numEmptyMisses;
-    uint64_t             m_numLoadingMisses;
-    uint64_t             m_numInvalidMisses;
-    uint64_t             m_numHardConflicts;
-    uint64_t             m_numResolvedConflicts;
-    uint64_t             m_numStallingMisses;
+    DefineSampleVariable(uint64_t, numHits);
+    DefineSampleVariable(uint64_t, numDelayedReads);
+    DefineSampleVariable(uint64_t, numEmptyMisses);
+    DefineSampleVariable(uint64_t, numLoadingMisses);
+    DefineSampleVariable(uint64_t, numInvalidMisses);
+    DefineSampleVariable(uint64_t, numHardConflicts);
+    DefineSampleVariable(uint64_t, numResolvedConflicts);
+    DefineSampleVariable(uint64_t, numStallingMisses);
 
     Object& GetDRISCParent() const { return *GetParent(); }
 
 public:
-    ICache(const std::string& name, DRISC& parent, Clock& clock, Config& config);
+    ICache(const std::string& name, DRISC& parent, Clock& clock);
     ICache(const ICache&) = delete;
     ICache& operator=(const ICache&) = delete;
     ~ICache();

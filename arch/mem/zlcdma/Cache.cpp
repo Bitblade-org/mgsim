@@ -1,4 +1,4 @@
-#include "Cache.h"
+#include <arch/mem/zlcdma/Cache.h>
 #include <sim/config.h>
 #include <sim/sampling.h>
 
@@ -374,7 +374,7 @@ Result ZLCDMA::Cache::OnReadRequest(const Request& req)
         COMMIT
         {
             line->tag           = tag;
-            line->time          = GetCycleNo();
+            line->time          = GetKernel()->GetActiveClock()->GetCycleNo();
             line->valid         = true;
             line->dirty         = false;
             line->tokens        = 0;
@@ -399,7 +399,7 @@ Result ZLCDMA::Cache::OnReadRequest(const Request& req)
             std::copy(line->data, line->data + m_lineSize, data);
 
             // Update LRU time of the line
-            line->time = GetCycleNo();
+            line->time = GetKernel()->GetActiveClock()->GetCycleNo();
 
             m_numHits++;
         }
@@ -513,7 +513,7 @@ Result ZLCDMA::Cache::OnWriteRequest(const Request& req)
     // Update line; write data
     COMMIT
     {
-        line->time = GetCycleNo();
+        line->time = GetKernel()->GetActiveClock()->GetCycleNo();
         line->dirty = true;
 
         line::blit(line->data, req.mdata.data, req.mdata.mask, m_lineSize);
@@ -1055,7 +1055,7 @@ Result ZLCDMA::Cache::OnEviction(Message* req)
         COMMIT
         {
             line->tag           = tag;
-            line->time          = GetCycleNo();
+            line->time          = GetKernel()->GetActiveClock()->GetCycleNo();
             line->dirty         = req->dirty;
             line->tokens        = req->tokens;
             line->pending_read  = false;
@@ -1154,33 +1154,30 @@ Result ZLCDMA::Cache::DoReceive()
     return (result == FAILED) ? FAILED : SUCCESS;
 }
 
-ZLCDMA::Cache::Cache(const std::string& name, ZLCDMA& parent, Clock& clock, CacheID id, Config& config) :
-    Simulator::Object(name, parent),
+ZLCDMA::Cache::Cache(const std::string& name, ZLCDMA& parent, Clock& clock, CacheID id,
+                     size_t assoc, bool enableInjection)
+  : Simulator::Object(name, parent),
     Node(name, parent, clock),
     m_selector (parent.GetBankSelector()),
-    m_lineSize (config.getValue<size_t>("CacheLineSize")),
-    m_assoc    (config.getValue<size_t>(parent, "L2CacheAssociativity")),
+    m_lineSize (GetTopConf("CacheLineSize", size_t)),
+    m_assoc    (assoc),
     m_sets     (m_selector.GetNumBanks()),
-    m_inject   (config.getValue<bool>(parent, "EnableCacheInjection")),
+    m_inject   (enableInjection),
     m_id       (id),
     m_clients  (),
     m_storages (),
-    p_lines    (*this, clock, "p_lines"),
+    p_lines    (clock, GetName() + ".p_lines"),
     m_lines    (m_assoc * m_sets),
-    m_numHits  (0),
-    m_numMisses(0),
-    m_numConflicts(0),
-    m_numResolved(0),
-    p_Requests (*this, "requests", delegate::create<Cache, &Cache::DoRequests>(*this)),
-    p_In       (*this, "incoming", delegate::create<Cache, &Cache::DoReceive>(*this)),
-    p_bus      (*this, clock, "p_bus"),
-    m_requests ("b_requests", *this, clock, config.getValue<BufferSize>(*this, "RequestBufferSize")),
-    m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseBufferSize"))
+    InitSampleVariable(numHits, SVC_CUMULATIVE),
+    InitSampleVariable(numMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numConflicts, SVC_CUMULATIVE),
+    InitSampleVariable(numResolved, SVC_CUMULATIVE),
+    InitProcess(p_Requests, DoRequests),
+    InitProcess(p_In, DoReceive),
+    p_bus      (clock, GetName() + ".p_bus"),
+    InitBuffer(m_requests, clock, "RequestBufferSize"),
+    InitBuffer(m_responses, clock, "ResponseBufferSize")
 {
-    RegisterSampleVariableInObject(m_numHits, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numConflicts, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numResolved, SVC_CUMULATIVE);
 
     // Create the cache lines
     for (size_t i = 0; i < m_lines.size(); ++i)
@@ -1197,11 +1194,11 @@ ZLCDMA::Cache::Cache(const std::string& name, ZLCDMA& parent, Clock& clock, Cach
     p_bus.AddPriorityProcess(p_In);                   // Update triggers write completion
     p_bus.AddPriorityProcess(p_Requests);             // Read or write hit
 
-    config.registerObject(*this, "cache");
-    config.registerProperty(*this, "assoc", (uint32_t)m_assoc);
-    config.registerProperty(*this, "sets", (uint32_t)m_sets);
-    config.registerProperty(*this, "lsz", (uint32_t)m_lineSize);
-    config.registerProperty(*this, "freq", (uint32_t)clock.GetFrequency());
+    RegisterModelObject(*this, "cache");
+    RegisterModelProperty(*this, "assoc", (uint32_t)m_assoc);
+    RegisterModelProperty(*this, "sets", (uint32_t)m_sets);
+    RegisterModelProperty(*this, "lsz", (uint32_t)m_lineSize);
+    RegisterModelProperty(*this, "freq", (uint32_t)clock.GetFrequency());
 }
 
 void ZLCDMA::Cache::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*args*/) const

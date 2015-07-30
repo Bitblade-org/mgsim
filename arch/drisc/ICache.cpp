@@ -15,40 +15,33 @@ namespace Simulator
 namespace drisc
 {
 
-ICache::ICache(const std::string& name, DRISC& parent, Clock& clock, Config& config)
-:   Object(name, parent, clock),
+ICache::ICache(const std::string& name, DRISC& parent, Clock& clock)
+:   Object(name, parent),
     m_memory(NULL),
-    m_selector(IBankSelector::makeSelector(*this, config.getValue<string>(*this, "BankSelector"), config.getValue<size_t>(*this, "NumSets"))),
+    m_selector(IBankSelector::makeSelector(*this, GetConf("BankSelector", string), GetConf("NumSets", size_t))),
     m_mcid(0),
     m_lines(),
     m_data(),
-    m_outgoing("b_outgoing", *this, clock, config.getValue<BufferSize>(*this, "OutgoingBufferSize")),
-    m_incoming("b_incoming", *this, clock, config.getValue<BufferSize>(*this, "IncomingBufferSize")),
-    m_lineSize(config.getValue<size_t>("CacheLineSize")),
-    m_assoc   (config.getValue<size_t>(*this, "Associativity")),
+    InitBuffer(m_outgoing, clock, "OutgoingBufferSize"),
+    InitBuffer(m_incoming, clock, "IncomingBufferSize"),
+    m_lineSize(GetTopConf("CacheLineSize", size_t)),
+    m_assoc   (GetConf("Associativity", size_t)),
 
-    m_numHits        (0),
-    m_numDelayedReads(0),
-    m_numEmptyMisses (0),
-    m_numLoadingMisses(0),
-    m_numInvalidMisses(0),
-    m_numHardConflicts(0),
-    m_numResolvedConflicts(0),
-    m_numStallingMisses(0),
+    InitSampleVariable(numHits, SVC_CUMULATIVE),
+    InitSampleVariable(numDelayedReads, SVC_CUMULATIVE),
+    InitSampleVariable(numEmptyMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numLoadingMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numInvalidMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numHardConflicts, SVC_CUMULATIVE),
+    InitSampleVariable(numResolvedConflicts, SVC_CUMULATIVE),
+    InitSampleVariable(numStallingMisses, SVC_CUMULATIVE),
 
-    p_Outgoing(*this, "outgoing", delegate::create<ICache, &ICache::DoOutgoing>(*this)),
-    p_Incoming(*this, "incoming", delegate::create<ICache, &ICache::DoIncoming>(*this)),
-    p_service(*this, clock, "p_service")
+    InitProcess(p_Outgoing, DoOutgoing),
+    InitProcess(p_Incoming, DoIncoming),
+    p_service(clock, GetName() + ".p_service")
 {
-    RegisterSampleVariableInObject(m_numHits, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numEmptyMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numLoadingMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numInvalidMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numHardConflicts, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numResolvedConflicts, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numStallingMisses, SVC_CUMULATIVE);
 
-    config.registerObject(parent, "cpu");
+    RegisterModelObject(parent, "cpu");
 
     m_outgoing.Sensitive( p_Outgoing );
     m_incoming.Sensitive( p_Incoming );
@@ -79,14 +72,18 @@ ICache::ICache(const std::string& name, DRISC& parent, Clock& clock, Config& con
     // Initialize the cache lines
     m_lines.resize(sets * m_assoc);
     m_data.resize(m_lineSize * m_lines.size());
+
+    RegisterStateVariable(m_data, "data");
+
     for (size_t i = 0; i < m_lines.size(); ++i)
     {
-        Line& line = m_lines[i];
+        auto& line = m_lines[i];
         line.state        = LINE_EMPTY;
         line.data         = &m_data[i * m_lineSize];
         line.references   = 0;
         line.waiting.head = INVALID_TID;
         line.creation     = false;
+        RegisterStateObject(line, "line" + to_string(i));
     }
 }
 
@@ -247,11 +244,12 @@ Result ICache::Fetch(MemAddr address, MemSize size, TID* tid, CID* cid)
 {
     // Check that we're fetching executable memory
     auto& cpu = GetDRISC();
-    if (!cpu.CheckPermissions(address, size, IMemory::PERM_EXECUTE))
-    {
-        throw exceptf<SecurityException>(*this, "Fetch (%#016llx, %zd): Attempting to execute from non-executable memory",
-                                         (unsigned long long)address, (size_t)size);
-    }
+    //MLDNOTE Permissie fysiek geheugen.
+//    if (!cpu.CheckPermissions(address, size, IMemory::PERM_EXECUTE))
+//    {
+//        throw exceptf<SecurityException>(*this, "Fetch (%#016llx, %zd): Attempting to execute from non-executable memory",
+//                                         (unsigned long long)address, (size_t)size);
+//    }
 
     // Validate input
     size_t offset = (size_t)(address % m_lineSize);
@@ -289,7 +287,7 @@ Result ICache::Fetch(MemAddr address, MemSize size, TID* tid, CID* cid)
     }
 
     // Update access time
-    COMMIT{ line->access = GetCycleNo(); }
+    COMMIT{ line->access = cpu.GetCycleNo(); }
 
     // If the caller wants the line index, give it
     if (cid != NULL)

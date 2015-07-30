@@ -1,11 +1,13 @@
+// -*- c++ -*-
 #ifndef REGISTERFILE_H
 #define REGISTERFILE_H
 
-#include <sim/kernel.h>
-#include <sim/inspect.h>
-#include <arch/FPU.h>
-#include <sim/storage.h>
 #include <array>
+
+#include "sim/kernel.h"
+#include "sim/inspect.h"
+#include "sim/ports.h"
+#include "arch/FPU.h"
 #include "forward.h"
 
 namespace Simulator
@@ -21,7 +23,11 @@ namespace drisc
  * one write port from the writeback stage of the pipeline, and one asynchronous
  * read and write port for other components (memory, etc).
  */
-class RegisterFile : public virtual Structure<RegAddr>, public virtual Storage, public FPU::IFPUClient, public Inspect::Interface<Inspect::Read>
+class RegisterFile
+    : public virtual ReadWriteStructure<RegAddr>,
+      public virtual Storage,
+      public FPU::IFPUClient,
+      public Inspect::Interface<Inspect::Read>
 {
 public:
     /**
@@ -31,7 +37,7 @@ public:
      * @param[in] clock reference to the clock used to control updates.
      * @param[in] config reference to the configuration data.
      */
-    RegisterFile(const std::string& name, DRISC& parent, Clock& clock, Config& config);
+    RegisterFile(const std::string& name, DRISC& parent, Clock& clock);
     ~RegisterFile();
 
     /**
@@ -85,7 +91,7 @@ public:
     const std::array<RegSize, NUM_REG_TYPES>& GetSizes() const { return m_sizes; };
 
     // Interfaces from IFPUClient
-    std::string GetName() const override;
+    const std::string& GetName() const override;
     bool CheckFPUOutputAvailability(RegAddr addr) override;
     bool WriteFPUResult(RegAddr addr, const RegValue& value) override;
 
@@ -93,7 +99,7 @@ public:
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const;
 
-    Object* GetParent() const { return Structure<RegAddr>::GetParent(); }
+    Object* GetParent() const { return ReadWriteStructure<RegAddr>::GetParent(); }
     Object& GetDRISCParent() const { return *GetParent(); }
 
     DedicatedReadPort            p_pipelineR1; ///< Read port #1 for the pipeline

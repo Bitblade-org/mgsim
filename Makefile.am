@@ -7,9 +7,12 @@ ACLOCAL_AMFLAGS = -I build-aux
 # the included Makefiles below.
 bin_PROGRAMS =
 dist_man1_MANS = 
+noinst_LIBRARIES =
 CLEANFILES = 
 MAINTAINERCLEANFILES =
-EXTRA_DIST = 
+EXTRA_DIST =
+SUFFIXES =
+BUILT_SOURCES =
 
 ##
 ## Multi-way distcheck

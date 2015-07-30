@@ -1,5 +1,5 @@
 TEST_BINS =
-SUFFIXES = .c .s .test .log
+SUFFIXES += .c .s .test .log
 include tests/common/Makefile.inc
 include tests/mtalpha/Makefile.inc
 include tests/mtsparc/Makefile.inc
@@ -9,8 +9,8 @@ include tests/or1k/Makefile.inc
 # The "slc" command is used by the various target test suites.
 # We need to sandwich -lc between two uses of -lmgos since they
 # are mutually dependent and the linker may be single-pass.
-COMMON_SLC_OPTIONS = $(top_srcdir)/programs/mtconf.c -nostartfiles -lmgos -lc -lmgos -I$(top_srcdir)/programs
-COMMON_SLC_DEPS = $(top_srcdir)/programs/mtconf.c $(top_srcdir)/programs/mgsim.h
+COMMON_SLC_OPTIONS = $(top_srcdir)/programs/mtconf.c $(top_srcdir)/programs/gfxlib.c -nostartfiles -lmgos -lc -lmgos -I$(top_srcdir)/programs
+COMMON_SLC_DEPS = $(top_srcdir)/programs/mtconf.c $(top_srcdir)/programs/gfxlib.c $(top_srcdir)/programs/mgsim.h
 
 # Command used to run tests by Automake
 RUNTEST_SH = \

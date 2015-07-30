@@ -444,33 +444,35 @@ void ZLCDMA::RootDirectory::SetNumDirectories(size_t num_dirs)
         l.valid = false;
 }
 
-ZLCDMA::RootDirectory::RootDirectory(const std::string& name, ZLCDMA& parent, Clock& clock, size_t id, size_t numRoots, const DDRChannelRegistry& ddr, Config& config) :
+ZLCDMA::RootDirectory::RootDirectory(const std::string& name, ZLCDMA& parent, Clock& clock, size_t id,
+                                     size_t numRoots, const DDRChannelRegistry& ddr,
+                                     size_t l2Assoc, size_t numCachesPerDir) :
     Simulator::Object(name, parent),
     DirectoryBottom(name, parent, clock),
     m_selector (parent.GetBankSelector()),
     m_assoc    (0),
     m_sets     (m_selector.GetNumBanks()),
     m_lines    (),
-    m_lineSize (config.getValue<size_t>("CacheLineSize")),
-    m_assoc_dir(config.getValue<size_t>(parent, "L2CacheAssociativity") * config.getValue<size_t>(parent, "NumL2CachesPerRing")),
+    m_lineSize (GetTopConf("CacheLineSize", size_t)),
+    m_assoc_dir(l2Assoc * numCachesPerDir),
     m_id       (id),
     m_numRoots (numRoots),
-    p_lines    (*this, clock, "p_lines"),
+    p_lines    (clock, GetName() + ".p_lines"),
     m_memory   (0),
-    m_requests ("b_requests", *this, clock, config.getValue<size_t>(*this, "ExternalOutputQueueSize")),
-    m_responses("b_responses", *this, clock, config.getValue<size_t>(*this, "ExternalInputQueueSize")),
+    InitBuffer(m_requests, clock, "ExternalOutputQueueSize"),
+    InitBuffer(m_responses, clock, "ExternalInputQueueSize"),
     m_active   (),
     m_activelines(),
-    p_Incoming (*this, "incoming",  delegate::create<RootDirectory, &RootDirectory::DoIncoming>(*this)),
-    p_Requests (*this, "requests",  delegate::create<RootDirectory, &RootDirectory::DoRequests>(*this)),
-    p_Responses(*this, "responses", delegate::create<RootDirectory, &RootDirectory::DoResponses>(*this)),
+    InitProcess(p_Incoming, DoIncoming),
+    InitProcess(p_Requests, DoRequests),
+    InitProcess(p_Responses, DoResponses),
     m_nreads(0),
     m_nwrites(0)
 {
     assert(m_lineSize <= MAX_MEMORY_OPERATION_SIZE);
 
-    config.registerObject(*this, "rootdir");
-    config.registerProperty(*this, "freq", (uint32_t)clock.GetFrequency());
+    RegisterModelObject(*this, "rootdir");
+    RegisterModelProperty(*this, "freq", (uint32_t)clock.GetFrequency());
 
     m_incoming.Sensitive(p_Incoming);
     m_requests.Sensitive(p_Requests);
@@ -479,7 +481,7 @@ ZLCDMA::RootDirectory::RootDirectory(const std::string& name, ZLCDMA& parent, Cl
     p_lines.AddProcess(p_Responses);
     p_lines.AddProcess(p_Incoming);
 
-    size_t ddrid = config.getValueOrDefault<size_t>(*this, "DDRChannelID", id);
+    size_t ddrid = GetConfOpt("DDRChannelID", size_t, id);
     if (ddrid >= ddr.size())
     {
         throw exceptf<InvalidArgumentException>(*this, "Invalid DDR channel ID: %zu", ddrid);
@@ -573,4 +575,3 @@ void ZLCDMA::RootDirectory::Cmd_Read(std::ostream& out, const std::vector<std::s
 }
 
 }
-

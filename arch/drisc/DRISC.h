@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef PROCESSOR_H
 #define PROCESSOR_H
 
@@ -7,36 +8,40 @@
 #include <arch/Memory.h>
 #include <arch/BankSelector.h>
 #include <arch/FPU.h>
-#include "RAUnit.h"
-#include "IOMatchUnit.h"
-#include "DebugChannel.h"
-#include "ActionInterface.h"
-#include "AncillaryRegisterFile.h"
-#include "PerfCounters.h"
-#include "MMUInterface.h"
-#include "RegisterFile.h"
-#include "FamilyTable.h"
-#include "ThreadTable.h"
-#include "ICache.h"
-#include "DCache.h"
-#include "IOInterface.h"
-#include "Network.h"
-#include "Allocator.h"
-#include "Pipeline.h"
+#include <arch/drisc/RAUnit.h>
+#include <arch/drisc/DebugChannel.h>
+#include <arch/drisc/ActionInterface.h>
+#include <arch/drisc/AncillaryRegisterFile.h>
+#include <arch/drisc/PerfCounters.h>
+#include <arch/drisc/old/MMUInterface.h>
+#include <arch/drisc/FamilyTable.h>
+#include <arch/drisc/ThreadTable.h>
+#include <arch/drisc/ICache.h>
+#include <arch/drisc/DCache.h>
+#include <arch/drisc/IOInterface.h>
+#include <arch/drisc/Network.h>
+#include <arch/drisc/Allocator.h>
+#include <arch/drisc/Pipeline.h>
+#include <arch/drisc/RegisterFile.h>
+#include <arch/drisc/old/IOMatchUnit.h>
+#include <arch/drisc/mmu/MMU.h>
+#include <arch/dev/JTAG/MMUTester.h>
 
 class Config;
 
 namespace Simulator
 {
 
-#define GetDRISC() (dynamic_cast<DRISC&>(GetDRISCParent()))
+    class BreakPointManager;
+
+#define GetDRISC() (static_cast<DRISC&>(GetDRISCParent()))
 
 class DRISC : public Object
 {
 public:
     class Allocator;
 
-    DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, const std::vector<DRISC*>& grid, Config& config);
+    DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, const std::vector<DRISC*>& grid, BreakPointManager& bp);
     DRISC(const DRISC&) = delete;
     DRISC& operator=(const DRISC&) = delete;
     ~DRISC();
@@ -44,8 +49,8 @@ public:
 public:
     void ConnectMemory(IMemory* memory, IMemoryAdmin *admin);
     void ConnectLink(DRISC* prev, DRISC* next);
-    void ConnectFPU(Config& config, FPU* fpu);
-    void ConnectIO(Config& config, IIOBus* iobus);
+    void ConnectFPU(FPU* fpu);
+    void ConnectIO(IIOBus* iobus);
 
     void Initialize();
 
@@ -55,7 +60,7 @@ private:
     // Helper to Initialize()
     void InitializeRegisters();
 public:
-
+    CycleNo GetCycleNo() const { return m_clock.GetCycleNo(); }
     PID   GetPID()      const { return m_pid; }
     PSize GetGridSize() const { return m_grid.size(); }
     bool  IsIdle()      const;
@@ -102,9 +107,11 @@ public:
     void UnmapMemory(ProcessID pid);
     bool CheckPermissions(MemAddr address, MemSize size, int access) const;
 
+    BreakPointManager& GetBreakPointManager() { return m_bp_manager; }
     drisc::Network& GetNetwork() { return m_network; }
     drisc::IOInterface* GetIOInterface() { return m_io_if; }
     drisc::RegisterFile& GetRegisterFile() { return m_registerFile; }
+    drisc::mmu::MMU& getMMU() {return m_mmu; }
     drisc::ICache& GetICache() { return m_icache; }
     drisc::DCache& GetDCache() { return m_dcache; }
     drisc::Allocator& GetAllocator() { return m_allocator; }
@@ -116,6 +123,8 @@ public:
     SymbolTable& GetSymbolTable() { return *m_symtable; }
 
 private:
+    Clock&                         m_clock;
+    BreakPointManager&             m_bp_manager;
     IMemory*                       m_memory;
     IMemoryAdmin*                  m_memadmin;
     const std::vector<DRISC*>&     m_grid;
@@ -134,6 +143,7 @@ private:
     } m_bits;
 
     // The components on the core
+    drisc::mmu::MMU		  m_mmu;
     drisc::FamilyTable    m_familyTable;
     drisc::ThreadTable    m_threadTable;
     drisc::RegisterFile   m_registerFile;
@@ -151,7 +161,7 @@ private:
     drisc::PerfCounters   m_perfcounters;
     drisc::DebugChannel   m_lpout;
     drisc::DebugChannel   m_lperr;
-    drisc::MMUInterface   m_mmu;
+    drisc::MMUInterface   m_oldmmu;
     drisc::ActionInterface m_action;
 
     // External I/O interface, optional

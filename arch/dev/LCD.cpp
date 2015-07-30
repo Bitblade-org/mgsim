@@ -15,19 +15,19 @@ namespace Simulator
 
 // size_t LCD::GetSize() const { return m_width * m_height + 1; }
 
-LCD::LCD(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid, Config& config)
-    : Object(name, parent, parent.GetClock()),
+LCD::LCD(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid)
+    : Object(name, parent),
       m_iobus(iobus),
       m_devid(devid),
       m_buffer(0),
-      m_width(config.getValue<size_t>(*this, "LCDDisplayWidth")),
-      m_height(config.getValue<size_t>(*this, "LCDDisplayHeight")),
-      m_startrow(config.getValue<size_t>(*this, "LCDOutputRow")),
-      m_startcolumn(config.getValue<size_t>(*this, "LCDOutputColumn")),
-      m_bgcolor(config.getValue<size_t>(*this, "LCDBackgroundColor") % 10),
-      m_fgcolor(config.getValue<size_t>(*this, "LCDForegroundColor") % 10),
-      m_curx(0),
-      m_cury(0),
+      m_width(GetConf("LCDDisplayWidth", size_t)),
+      m_height(GetConf("LCDDisplayHeight", size_t)),
+      m_startrow(GetConf("LCDOutputRow", size_t)),
+      m_startcolumn(GetConf("LCDOutputColumn", size_t)),
+      m_bgcolor(GetConf("LCDBackgroundColor", size_t) % 10),
+      m_fgcolor(GetConf("LCDForegroundColor", size_t) % 10),
+      InitStateVariable(curx, 0),
+      InitStateVariable(cury, 0),
       m_tracefile(NULL)
 {
     if (m_width * m_height == 0)
@@ -36,8 +36,9 @@ LCD::LCD(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devi
     }
     m_buffer = new char[m_width * m_height];
     memset(m_buffer, ' ', m_width * m_height);
+    RegisterStateArray(m_buffer, m_width * m_height, "buffer");
 
-    std::string tfname = config.getValueOrDefault<std::string>(*this, "LCDTraceFile", "");
+    std::string tfname = GetConfOpt("LCDTraceFile", std::string, "");
     if (!tfname.empty())
     {
         m_tracefile = new std::ofstream;
@@ -61,6 +62,11 @@ LCD::~LCD()
     }
 }
 
+const std::string& LCD::GetIODeviceName() const
+{
+    return GetName();
+}
+
 void LCD::GetDeviceIdentity(IODeviceIdentification& id) const
 {
     if (!DeviceDatabase::GetDatabase().FindDeviceByName("MGSim", "LCD", id))
@@ -73,7 +79,7 @@ bool LCD::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size)
 {
     if (address != 0 || size != 4)
     {
-        throw exceptf<SimulationException>(*this, "Invalid I/O read to %#016llx/%u", (unsigned long long)address, (unsigned)size);
+        throw exceptf<>(*this, "Invalid I/O read to %#016llx/%u", (unsigned long long)address, (unsigned)size);
     }
 
     uint32_t value = (uint32_t)m_width << 16 | (uint32_t)m_height;
@@ -166,7 +172,7 @@ bool LCD::OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData&
         {
             if (address + data.size >= (m_width * m_height))
             {
-                throw exceptf<SimulationException>(*this, "Invalid I/O write to %#016llx/%u", (unsigned long long)address, (unsigned)data.size);
+                throw exceptf<>(*this, "Invalid I/O write to %#016llx/%u", (unsigned long long)address, (unsigned)data.size);
             }
             for (size_t i = 0; i < data.size; ++i)
             {

@@ -1,30 +1,20 @@
-#include "ParallelMemory.h"
+#include <arch/mem/ParallelMemory.h>
 #include <sim/config.h>
 
 #include <cassert>
-#include <sstream>
 #include <cstring>
 #include <iomanip>
 using namespace std;
 
 namespace Simulator
 {
-
-struct ParallelMemory::Request
-{
-    bool             write;
-    MemAddr          address;
-    MemData          data;
-    WClientID        wid;
-};
-
 class ParallelMemory::Port : public Object
 {
     ParallelMemory&     m_memory;
     IMemoryCallback&    m_callback;
     ArbitratedService<> p_requests;
     Buffer<Request>     m_requests;
-    CycleNo             m_nextdone;
+    DefineStateVariable(CycleNo, nextdone);
     Process             p_Requests;
     size_t              m_lineSize;
 
@@ -33,7 +23,7 @@ class ParallelMemory::Port : public Object
         assert(!m_requests.Empty());
 
         const Request& request = m_requests.Front();
-        const CycleNo  now     = GetCycleNo();
+        const CycleNo  now     = GetKernel()->GetActiveClock()->GetCycleNo();
 
         if (m_nextdone == 0)
         {
@@ -90,7 +80,7 @@ public:
             if (obj == NULL) {
                 out << "???";
             } else {
-                out << obj->GetFQN();
+                out << obj->GetName();
             }
             out << endl;
 
@@ -136,13 +126,14 @@ public:
         return m_callback.OnMemorySnooped(address, data, mask);
     }
 
-    Port(const std::string& name, ParallelMemory& memory, BufferSize buffersize, IMemoryCallback& callback, Process& process, StorageTraceSet& traces, const StorageTraceSet& storages, size_t lineSize)
+    Port(const std::string& name, ParallelMemory& memory, Clock& clock, BufferSize buffersize, IMemoryCallback& callback, Process& process, StorageTraceSet& traces, const StorageTraceSet& storages, size_t lineSize)
         : Object(name, memory),
           m_memory(memory),
           m_callback(callback),
-          p_requests(*this, memory.GetClock(), "p_requests"),
-          m_requests("b_requests", *this, memory.GetClock(), buffersize), m_nextdone(0),
-          p_Requests(*this, "port", delegate::create<Port, &Port::DoRequests>(*this)),
+          p_requests(clock, GetName() + ".p_requests"),
+          InitStorage(m_requests, clock, buffersize),
+          InitStateVariable(nextdone, 0),
+          InitProcess(p_Requests, DoRequests),
           m_lineSize(lineSize)
     {
         m_requests.Sensitive( p_Requests );
@@ -166,13 +157,11 @@ MCID ParallelMemory::RegisterClient(IMemoryCallback& callback, Process& process,
     }
 #endif
 
-    m_registry.registerRelation(callback.GetMemoryPeer(), *this, "mem");
+    RegisterModelRelation(callback.GetMemoryPeer(), *this, "mem");
 
     MCID id = m_ports.size();
 
-    stringstream name;
-    name << "port" << id;
-    m_ports.push_back(new Port(name.str(), *this, m_buffersize, callback, process, traces, storages, m_lineSize));
+    m_ports.push_back(new Port("port" + to_string(id), *this, m_clock, m_buffersize, callback, process, traces, storages, m_lineSize));
 
     return id;
 }
@@ -238,25 +227,21 @@ bool ParallelMemory::Write(MCID id, MemAddr address, const MemData& data, WClien
     return true;
 }
 
-ParallelMemory::ParallelMemory(const std::string& name, Object& parent, Clock& clock, Config& config) :
-    Object(name, parent, clock),
-    m_registry       (config),
+ParallelMemory::ParallelMemory(const std::string& name, Object& parent, Clock& clock) :
+    VirtualMemory(name, parent),
+    m_clock          (clock),
     m_ports          (),
-    m_buffersize     (config.getValue<BufferSize>(*this, "BufferSize")),
-    m_baseRequestTime(config.getValue<CycleNo>(*this, "BaseRequestTime")),
-    m_timePerLine    (config.getValue<CycleNo>(*this, "TimePerLine")),
-    m_lineSize       (config.getValue<size_t> ("CacheLineSize")),
-    m_nreads         (0),
-    m_nread_bytes    (0),
-    m_nwrites        (0),
-    m_nwrite_bytes   (0)
+    m_buffersize     (GetConf("BufferSize", BufferSize)),
+    m_baseRequestTime(GetConf("BaseRequestTime", CycleNo)),
+    m_timePerLine    (GetConf("TimePerLine", CycleNo)),
+    m_lineSize       (GetTopConf("CacheLineSize", size_t)),
+    InitSampleVariable(nreads, SVC_CUMULATIVE),
+    InitSampleVariable(nread_bytes, SVC_CUMULATIVE),
+    InitSampleVariable(nwrites, SVC_CUMULATIVE),
+    InitSampleVariable(nwrite_bytes, SVC_CUMULATIVE)
 {
-    config.registerObject(*this, "pmem");
+    RegisterModelObject(*this, "pmem");
 
-    RegisterSampleVariableInObject(m_nreads, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nread_bytes, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nwrites, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nwrite_bytes, SVC_CUMULATIVE);
 }
 
 ParallelMemory::~ParallelMemory()

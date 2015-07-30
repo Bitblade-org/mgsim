@@ -262,7 +262,7 @@ AC_ARG_ENABLE([sdl],
                               [disable support for graphics output using SDL (default is try to enable)])],
               [], [enable_sdl=yes])
 if test "x$enable_sdl" = "xyes"; then
-  AM_PATH_SDL
+  AM_PATH_SDL2
   if test "x$no_sdl" = xyes; then
     AC_MSG_ERROR([SDL not found])
     enable_sdl=no
@@ -436,6 +436,8 @@ AC_CONFIG_FILES([
 	programs/Makefile
 	doc/Makefile
 ])
+
+AC_CONFIG_FILES([tools/preproc], [chmod +x tools/preproc])
 AC_CONFIG_FILES([tools/readtrace], [chmod +x tools/readtrace])
 AC_CONFIG_FILES([tools/viewlog], [chmod +x tools/viewlog])
 

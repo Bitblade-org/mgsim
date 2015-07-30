@@ -1,12 +1,13 @@
+// -*- c++ -*-
 #ifndef ACTIVE_ROM_H
 #define ACTIVE_ROM_H
 
-#include <arch/IOBus.h>
-#include <arch/Memory.h>
-#include <sim/kernel.h>
-#include <sim/config.h>
-#include <sim/storage.h>
-#include <sim/inspect.h>
+#include "arch/IOBus.h"
+#include "arch/Memory.h"
+#include "sim/kernel.h"
+#include "sim/config.h"
+#include "sim/flag.h"
+#include "sim/inspect.h"
 #include <map>
 
 namespace Simulator
@@ -25,8 +26,6 @@ namespace Simulator
     private:
         IMemoryAdmin&      m_memory;
 
-        Config&            m_config;
-
         char              *m_data;
         size_t             m_lineSize;
         size_t             m_numLines;
@@ -38,7 +37,7 @@ namespace Simulator
         bool               m_bootable;
         MemAddr            m_start_address;
         bool               m_legacy;
-        bool               m_booting;
+        DefineStateVariable(bool, booting);
         const bool         m_preloaded_at_boot;
 
         // DCA parameters
@@ -46,23 +45,23 @@ namespace Simulator
         IODeviceID         m_devid;
         IIOBus&            m_iobus;
 
-        IODeviceID         m_client;
-        IONotificationChannelID      m_completionTarget;
+        DefineStateVariable(IODeviceID, client);
+        DefineStateVariable(IONotificationChannelID, completionTarget);
 
-        SingleFlag         m_loading;
-        SingleFlag         m_flushing;
-        SingleFlag         m_notifying;
+        Flag               m_loading;
+        Flag               m_flushing;
+        Flag               m_notifying;
 
-        size_t             m_currentRange;
-        size_t             m_currentOffset;
+        DefineStateVariable(size_t, currentRange);
+        DefineStateVariable(size_t, currentOffset);
 
-        void LoadConfig(Config& config);
-        void LoadArgumentVector(Config& config);
+        void LoadConfig();
+        void LoadArgumentVector();
         void LoadFile(const std::string& filename);
         void PrepareRanges();
 
     public:
-        ActiveROM(const std::string& name, Object& parent, IMemoryAdmin& mem, IIOBus& iobus, IODeviceID devid, Config& config, bool quiet = false);
+        ActiveROM(const std::string& name, Object& parent, IMemoryAdmin& mem, IIOBus& iobus, IODeviceID devid, bool quiet = false);
         ActiveROM(const ActiveROM&) = delete;
         ActiveROM& operator=(const ActiveROM&) = delete;
         ~ActiveROM();
@@ -90,7 +89,7 @@ namespace Simulator
         StorageTraceSet GetReadResponseTraces() const;
 
         void GetDeviceIdentity(IODeviceIdentification& id) const;
-        std::string GetIODeviceName() const;
+        const std::string& GetIODeviceName() const;
 
         /* debug */
         void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const;

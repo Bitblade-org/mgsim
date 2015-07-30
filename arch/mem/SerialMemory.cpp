@@ -1,5 +1,5 @@
-#include "SerialMemory.h"
-#include <sim/config.h>
+#include "arch/mem/SerialMemory.h"
+#include "sim/config.h"
 
 #include <cassert>
 #include <cstring>
@@ -20,7 +20,7 @@ MCID SerialMemory::RegisterClient(IMemoryCallback& callback, Process& process, S
     m_storages = m_storages ^ storages;
     p_Requests.SetStorageTraces(m_storages);
 
-    m_registry.registerRelation(callback.GetMemoryPeer(), *this, "mem");
+    RegisterModelRelation(callback.GetMemoryPeer(), *this, "mem");
 
     return m_clients.size() - 1;
 }
@@ -44,7 +44,7 @@ bool SerialMemory::Read(MCID id, MemAddr address)
     assert(id < m_clients.size() && m_clients[id] != NULL);
 
     Request request;
-    request.callback  = m_clients[id];
+    request.client    = id;
     request.address   = address;
     request.write     = false;
 
@@ -69,7 +69,7 @@ bool SerialMemory::Write(MCID id, MemAddr address, const MemData& data, WClientI
     assert(id < m_clients.size() && m_clients[id] != NULL);
 
     Request request;
-    request.callback  = m_clients[id];
+    request.client    = id;
     request.address   = address;
     request.wid       = wid;
     request.write     = true;
@@ -100,7 +100,7 @@ Result SerialMemory::DoRequests()
     assert(!m_requests.Empty());
 
     const Request& request = m_requests.Front();
-    const CycleNo  now     = GetCycleNo();
+    const CycleNo  now     = GetKernel()->GetActiveClock()->GetCycleNo();
 
     if (m_nextdone > 0)
     {
@@ -112,7 +112,7 @@ Result SerialMemory::DoRequests()
 
                 VirtualMemory::Write(request.address, request.data.data, request.data.mask, m_lineSize);
 
-                if (!request.callback->OnMemoryWriteCompleted(request.wid))
+                if (!m_clients[request.client]->OnMemoryWriteCompleted(request.wid))
                 {
                     return FAILED;
                 }
@@ -125,7 +125,7 @@ Result SerialMemory::DoRequests()
 
                 VirtualMemory::Read(request.address, data, m_lineSize);
 
-                if (!request.callback->OnMemoryReadCompleted(request.address, data))
+                if (!m_clients[request.client]->OnMemoryReadCompleted(request.address, data))
                 {
                     return FAILED;
                 }
@@ -151,34 +151,29 @@ Result SerialMemory::DoRequests()
     return SUCCESS;
 }
 
-SerialMemory::SerialMemory(const std::string& name, Object& parent, Clock& clock, Config& config) :
-    Object(name, parent, clock),
-    m_registry       (config),
+SerialMemory::SerialMemory(const std::string& name, Object& parent, Clock& clock) :
+    VirtualMemory(name, parent),
     m_clients        (),
-    m_requests       ("b_requests", *this, clock, config.getValue<BufferSize>(*this, "BufferSize")),
-    p_requests       (*this, clock, "m_requests"),
-    m_baseRequestTime(config.getValue<CycleNo>   (*this, "BaseRequestTime")),
-    m_timePerLine    (config.getValue<CycleNo>   (*this, "TimePerLine")),
-    m_lineSize       (config.getValue<CycleNo>   ("CacheLineSize")),
-    m_nextdone(0),
+    InitBuffer(m_requests, clock, "BufferSize"),
+    p_requests       (clock, GetName() + ".m_requests"),
+    m_baseRequestTime(GetConf("BaseRequestTime", CycleNo)),
+    m_timePerLine    (GetConf("TimePerLine", CycleNo)),
+    m_lineSize       (GetTopConf("CacheLineSize", CycleNo)),
+    InitStateVariable(nextdone, 0),
     m_storages(),
-    m_nreads(0),
-    m_nread_bytes(0),
-    m_nwrites(0),
-    m_nwrite_bytes(0),
+    InitSampleVariable(nreads, SVC_CUMULATIVE),
+    InitSampleVariable(nread_bytes, SVC_CUMULATIVE),
+    InitSampleVariable(nwrites, SVC_CUMULATIVE),
+    InitSampleVariable(nwrite_bytes, SVC_CUMULATIVE),
 
-    p_Requests(*this, "requests", delegate::create<SerialMemory, &SerialMemory::DoRequests>(*this) )
+    InitProcess(p_Requests, DoRequests)
 {
     m_requests.Sensitive( p_Requests );
-    config.registerObject(*this, "sermem");
+    RegisterModelObject(*this, "sermem");
 
     m_storages = StorageTraceSet(StorageTrace());   // Request handler is waiting for completion
     p_Requests.SetStorageTraces(m_storages);
 
-    RegisterSampleVariableInObject(m_nreads, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nread_bytes, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nwrites, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nwrite_bytes, SVC_CUMULATIVE);
 }
 
 void SerialMemory::Cmd_Info(ostream& out, const vector<string>& arguments) const
@@ -223,11 +218,11 @@ void SerialMemory::Cmd_Read(ostream& out, const vector<string>& arguments) const
         out << " | "
             << setw(20);
 
-        Object* obj = dynamic_cast<Object*>(p->callback);
+        Object* obj = dynamic_cast<Object*>(m_clients[p->client]);
         if (obj == NULL) {
             out << "???";
         } else {
-            out << obj->GetFQN();
+            out << obj->GetName();
         }
 
         out << " |"

@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef ZLCDMA_NODE_H
 #define ZLCDMA_NODE_H
 
@@ -35,6 +36,7 @@ class ZLCDMA::Node : public ZLCDMA::Object
 {
 protected:
     friend class ZLCDMA::Directory;
+    template<typename T> friend struct Serialization::serialize_trait;
 
     /// This is the message that gets sent around
     union Message
@@ -73,6 +75,8 @@ protected:
 
             // Number of tokens held by this request
             unsigned int tokens;
+
+            // (See also serializer below!)
         };
 
         // transient tokens cannot be grabbed by anybody, but can be transformed into permanent token by priority token
@@ -136,6 +140,32 @@ protected:
 public:
     void Initialize(Node* next, Node* prev);
 };
+
+namespace Serialization
+{
+    template<>
+    struct serialize_trait<ZLCDMA::Node::Message*>
+    {
+        template<typename A>
+        static void serialize(A& arch, ZLCDMA::Node::Message* &p)
+        {
+            if (p == NULL)
+                p = new ZLCDMA::Node::Message;
+            arch & "[cn"
+                & p->type
+                & p->address
+                & p->source
+                & p->dirty
+                & p->ignore
+                & p->priority
+                & p->transient
+                & p->tokens
+                & Serialization::binary(p->data, MAX_MEMORY_OPERATION_SIZE);
+            for (auto &b : p->bitmask) arch & b;
+            arch & "]";
+        }
+    };
+}
 
 }
 #endif

@@ -1,24 +1,22 @@
-#include "IOResponseMultiplexer.h"
-#include "DRISC.h"
+#include <arch/drisc/IOResponseMultiplexer.h>
+#include <arch/drisc/DRISC.h>
 #include <sim/config.h>
-
-#include <sstream>
 
 namespace Simulator
 {
 namespace drisc
 {
 
-IOResponseMultiplexer::IOResponseMultiplexer(const std::string& name, IOInterface& parent, Clock& clock, size_t numDevices, Config& config)
-    : Object(name, parent, clock),
-      m_incoming("b_incoming", *this, clock, config.getValue<BufferSize>(*this, "IncomingQueueSize")),
+IOResponseMultiplexer::IOResponseMultiplexer(const std::string& name, IOInterface& parent, Clock& clock, size_t numDevices)
+    : Object(name, parent),
+      InitBuffer(m_incoming, clock, "IncomingQueueSize"),
       m_wb_buffers(),
-      p_dummy(*this, "dummy-process", delegate::create<IOResponseMultiplexer, &IOResponseMultiplexer::DoNothing>(*this)),
-      p_IncomingReadResponses(*this, "completed-reads", delegate::create<IOResponseMultiplexer, &IOResponseMultiplexer::DoReceivedReadResponses>(*this))
+      InitProcess(p_dummy, DoNothing),
+      InitProcess(p_IncomingReadResponses, DoReceivedReadResponses)
 {
     m_incoming.Sensitive(p_IncomingReadResponses);
 
-    BufferSize wbqsize = config.getValue<BufferSize>(*this, "WritebackQueueSize");
+    BufferSize wbqsize = GetConf("WritebackQueueSize", BufferSize);
     if (wbqsize < 3)
     {
         throw InvalidArgumentException(*this, "WritebackQueueSize must be at least 3 to accomodate pipeline hazards");
@@ -27,9 +25,7 @@ IOResponseMultiplexer::IOResponseMultiplexer(const std::string& name, IOInterfac
     m_wb_buffers.resize(numDevices, 0);
     for (size_t i = 0; i < numDevices; ++i)
     {
-        std::stringstream ss;
-        ss << "b_writeback" << i;
-        m_wb_buffers[i] = new WriteBackQueue(ss.str(), *this, clock, wbqsize);
+        m_wb_buffers[i] = MakeStorage(WriteBackQueue, "writeback" + std::to_string(i), clock, wbqsize);
         m_wb_buffers[i]->Sensitive(p_dummy);
     }
 
@@ -79,7 +75,7 @@ Result IOResponseMultiplexer::DoReceivedReadResponses()
     // pending writeback address.
     if (wbq.Empty())
     {
-        throw exceptf<SimulationException>(*this, "Unexpected read response from device %u", (unsigned)response.device);
+        throw exceptf<>(*this, "Unexpected read response from device %u", (unsigned)response.device);
     }
 
     const RegAddr& addr = wbq.Front();

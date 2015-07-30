@@ -1,8 +1,10 @@
+// -*- c++ -*-
 #ifndef LCD_H
 #define LCD_H
 
 #include <arch/IOBus.h>
 #include <sim/kernel.h>
+#include <sim/sampling.h>
 
 #include <fstream>
 
@@ -27,15 +29,15 @@ class LCD : public IIOBusClient, public Object
     unsigned   m_bgcolor;
     unsigned   m_fgcolor;
 
-    size_t     m_curx;
-    size_t     m_cury;
+    DefineStateVariable(size_t, curx);
+    DefineStateVariable(size_t, cury);
 
     std::ofstream *m_tracefile;
 
     void Refresh(unsigned firstrow, unsigned lastrow) const;
 
 public:
-    LCD(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid, Config& config);
+    LCD(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid);
     LCD(const LCD&) = delete;
     LCD& operator=(const LCD&) = delete;
     ~LCD();
@@ -45,9 +47,8 @@ public:
 
     void GetDeviceIdentity(IODeviceIdentification& id) const override;
 
-    std::string GetIODeviceName() const { return GetFQN(); }
+    const std::string& GetIODeviceName() const override;
 };
-
 
 }
 

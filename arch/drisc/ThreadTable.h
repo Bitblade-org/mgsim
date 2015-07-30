@@ -1,8 +1,10 @@
+// -*- c++ -*-
 #ifndef THREADTABLE_H
 #define THREADTABLE_H
 
 #include <sim/kernel.h>
 #include <sim/inspect.h>
+#include <sim/sampling.h>
 #include <arch/simtypes.h>
 #include <vector>
 #include "forward.h"
@@ -88,7 +90,7 @@ struct Thread
 class ThreadTable : public Object, public Inspect::Interface<Inspect::Read>
 {
 public:
-    ThreadTable(const std::string& name, DRISC& parent, Clock& clock, Config& config);
+    ThreadTable(const std::string& name, DRISC& parent);
 
     TSize GetNumThreads() const { return m_threads.size(); }
 
@@ -117,10 +119,10 @@ private:
     TSize               m_free[NUM_CONTEXT_TYPES];
 
     // Admin
-    CycleNo             m_lastcycle;
-    TSize               m_totalalloc;
-    TSize               m_maxalloc;
-    TSize               m_curalloc;
+    DefineSampleVariable(CycleNo, lastcycle);
+    DefineSampleVariable(TSize, totalalloc);
+    DefineSampleVariable(TSize, maxalloc);
+    DefineSampleVariable(TSize, curalloc);
 
     void UpdateStats();
     void CheckStateSanity() const;

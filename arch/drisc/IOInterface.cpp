@@ -13,16 +13,16 @@ namespace Simulator
 namespace drisc
 {
 
-    IOInterface::IOInterface(const string& name, DRISC& parent, Clock& clock, IIOBus& iobus, IODeviceID devid, Config& config)
-        : Object(name, parent, clock),
-          m_numDevices(config.getValue<size_t>(*this, "NumDeviceSlots")),
-          m_numChannels(config.getValue<size_t>(*this, "NumNotificationChannels")),
-          m_async_io("aio",    *this, clock, config),
-          m_pnc     ("pnc",    *this, clock, config),
-          m_rrmux   ("rrmux",  *this, clock, m_numDevices, config),
-          m_nmux    ("nmux",   *this, clock, m_numChannels, config),
-          m_iobus_if("bus_if", *this, iobus.GetClock(), iobus, devid, config),
-          m_dca     ("dca",    *this, clock, config)
+    IOInterface::IOInterface(const string& name, DRISC& parent, Clock& clock, IIOBus& iobus, IODeviceID devid)
+        : Object(name, parent),
+          m_numDevices(GetConf("NumDeviceSlots", size_t)),
+          m_numChannels(GetConf("NumNotificationChannels", size_t)),
+          m_async_io("aio",    *this),
+          m_pnc     ("pnc",    *this),
+          m_rrmux   ("rrmux",  *this, clock, m_numDevices),
+          m_nmux    ("nmux",   *this, clock, m_numChannels),
+          m_iobus_if("bus_if", *this, iobus.GetClock(), iobus, devid),
+          m_dca     ("dca",    *this, clock)
     {
         if (m_numDevices == 0)
         {
@@ -107,18 +107,18 @@ namespace drisc
     void IOInterface::Cmd_Info(ostream& out, const vector<string>& /*args*/) const
     {
         out << "This I/O interface is composed of the following components:" << endl
-            << "- " << m_async_io.GetFQN() << endl
-            << "- " << m_pnc.GetFQN() << endl
-            << "- " << m_rrmux.GetFQN() << endl
-            << "- " << m_nmux.GetFQN() << endl
-            << "- " << m_dca.GetFQN() << endl
+            << "- " << m_async_io.GetName() << endl
+            << "- " << m_pnc.GetName() << endl
+            << "- " << m_rrmux.GetName() << endl
+            << "- " << m_nmux.GetName() << endl
+            << "- " << m_dca.GetName() << endl
             << "Use 'info' on the individual components for more details." << endl;
     }
 
-    IOInterface::AsyncIOInterface::AsyncIOInterface(const string& name, IOInterface& parent, Clock& clock, Config& config)
-        : MMIOComponent(name, parent, clock),
-          m_baseAddr(config.getValue<unsigned>(*this, "MMIO_BaseAddr")),
-          m_devAddrBits(config.getValue<unsigned>(*this, "DeviceAddressBits"))
+    IOInterface::AsyncIOInterface::AsyncIOInterface(const string& name, IOInterface& parent)
+        : MMIOComponent(name, parent),
+          m_baseAddr(GetConf("MMIO_BaseAddr", unsigned)),
+          m_devAddrBits(GetConf("DeviceAddressBits", unsigned))
     {
         if (m_devAddrBits == 0)
         {
@@ -150,7 +150,7 @@ namespace drisc
 
         if (dev > iface.m_numDevices)
         {
-            throw exceptf<SimulationException>("Invalid I/O read to non-existent device %u by F%u/T%u", (unsigned)dev, (unsigned)fid, (unsigned)tid);
+            throw exceptf<>("Invalid I/O read to non-existent device %u by F%u/T%u", (unsigned)dev, (unsigned)fid, (unsigned)tid);
         }
 
         MemAddr devaddr = address & ((1ULL << m_devAddrBits) - 1);
@@ -167,7 +167,7 @@ namespace drisc
         IODeviceID dev = address >> m_devAddrBits;
         if (dev > GetInterface().m_numDevices)
         {
-            throw exceptf<SimulationException>("Invalid I/O read to non-existent device %u by F%u/T%u", (unsigned)dev, (unsigned)fid, (unsigned)tid);
+            throw exceptf<>("Invalid I/O read to non-existent device %u by F%u/T%u", (unsigned)dev, (unsigned)fid, (unsigned)tid);
         }
 
         MemAddr devaddr = address & ((1ULL << m_devAddrBits) - 1);
@@ -206,9 +206,9 @@ namespace drisc
 
     }
 
-    IOInterface::PNCInterface::PNCInterface(const string& name, IOInterface& parent, Clock& clock, Config& config)
-        : MMIOComponent(name, parent, clock),
-          m_baseAddr(config.getValue<unsigned>(*this, "MMIO_BaseAddr"))
+    IOInterface::PNCInterface::PNCInterface(const string& name, IOInterface& parent)
+        : MMIOComponent(name, parent),
+          m_baseAddr(GetConf("MMIO_BaseAddr", unsigned))
     {
     }
 
@@ -227,13 +227,13 @@ namespace drisc
     {
         if (address % sizeof(Integer) != 0 || size != sizeof(Integer))
         {
-            throw exceptf<SimulationException>("Invalid unaligned PNC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>("Invalid unaligned PNC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
         }
 
         IONotificationChannelID which = address / sizeof(Integer);
         if (which > GetInterface().m_numChannels)
         {
-            throw exceptf<SimulationException>("Invalid wait to non-existent notification/interrupt channel %u by F%u/T%u", (unsigned)which, (unsigned)fid, (unsigned)tid);
+            throw exceptf<>("Invalid wait to non-existent notification/interrupt channel %u by F%u/T%u", (unsigned)which, (unsigned)fid, (unsigned)tid);
         }
 
         if (!GetInterface().WaitForNotification(which, writeback))
@@ -268,13 +268,13 @@ namespace drisc
     {
         if (address % sizeof(Integer) != 0 || size != sizeof(Integer))
         {
-            throw exceptf<SimulationException>("Invalid unaligned PNC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>("Invalid unaligned PNC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
         }
 
         IONotificationChannelID which = address / sizeof(Integer);
         if (which > GetInterface().m_numChannels)
         {
-            throw exceptf<SimulationException>("Invalid wait to non-existent notification/interrupt channel %u by F%u/T%u", (unsigned)which, (unsigned)fid, (unsigned)tid);
+            throw exceptf<>("Invalid wait to non-existent notification/interrupt channel %u by F%u/T%u", (unsigned)which, (unsigned)fid, (unsigned)tid);
         }
 
         Integer value = UnserializeRegister(RT_INTEGER, data, size);
@@ -303,10 +303,10 @@ namespace drisc
         // ASR_IO_PARAMS2 has 32 bits:
         // bits 0-7:   log2 of the AIO address space per device
         // bits 8-31:  (unused)
-        assert(m_numDevices < 256);
+        assert(m_numDevices < 256); //MLDNOTE This is going to cause problems!
         assert(m_numChannels < 256);
         IODeviceID devid = m_iobus_if.GetHostID();
-        assert(devid < 256);
+        assert(devid < 256); //MLDNOTE This is going to cause problems!
         Integer value =
             m_numDevices |
             m_numChannels << 8 |
@@ -336,7 +336,7 @@ namespace drisc
         }
         if (smcid == INVALID_IO_DEVID)
         {
-            clog << "#warning: processor " << GetDRISC().GetFQN() << " connected to I/O but cannot find SMC" << endl;
+            clog << "#warning: processor " << GetDRISC().GetName() << " connected to I/O but cannot find SMC" << endl;
         }
         else
         {

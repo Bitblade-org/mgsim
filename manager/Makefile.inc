@@ -1,0 +1,1 @@
+MANAGER_SOURCES = MgtMsg.h

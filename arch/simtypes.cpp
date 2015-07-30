@@ -49,6 +49,7 @@ string RegAddr::str() const
         {
         case RT_INTEGER: ss << 'R'; break;
         case RT_FLOAT:   ss << 'F'; break;
+        default: ss << 'X'; break;
         }
         ss << hex << uppercase << setw(4) << setfill('0') << index;
         return ss.str();
@@ -503,4 +504,3 @@ void   Float64 ::fromfloat(double f) { return IEEE754<uint64_t, 11, 52>::fromflo
 #endif // EMULATE_IEEE754
 
 }
-

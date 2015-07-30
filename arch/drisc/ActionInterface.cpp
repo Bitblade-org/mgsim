@@ -33,7 +33,7 @@ Result ActionInterface::Write(MemAddr address, const void *data, MemSize size, L
 {
     if (address % sizeof(Integer) != 0)
     {
-        throw exceptf<SimulationException>(*this, "Invalid action control: %#016llx", (unsigned long long)address);
+        throw exceptf<>(*this, "Invalid action control: %#016llx", (unsigned long long)address);
     }
 
     address /= sizeof(Integer);
@@ -94,7 +94,7 @@ Result ActionInterface::Write(MemAddr address, const void *data, MemSize size, L
 }
 
 ActionInterface::ActionInterface(const std::string& name, Object& parent)
-    : MMIOComponent(name, parent, parent.GetClock())
+    : MMIOComponent(name, parent)
 {
 }
 

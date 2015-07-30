@@ -1,209 +1,154 @@
-#include "sampling.h"
-#include "config.h"
 #include <sys_config.h>
-#include <arch/MGSystem.h>
+#include <sim/sampling.h>
+#include <sim/except.h>
 
-#include <algorithm>
-#include <map>
-#include <vector>
-#include <ctime>
+#include <sstream>
 #include <fnmatch.h>
-#include <unistd.h>
 
 using namespace std;
 
-struct VarInfo
+namespace Simulator
 {
-    void *                 var;
-    size_t                 width;
-    SampleVariableDataType type;
-    SampleVariableCategory cat;
-    vector<char>           max;
+    VariableRegistry::VariableRegistry()
+        : m_registry()
+    {}
 
-    VarInfo() : var(0), width(0), type(SV_INTEGER), cat(SVC_LEVEL), max() {};
-    VarInfo(const VarInfo&) = default;
-    VarInfo& operator=(const VarInfo&) = default;
-};
-
-typedef map<string, VarInfo> var_registry_t;
-
-static
-var_registry_t registry;
-
-void _RegisterSampleVariable(void *var, size_t width, const string& name, SampleVariableDataType type, SampleVariableCategory cat, void *maxval)
-{
-    assert (registry.find(name) == registry.end()); // no duplicates allowed.
-
-    VarInfo vinfo;
-
-    vinfo.var = var;
-    vinfo.width = width;
-    vinfo.type = type;
-    vinfo.cat = cat;
-
-    const char *maxdata = (const char*)maxval;
-    for (size_t i = 0; i < width; ++i)
-        vinfo.max.push_back(maxdata[i]);
-
-    registry[name] = vinfo;
-}
-
-static
-void ListSampleVariables_header(ostream& os)
-{
-    os << "# size\ttype\tdtype\tmax\taddress\tname" << endl;
-}
-
-static
-void ListSampleVariables_onevar(ostream& os, const string& name, const VarInfo& vinfo)
-{
-    os << vinfo.width << "\t";
-
-    switch(vinfo.cat)
+    void VariableRegistry::RegisterVariable(void *var, const string& name,
+                                            VariableCategory cat,
+                                            ValueType type,
+                                            size_t width, void *maxval,
+                                            serializer_func_t ser)
     {
-    case SVC_LEVEL: os << "level"; break;
-    case SVC_STATE: os << "state"; break;
-    case SVC_WATERMARK: os << "wmark"; break;
-    case SVC_CUMULATIVE: os << "cumul"; break;
-    default: os << "unknown"; break;
-    }
-    os << (const char*)((vinfo.type == SV_INTEGER) ? "\tint\t" : "\tfloat\t");
+        if (m_registry.find(name) != m_registry.end())
+            throw exceptf<>("Duplicate variable registration: %s",
+                            name.c_str());
 
-    if (vinfo.cat == SVC_LEVEL || vinfo.cat == SVC_WATERMARK)
+        VarInfo vinfo;
+
+        vinfo.var = var;
+        vinfo.width = width;
+        vinfo.type = type;
+        vinfo.cat = cat;
+        vinfo.ser = ser;
+
+        const char *maxdata = (const char*)maxval;
+        if (maxdata)
+            for (size_t i = 0; i < width; ++i)
+                vinfo.max.push_back(maxdata[i]);
+
+        m_registry[name] = vinfo;
+    }
+
+    void VariableRegistry::ListVariables_onevar(ostream& os,
+                                                const string& name,
+                                                const VarInfo& vinfo)
     {
-        const void *p = &vinfo.max[0];
-        switch(vinfo.type) {
-        case SV_INTEGER:
-            switch(vinfo.width) {
-            case 1: os << dec << (unsigned)*(uint8_t*)p; break;
-            case 2: os << dec << *(uint16_t*)p; break;
-            case 4: os << dec << *(uint32_t*)p; break;
-            case 8: os << dec << *(uint64_t*)p; break;
-            default: os << "<invsize>"; break;
-            }
-            break;
-        case SV_FLOAT:
-            if (vinfo.width == sizeof(float))
-                os << *(float*)p;
-            else
-                os << *(double*)p;
-            break;
-        }
-    }
-    else
-        os << "N/A";
+        os << dec << vinfo.width << "\t";
 
-    os << '\t' << vinfo.var << '\t'
-       << name
-       << endl;
-}
-
-void ListSampleVariables(ostream& os, const string& pat)
-{
-    ListSampleVariables_header(os);
-    for (auto& i : registry)
-    {
-        if (FNM_NOMATCH == fnmatch(pat.c_str(), i.first.c_str(), 0))
-            continue;
-        ListSampleVariables_onevar(os, i.first, i.second);
-    }
-}
-
-bool ReadSampleVariables(ostream& os, const string& pat)
-{
-    bool some = false;
-    for (auto& i : registry)
-    {
-        if (FNM_NOMATCH == fnmatch(pat.c_str(), i.first.c_str(), 0))
-            continue;
-
-        os << i.first << " = ";
-
-        const VarInfo& vinfo = i.second;
-        void *p = vinfo.var;
-        switch(vinfo.type) {
-        case SV_INTEGER:
-            switch(vinfo.width) {
-            case 1: os << dec << (unsigned)*(uint8_t*)p; break;
-            case 2: os << dec << *(uint16_t*)p; break;
-            case 4: os << dec << *(uint32_t*)p; break;
-            case 8: os << dec << *(uint64_t*)p; break;
-            default: os << "<invsize>"; break;
-            }
-            break;
-        case SV_FLOAT:
-            if (vinfo.width == sizeof(float))
-                os << *(float*)p;
-            else
-                os << *(double*)p;
-            break;
-        }
-        os << endl;
-        some = true;
-    }
-    return some;
-}
-
-typedef pair<const string*, const VarInfo*> varsel_t;
-typedef vector<varsel_t> varvec_t;
-
-static
-bool comparevars(const varsel_t& left, const varsel_t& right)
-{
-    return left.second->var < right.second->var;
-}
-
-BinarySampler::BinarySampler(ostream& os, const Config& config,
-                             const vector<string>& pats)
-    : m_datasize(0), m_vars()
-{
-
-    varvec_t vars;
-
-    //
-    // Select variables to sample
-    //
-
-    for (auto& i : pats)
-        for (auto& j : registry)
+        switch(vinfo.cat)
         {
-            if (FNM_NOMATCH == fnmatch(i.c_str(), j.first.c_str(), 0))
-                continue;
-            vars.push_back(make_pair(&j.first, &j.second));
+        case SVC_LEVEL: os << "level"; break;
+        case SVC_STATE: os << "state"; break;
+        case SVC_WATERMARK: os << "wmark"; break;
+        case SVC_CUMULATIVE: os << "cumul"; break;
+        default: os << "unknown"; break;
         }
 
-    if (vars.size() >= 2)
-        // we sort everything but the first and last variables,
-        // which should be the cycle counters. The cycle counters
-        // must be sampled once before and after everything else,
-        // to evaluate how imprecise the measurement is.
-        sort(vars.begin()+1, vars.end()-1, comparevars);
+        switch(vinfo.type)
+        {
+        case Serialization::SV_BOOL: os << "\tbool\t"; break;
+        case Serialization::SV_INTEGER: os << "\tint\t"; break;
+        case Serialization::SV_FLOAT: os << "\tfloat\t"; break;
+        case Serialization::SV_BINARY: os << "\tbytes\t"; break;
+        case Serialization::SV_BITS: os << "\tbits\t"; break;
+        case Serialization::SV_OTHER: os << "\tother\t"; break;
+        }
 
-    //
-    // Generate header for output file
-    //
-    time_t cl = time(0);
-    string timestr = asctime(gmtime(&cl));
+        if (vinfo.max.size() > 0)
+        {
+            const void *p = &vinfo.max[0];
+            StreamSerializer s(os, false);
+            s.serialize_raw_ro(vinfo.type, p, vinfo.width);
+        }
+        else
+            os << "N/A";
 
-    os << "# date: " << timestr // asctime already embeds a newline character
-       << "# generator: " << PACKAGE_STRING << endl;
-
-    char hn[255];
-    if (gethostname(hn, 255) == 0)
-        os << "# host: " << hn << endl;
-
-    vector<pair<string, string> > rawconf = config.getRawConfiguration();
-    os << "# configuration: " << rawconf.size() << endl;
-    for (auto& i : rawconf)
-        os << i.first << " = " << i.second << endl;
-
-    os << "# varinfo: " << vars.size() << endl;
-    // ListSampleVariables_header(os);
-    for (auto& i : vars)
-    {
-        m_datasize += i.second->width;
-        m_vars.push_back(make_pair((const char*)i.second->var, i.second->width));
-        ListSampleVariables_onevar(os, *i.first, *i.second);
+        os << '\t' << vinfo.var << '\t'
+           << name
+           << endl;
     }
-    os << "# recwidth: " << m_datasize << endl;
+
+    void VariableRegistry::ListVariables_header(ostream& os)
+    {
+        os << "# size\ttype\tdtype\tmax\taddress\tname" << endl;
+    }
+
+    void VariableRegistry::ListVariables(ostream& os, const string& pat) const
+    {
+        ListVariables_header(os);
+        for (auto& i : GetRegistry())
+        {
+            if (FNM_NOMATCH == fnmatch(pat.c_str(), i.first.c_str(), 0))
+                continue;
+            ListVariables_onevar(os, i.first, i.second);
+        }
+    }
+
+
+    void VariableRegistry::SetVariables(ostream& os, const string& pat,
+                                        const string& val) const
+    {
+        for (auto& i : m_registry)
+        {
+            if (FNM_NOMATCH == fnmatch(pat.c_str(), i.first.c_str(), 0))
+                continue;
+            os << "Writing " << i.first << "..." << std::endl;
+
+            istringstream is(val);
+            StreamSerializer s(is);
+
+            switch(i.second.type)
+            {
+            case Serialization::SV_BITS:
+            case Serialization::SV_BINARY:
+                s.serialize_raw(i.second.type, i.second.var, i.second.width);
+                break;
+            default:
+                i.second.ser(s, i.second.var);
+                break;
+            }
+        }
+    }
+
+
+    bool VariableRegistry::RenderVariables(ostream& os, const string& pat,
+                                           bool compact) const
+    {
+        bool some = false;
+        for (auto& i : m_registry)
+        {
+            if (FNM_NOMATCH == fnmatch(pat.c_str(), i.first.c_str(), 0))
+                continue;
+
+            os << i.first << " =";
+
+            StreamSerializer s(os, compact);
+
+            const VarInfo& vinfo = i.second;
+            switch(vinfo.type)
+            {
+            case Serialization::SV_BITS:
+            case Serialization::SV_BINARY:
+                s.serialize_raw(vinfo.type, vinfo.var, vinfo.width);
+                break;
+            default:
+                vinfo.ser(s, vinfo.var);
+            }
+            os << endl;
+            some = true;
+        }
+        return some;
+    }
+
+
 }

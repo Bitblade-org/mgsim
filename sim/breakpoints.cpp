@@ -116,7 +116,7 @@ void BreakPointManager::ReportBreaks(std::ostream& out) const
             << setw(18) << hex << showbase << i.addr << " | "
             << setw(20) << GetSymbolTable()[i.addr] << " | "
             << setw(4) << GetModeName(i.type) << " | "
-            << i.obj->GetFQN()
+            << i.obj->GetName()
             << endl;
     }
 }
@@ -208,7 +208,7 @@ void BreakPointManager::CheckMore(int type, MemAddr addr, Object& obj)
     {
         if (i->second.type & TRACEONLY)
         {
-            if (m_kernel.GetCyclePhase() == PHASE_COMMIT)
+            if (GetKernel()->GetCyclePhase() == PHASE_COMMIT)
             {
                 obj.DebugSimWrite_("Trace point %d reached: 0x%.*llx (%s, %s)",
                                    i->second.id, (int)sizeof(addr)*2, (unsigned long long)addr,
@@ -220,7 +220,7 @@ void BreakPointManager::CheckMore(int type, MemAddr addr, Object& obj)
         {
             ActiveBreak ab(addr, obj, i->second.type & type);
             m_activebreaks.insert(ab);
-            m_kernel.Stop();
+            GetKernel()->Stop();
         }
     }
 }

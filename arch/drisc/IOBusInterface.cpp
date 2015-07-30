@@ -2,21 +2,22 @@
 #include "DRISC.h"
 #include <sim/config.h>
 #include <sstream>
+#include <cstring>
 
 namespace Simulator
 {
 namespace drisc
 {
 
-    IOBusInterface::IOBusInterface(const std::string& name, IOInterface& parent, Clock& clock, IIOBus& iobus, IODeviceID devid, Config& config)
-        : Object(name, parent, clock),
+    IOBusInterface::IOBusInterface(const std::string& name, IOInterface& parent, Clock& clock, IIOBus& iobus, IODeviceID devid)
+        : Object(name, parent),
           m_rrmux(parent.GetReadResponseMultiplexer()),
           m_nmux(parent.GetNotificationMultiplexer()),
           m_dca(parent.GetDirectCacheAccess()),
           m_iobus(iobus),
           m_hostid(devid),
-          m_outgoing_reqs("b_outgoing_reqs", *this, clock, config.getValue<BufferSize>(*this, "OutgoingRequestQueueSize")),
-          p_OutgoingRequests(*this, "outgoing-requests", delegate::create<IOBusInterface, &IOBusInterface::DoOutgoingRequests>(*this))
+          InitBuffer(m_outgoing_reqs, clock, "OutgoingRequestQueueSize"),
+          InitProcess(p_OutgoingRequests, DoOutgoingRequests)
     {
         if (m_outgoing_reqs.GetMaxSize() < 3)
         {
@@ -132,7 +133,7 @@ namespace drisc
     StorageTraceSet IOBusInterface::GetInterruptRequestTraces() const
     {
         StorageTraceSet res;
-        for (std::vector<SingleFlag*>::const_iterator p = m_nmux.m_interrupts.begin(); p != m_nmux.m_interrupts.end(); ++p)
+        for (std::vector<Flag      *>::const_iterator p = m_nmux.m_interrupts.begin(); p != m_nmux.m_interrupts.end(); ++p)
         {
             res ^= opt(*(*p));
         }
@@ -172,6 +173,11 @@ namespace drisc
         {
             throw InvalidArgumentException(*this, "Device identity not registered");
         }
+    }
+
+    const std::string& IOBusInterface::GetIODeviceName() const
+    {
+        return GetName();
     }
 
 }

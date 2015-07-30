@@ -1,75 +1,114 @@
+// -*- c++ -*-
 #ifndef SAMPLING_H
 #define SAMPLING_H
 
+#include <type_traits>
 #include <vector>
-#include <utility>
 #include <string>
-#include <iostream>
-#include <cassert>
 
-enum SampleVariableDataType {
-    SV_INTEGER,
-    SV_FLOAT
-};
+#include <sim/serialization.h>
+#include <sim/streamserializer.h>
 
-enum SampleVariableCategory {
-    SVC_LEVEL,    // current level: cycle counter, #threads, etc
-    SVC_STATE,    // state variable
-    SVC_WATERMARK,  // mins and maxs, evolves monotonously
-    SVC_CUMULATIVE, // integral of level over time
-};
-
-template<typename T> struct _sv_detect_type { static const SampleVariableDataType type = SV_INTEGER; };
-template<> struct _sv_detect_type<float> { static const SampleVariableDataType type = SV_FLOAT; };
-template<> struct _sv_detect_type<double> { static const SampleVariableDataType type = SV_FLOAT; };
-
-void _RegisterSampleVariable(void*, size_t, const std::string&, SampleVariableDataType, SampleVariableCategory, void*);
-
-template<typename T>
-void RegisterSampleVariable(T& var, const std::string& name, SampleVariableCategory cat)
+namespace Simulator
 {
-    T _max = (T)0;
-    _RegisterSampleVariable(&var, sizeof(T), name, _sv_detect_type<T>::type, cat, &_max);
-}
-
-template<typename T, typename U>
-void RegisterSampleVariable(T& var, const std::string& name, SampleVariableCategory cat, U max)
-{
-    T _max = max;
-    _RegisterSampleVariable(&var, sizeof(T), name, _sv_detect_type<T>::type, cat, &_max);
-}
-
-#define RegisterSampleVariableInObject(var, cat, ...)                       \
-    RegisterSampleVariable(var, GetFQN() + ':' + (#var + 2) , cat, ##__VA_ARGS__)
-
-#define RegisterSampleVariableInObjectWithName(var, name, cat, ...)      \
-    RegisterSampleVariable(var, GetFQN() + ':' + name, cat, ##__VA_ARGS__)
-
-void ListSampleVariables(std::ostream& os, const std::string &pat = "*");
-bool ReadSampleVariables(std::ostream& os, const std::string &pat = "*"); // returns "false" if no variables match.
-
-
-class Config;
-
-class BinarySampler
-{
-    typedef std::vector<std::pair<const char*, size_t> > vars_t;
-
-    size_t   m_datasize;
-    vars_t   m_vars;
-
-public:
-
-    BinarySampler(std::ostream& os, const Config& config,
-                  const std::vector<std::string>& pats);
-
-    size_t GetBufferSize() const { return m_datasize; }
-    void   SampleToBuffer(char *buf) const
+    enum VariableCategory
     {
-        for (auto& i : m_vars)
-            for (size_t j = 0; j < i.second; ++j)
-                *buf++ = i.first[j];
-    }
-};
+        SVC_STATE,      // state variable
+        SVC_LEVEL,      // stats: current level: cycle counter, #threads, etc
+        SVC_WATERMARK,  // stats: mins and maxs, evolves monotonously
+        SVC_CUMULATIVE, // stats: integral of level over time
+    };
+
+    class VariableRegistry
+    {
+    public:
+        typedef Serialization::SerializationValueType ValueType;
+        typedef void (*serializer_func_t)(StreamSerializer&, void*);
+
+    private:
+        struct VarInfo
+        {
+            ValueType              type;
+            void *                 var;
+            size_t                 width;
+            serializer_func_t      ser;
+            VariableCategory       cat;
+            std::vector<char>      max;
+
+            VarInfo()
+                : type(Serialization::SV_INTEGER), var(0), width(0), ser(0),
+                  cat(SVC_LEVEL), max() {};
+            VarInfo(const VarInfo&) = default;
+            VarInfo& operator=(const VarInfo&) = default;
+        };
+
+        typedef std::map<std::string, VarInfo> var_registry_t;
+        var_registry_t m_registry;
+
+        const var_registry_t& GetRegistry() const { return m_registry; }
+
+    public:
+        VariableRegistry();
+        VariableRegistry(const VariableRegistry&) = default;
+        VariableRegistry& operator=(const VariableRegistry&) = default;
+
+        // Register a variable.
+        void RegisterVariable(void* ptr, const std::string& name,
+                              VariableCategory cat,
+                              ValueType t,
+                              size_t s, void* ref,
+                              serializer_func_t ser);
+        template<typename T>
+        void RegisterVariable(T& var,
+                              const std::string& name,
+                              VariableCategory cat);
+
+        template<typename T, typename U>
+        void RegisterVariable(T& var,
+                              const std::string& name,
+                              VariableCategory cat, U max);
+
+        template<typename T>
+        void RegisterVariable(std::vector<T>& var,
+                              const std::string& name,
+                              VariableCategory cat);
+        template<typename T>
+        void RegisterVariable(T *var,
+                              const std::string& name,
+                              VariableCategory cat, size_t sz);
+        inline
+        void RegisterVariable(bool *var,
+                              const std::string& name,
+                              VariableCategory cat, size_t sz);
+
+        // Load a value from a string into zero or more variables.
+        void SetVariables(std::ostream& os, const std::string& pat, const std::string& val) const;
+
+        // List all variables registered whose name match the pattern.
+        void ListVariables(std::ostream& os, const std::string &pat = "*") const;
+
+        // Render all variables registered whose name match the pattern.
+        // If the compact argument is true, compression is used.
+        // Return false if no variable match the pattern.
+        bool RenderVariables(std::ostream& os, const std::string &pat = "*",
+                             bool compact = false) const;
+
+
+    private:
+        // Helper methods
+        static
+        void ListVariables_onevar(std::ostream& os,
+                                  const std::string& name,
+                                  const VarInfo& vinfo);
+        static
+        void ListVariables_header(std::ostream& os);
+
+        friend class BinarySampler;
+    };
+
+}
+
+#include <sim/sampling.hpp>
+#include <sim/register_functions.h>
 
 #endif

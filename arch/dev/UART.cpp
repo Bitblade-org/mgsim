@@ -38,74 +38,74 @@ namespace Simulator
     // - MODEM lines are not supported/connected
     // - transmit speed / divisor latch is not supported
 
-    UART::UART(const string& name, Object& parent, IIOBus& iobus, IODeviceID devid, Config& config)
-        : Object(name, parent, iobus.GetClock()),
+    UART::UART(const string& name, Object& parent, IIOBus& iobus, IODeviceID devid)
+        : Object(name, parent),
 
           m_iobus(iobus),
           m_devid(devid),
 
-          m_hwbuf_in_full(false),
-          m_hwbuf_in(0),
-          m_hwbuf_out_full(false),
-          m_hwbuf_out(0),
+          InitStateVariable(hwbuf_in_full, false),
+          InitStateVariable(hwbuf_in, 0),
+          InitStateVariable(hwbuf_out_full, false),
+          InitStateVariable(hwbuf_out, 0),
 
-          m_receiveEnable("f_receiveEnable", *this, GetClock(), false),
-          m_fifo_in("b_fifo_in", *this, GetClock(), config.getValue<BufferSize>(*this, "UARTInputFIFOSize")),
-          p_Receive(*this, "external-receive", delegate::create<UART,&UART::DoReceive>(*this)),
+          InitStorage(m_receiveEnable, iobus.GetClock(), false),
+          InitBuffer(m_fifo_in, iobus.GetClock(), "UARTInputFIFOSize"),
+          InitProcess(p_Receive, DoReceive),
 
-          m_fifo_out("b_fifo_out", *this, GetClock(), config.getValue<BufferSize>(*this, "UARTOutputFIFOSize")),
-          p_Transmit(*this, "external-transmit", delegate::create<UART,&UART::DoTransmit>(*this)),
+          InitBuffer(m_fifo_out, iobus.GetClock(), "UARTOutputFIFOSize"),
+          InitProcess(p_Transmit, DoTransmit),
 
-          m_write_buffer(0),
+          InitStateVariable(write_buffer, 0),
 
-          m_sendEnable("f_sendEnable", *this, GetClock(), false),
-          p_Send(*this, "fifo-put", delegate::create<UART,&UART::DoSend>(*this)),
+          InitStorage(m_sendEnable, iobus.GetClock(), false),
+          InitProcess(p_Send, DoSend),
 
           m_eof(false),
           m_error_in(0),
           m_error_out(0),
 
-          m_readInterruptEnable(false),
+          InitStateVariable(readInterruptEnable, false),
 
-          m_readInterrupt("f_readInterrupt", *this, GetClock(), false),
-          p_ReadInterrupt(*this, "read-interrupt", delegate::create<UART,&UART::DoSendReadInterrupt>(*this)),
-          m_readInterruptChannel(0),
+          InitStorage(m_readInterrupt, iobus.GetClock(), false),
+          InitProcess(p_ReadInterrupt, DoSendReadInterrupt),
+          InitStateVariable(readInterruptChannel, 0),
 
-          m_writeInterruptEnable(false),
-          m_writeInterruptThreshold(1),
+          InitStateVariable(writeInterruptEnable, false),
+          InitStateVariable(writeInterruptThreshold, 1),
 
-          m_writeInterrupt("f_writeInterrupt", *this, GetClock(), false),
-          p_WriteInterrupt(*this, "write-interrupt", delegate::create<UART,&UART::DoSendWriteInterrupt>(*this)),
-          m_writeInterruptChannel(0),
+          InitStorage(m_writeInterrupt, iobus.GetClock(), false),
+          InitProcess(p_WriteInterrupt, DoSendWriteInterrupt),
+          InitStateVariable(writeInterruptChannel, 0),
 
-          m_loopback(false),
-          m_scratch(0),
+          InitStateVariable(loopback, false),
+          InitStateVariable(scratch, 0),
 
           m_fin_name(),
           m_fout_name(),
           m_fd_in(-1),
           m_fd_out(-1),
-          m_enabled(false),
+          InitStateVariable(enabled, false),
 
-          p_dummy(*this, "dummy-process", delegate::create<UART, &UART::DoNothing>(*this))
+          InitProcess(p_dummy, DoNothing)
     {
         int ein, eout;
         string fin, fout;
 
-        string connectMode = config.getValue<string>(*this, "UARTConnectMode");
+        string connectMode = GetConf("UARTConnectMode", string);
 
         errno = 0;
 
         if (connectMode == "FILE")
         {
-            fin = fout = config.getValue<string>(*this, "UARTFile");
+            fin = fout = GetConf("UARTFile", string);
             m_fd_in = m_fd_out = open(fin.c_str(), O_RDWR);
             ein = eout = errno;
         }
         else if (connectMode == "FILEPAIR")
         {
-            fin = config.getValue<string>(*this, "UARTInputFile");
-            fout = config.getValue<string>(*this, "UARTOutputFile");
+            fin = GetConf("UARTInputFile", string);
+            fout = GetConf("UARTOutputFile", string);
 
             m_fd_in = open(fin.c_str(), O_RDONLY);
             ein = errno;
@@ -129,18 +129,18 @@ namespace Simulator
 
             // Open master PTY and get name of slave side
             if (-1 == (master_fd = get_pty_master()))
-                throw exceptf<SimulationException>("Unable to obtain pty master (%s)", strerror(errno));
+                throw exceptf<>("Unable to obtain pty master (%s)", strerror(errno));
             if (-1 == grantpt(master_fd))
-                throw exceptf<SimulationException>("grantpt: %s", strerror(errno));
+                throw exceptf<>("grantpt: %s", strerror(errno));
             if (-1 == unlockpt(master_fd))
-                throw exceptf<SimulationException>("unlockpt: %s", strerror(errno));
+                throw exceptf<>("unlockpt: %s", strerror(errno));
             if (NULL == (slave_name = ptsname(master_fd)))
-                throw exceptf<SimulationException>("ptsname: %s", strerror(errno));
+                throw exceptf<>("ptsname: %s", strerror(errno));
 
             // configure master side: disable echo, buffering, control flow etc
             struct termios tio;
             if (-1 == tcgetattr(master_fd, &tio))
-                throw exceptf<SimulationException>("tcgetattr: %s", strerror(errno));
+                throw exceptf<>("tcgetattr: %s", strerror(errno));
 
             tio.c_iflag &= ~(IXON|IXOFF|ICRNL|INLCR|IGNCR|IMAXBEL|ISTRIP);
             tio.c_iflag |= IGNBRK;
@@ -150,14 +150,12 @@ namespace Simulator
             tio.c_cc[VTIME] = 0;
 
             if (-1 == tcsetattr(master_fd, TCSANOW, &tio))
-                throw exceptf<SimulationException>("tcsetattr: %s", strerror(errno));
+                throw exceptf<>("tcsetattr: %s", strerror(errno));
             tcflush(master_fd, TCIOFLUSH);
 
-            cerr << GetFQN() << ": slave tty at " << slave_name << endl;
+            cerr << GetName() << ": slave tty at " << slave_name << endl;
 
-            ostringstream os;
-            os << "<pty master for " << slave_name << ">";
-            fin = fout = os.str();
+            fin = fout = "<pty master for " + std::string(slave_name) + ">";
             m_fd_in = m_fd_out = master_fd;
             ein = eout = 0;
         }
@@ -187,10 +185,9 @@ namespace Simulator
 
         iobus.RegisterClient(devid, *this);
 
-        config.registerObject(*this, "uart");
-        config.registerProperty(*this, "inpfifosz", m_fifo_in.GetMaxSize());
-        config.registerProperty(*this, "outfifosz", m_fifo_out.GetMaxSize());
-        RegisterSampleVariableInObject(m_enabled, SVC_LEVEL);
+        RegisterModelObject(*this, "uart");
+        RegisterModelProperty(*this, "inpfifosz", m_fifo_in.GetMaxSize());
+        RegisterModelProperty(*this, "outfifosz", m_fifo_out.GetMaxSize());
     }
 
     Result UART::DoSendReadInterrupt()
@@ -308,7 +305,7 @@ namespace Simulator
     {
         if (iodata.size != 1 || addr > 10)
         {
-            throw exceptf<SimulationException>(*this, "Invalid write from device %u to %#016llx/%u", (unsigned)from, (unsigned long long)addr, (unsigned)iodata.size);
+            throw exceptf<>(*this, "Invalid write from device %u to %#016llx/%u", (unsigned)from, (unsigned long long)addr, (unsigned)iodata.size);
         }
 
         unsigned char data = *(unsigned char*)iodata.data;
@@ -427,7 +424,7 @@ namespace Simulator
     {
         if (size != 1 || addr > 10)
         {
-            throw exceptf<SimulationException>(*this, "Invalid read from device %u to %#016llx/%u", (unsigned)from, (unsigned long long)addr, (unsigned)size);
+            throw exceptf<>(*this, "Invalid read from device %u to %#016llx/%u", (unsigned)from, (unsigned long long)addr, (unsigned)size);
         }
 
         unsigned char data = 0;
@@ -635,7 +632,7 @@ namespace Simulator
 
     string UART::GetSelectorClientName() const
     {
-        return GetFQN();
+        return GetName();
     }
 
 
@@ -740,9 +737,9 @@ namespace Simulator
         }
     }
 
-    string UART::GetIODeviceName() const
+    const string& UART::GetIODeviceName() const
     {
-        return GetFQN();
+        return GetName();
     }
 
 

@@ -1,12 +1,17 @@
+// -*- c++ -*-
 #ifndef SIMTYPES_H
 #define SIMTYPES_H
 
 #include "Archures.h"
 #include <sim/types.h>
 #include <sim/unreachable.h>
+#include <sim/except.h>
+#include <sim/serialization.h>
+#include <sim/log2.h>
 
 #include <string>
 #include <cassert>
+#include <cmath>
 
 namespace Simulator
 {
@@ -71,6 +76,7 @@ struct Float32
         double tofloat() const { return floating; }
         void fromfloat(double f) { floating = f; }
 #endif
+    SERIALIZE(a) { a & integer; }
 };
 
 /// 64-bit IEEE-754 float
@@ -95,10 +101,12 @@ struct Float64
         double tofloat() const { return floating; }
         void fromfloat(double f) { floating = f; }
 #endif
+    SERIALIZE(a) { a & integer; }
 };
 
 #if defined(TARGET_MTALPHA)
 typedef uint64_t MemAddr;       ///< Address into memory
+typedef uint16_t ContextId;		///< Context id
 typedef uint64_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
 typedef uint64_t Integer;       ///< Natural integer type
@@ -109,6 +117,7 @@ typedef Float64  Float;         ///< Natural floating point type
 #define MEMSIZE_MAX UINT64_MAX
 #elif defined(TARGET_MTSPARC) || defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL) || defined(TARGET_OR1K)
 typedef uint32_t MemAddr;       ///< Address into memory
+typedef uint16_t ContextId;		///< Context id
 typedef uint32_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
 typedef uint32_t Integer;       ///< Natural integer type
@@ -118,6 +127,11 @@ typedef Float32  Float;         ///< Natural floating point type
 #define INTEGER_WIDTH 32
 #define MEMSIZE_MAX UINT32_MAX
 #endif
+
+struct RAddrIndices{
+	size_t i;
+	size_t j;
+};
 
 typedef Integer  FCapability;   ///< Capability for a family
 typedef Integer  PCapability;   ///< Capability for a place
@@ -130,6 +144,7 @@ struct PlaceID
     PSize       size;
     PID         pid;
     std::string str() const;
+    SERIALIZE(a) { a & "plid" & capability & size & pid; }
 };
 
 /// A globally unique family identifier
@@ -139,6 +154,7 @@ struct FID
     PID         pid;
     LFID        lfid;
     std::string str() const;
+    SERIALIZE(a) { a & "fid" & capability & pid & lfid; }
 };
 
 /// Program-specified allocation type for a place allocation
@@ -200,6 +216,35 @@ struct MultiFloat
     }
 };
 
+namespace Serialization
+{
+    template<typename SZ>
+    struct multifloat_serializer
+    {
+        MultiFloat* mf;
+        SZ* sz;
+    };
+    template<typename SZ>
+    multifloat_serializer<SZ> multifloat(MultiFloat& mf, SZ& sz)
+    {
+        return multifloat_serializer<SZ>{&mf, &sz};
+    }
+    template<typename A, typename SZ>
+    inline
+    A& operator&(A& s, const multifloat_serializer<SZ>& bs)
+    {
+        s & "mf" & *bs.sz;
+        switch(*bs.sz)
+        {
+        case 4: s & bs.mf->_32.integer; break;
+        case 8: s & bs.mf->_64.integer; break;
+        default: throw exceptf<>("Invalid float size: %u", *bs.sz);
+        }
+        return s;
+    }
+
+}
+
 /// An integer value that can be of different sizes
 struct MultiInteger
 {
@@ -248,6 +293,7 @@ struct RegsNo
     unsigned char globals;
     unsigned char shareds;
     unsigned char locals;
+    SERIALIZE(a) { a & "rn" & globals & shareds & locals; }
 };
 
 /// Register classes
@@ -271,6 +317,7 @@ struct RegAddr
 
     bool valid() const { return index != INVALID_REG_INDEX; }
     std::string str() const;
+    SERIALIZE(a) { a & "ra" & type & index; }
 };
 
 static RegAddr MAKE_REGADDR(RegType type, RegIndex index)
@@ -327,6 +374,11 @@ struct MemoryRequest
         unsigned     offset;      ///< Offset in the cache-line, in bytes
         bool         sign_extend; ///< Sign-extend the loaded value into the register?
         std::string  str() const;
+        SERIALIZE(a)
+        {
+            a & "mr" & next & fid
+                & size & offset & sign_extend;
+        }
 };
 
 /// Different types of shared classes
@@ -370,12 +422,14 @@ struct ThreadQueue
     TID head;
     TID tail;
     std::string str() const;
+    SERIALIZE(a) { a & "tq" & head & tail; }
 };
 
 struct FamilyQueue
 {
     LFID head;
     LFID tail;
+    SERIALIZE(a) { a & "fq" & head & tail; }
 };
 
 struct RegValue
@@ -394,6 +448,47 @@ struct RegValue
     RegState    m_state;       ///< State of the register.
     std::string str(RegType t) const;
 };
+
+namespace Serialization
+{
+    struct reg_serializer
+    {
+        RegAddr * addr;
+        RegValue * value;
+    };
+    inline
+    reg_serializer reg(RegAddr& addr, RegValue& value)
+    {
+        return reg_serializer{&addr, &value};
+    }
+    template<typename A>
+    inline
+    A& operator&(A& a, const reg_serializer& r)
+    {
+        a & "reg" & *r.addr & r.value->m_state;
+        switch(r.value->m_state)
+        {
+        case RST_INVALID: break;
+        case RST_EMPTY: break;
+        case RST_WAITING:
+        case RST_PENDING:
+            a & r.value->m_waiting
+                & r.value->m_memory;
+            break;
+        case RST_FULL:
+            switch(r.addr->type)
+            {
+            case RT_INTEGER:
+                a & r.value->m_integer; break;
+            case RT_FLOAT:
+                a & r.value->m_float; break;
+            }
+            break;
+        }
+        return a;
+    }
+}
+
 
 static inline RegValue MAKE_EMPTY_REG()
 {

@@ -1,7 +1,8 @@
+// -*- c++ -*-
 #ifndef RPC_UNIX_H
 #define RPC_UNIX_H
 
-#include "RPC.h"
+#include <arch/dev/RPC.h>
 #include <sim/inspect.h>
 
 #include <vector>
@@ -36,13 +37,13 @@ namespace Simulator
         VirtualDescriptor* DuplicateVFD2(VirtualFD original, VirtualFD target);
 
         // statistics
-        uint64_t m_nrequests;
-        uint64_t m_nfailures;
-        uint64_t m_nstats;
-        uint64_t m_nreads;
-        uint64_t m_nread_bytes;
-        uint64_t m_nwrites;
-        uint64_t m_nwrite_bytes;
+        DefineSampleVariable(uint64_t, nrequests);
+        DefineSampleVariable(uint64_t, nfailures);
+        DefineSampleVariable(uint64_t, nstats);
+        DefineSampleVariable(uint64_t, nreads);
+        DefineSampleVariable(uint64_t, nread_bytes);
+        DefineSampleVariable(uint64_t, nwrites);
+        DefineSampleVariable(uint64_t, nwrite_bytes);
 
     public:
 
@@ -55,7 +56,7 @@ namespace Simulator
                      const std::vector<char>& arg2,
                      uint32_t arg3, uint32_t arg4);
 
-        std::string GetName() { return GetFQN(); }
+        const std::string& GetName() const override;
 
         void Cmd_Info(std::ostream& out, const std::vector<std::string>& /*args*/) const;
 

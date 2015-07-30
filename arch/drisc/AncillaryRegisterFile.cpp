@@ -80,9 +80,9 @@ namespace drisc
         return SUCCESS;
     }
 
-    AncillaryRegisterFile::AncillaryRegisterFile(const std::string& name, Object& parent, Config& config)
-        : MMIOComponent(name, parent, parent.GetClock()),
-          m_numRegisters(name == "aprs" ? config.getValue<size_t>(*this, "NumAncillaryRegisters") : NUM_ASRS),
+    AncillaryRegisterFile::AncillaryRegisterFile(const std::string& name, Object& parent)
+        : MMIOComponent(name, parent),
+          m_numRegisters(name == "aprs" ? GetConf("NumAncillaryRegisters", size_t) : NUM_ASRS),
           m_registers()
     {
         if (m_numRegisters == 0)

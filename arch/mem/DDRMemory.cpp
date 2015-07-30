@@ -1,6 +1,5 @@
-#include "DDRMemory.h"
-#include "sim/config.h"
-#include <sstream>
+#include <arch/mem/DDRMemory.h>
+#include <sim/config.h>
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -16,17 +15,9 @@ struct DDRMemory::ClientInfo
     ArbitratedService<>* service;
 };
 
-struct DDRMemory::Request
-{
-    ClientInfo* client;
-    bool        write;
-    MemAddr     address;
-    MemData     data;
-    WClientID   wid;
-};
-
 class DDRMemory::Interface : public Object, public DDRChannel::ICallback
 {
+    const vector<ClientInfo>& m_clients;
     size_t              m_lineSize;  //< Cache line size
 
     ArbitratedService<CyclicArbitratedPort> p_service;
@@ -45,8 +36,8 @@ class DDRMemory::Interface : public Object, public DDRChannel::ICallback
     VirtualMemory&      m_memory;
 
     // Statistics
-    uint64_t          m_nreads;
-    uint64_t          m_nwrites;
+    DefineSampleVariable(uint64_t, nreads);
+    DefineSampleVariable(uint64_t, nwrites);
 
 
 public:
@@ -121,7 +112,7 @@ public:
                 return FAILED;
             }
 
-            if (!req.client->callback->OnMemoryWriteCompleted(req.wid)) {
+            if (!m_clients[req.client].callback->OnMemoryWriteCompleted(req.wid)) {
                 return FAILED;
             }
 
@@ -147,12 +138,12 @@ public:
         assert(!request.write);
 
         // This request has arrived, send it to the callback
-        if (!request.client->service->Invoke())
+        if (!m_clients[request.client].service->Invoke())
         {
             return FAILED;
         }
 
-        if (!request.client->callback->OnMemoryReadCompleted(request.address, request.data.data)) {
+        if (!m_clients[request.client].callback->OnMemoryReadCompleted(request.address, request.data.data)) {
             return FAILED;
         }
 
@@ -160,7 +151,7 @@ public:
         return SUCCESS;
     }
 
-    static void PrintRequest(ostream& out, char prefix, const Request& request, size_t lineSize)
+    void PrintRequest(ostream& out, char prefix, const Request& request, size_t lineSize)
     {
         out << prefix << " "
             << hex << setfill('0') << right
@@ -188,11 +179,11 @@ public:
 
         out << " | ";
 
-        Object* obj = dynamic_cast<Object*>(request.client->callback);
+        Object* obj = dynamic_cast<Object*>(m_clients[request.client].callback);
         if (obj == NULL) {
             out << "???";
         } else {
-            out << obj->GetFQN();
+            out << obj->GetName();
         }
         out << dec << endl;
     }
@@ -233,32 +224,31 @@ public:
     Interface(const Interface&) = delete;
     Interface& operator=(const Interface&) = delete;
 
-    Interface(const std::string& name, DDRMemory& parent, Clock& clock, size_t id, const DDRChannelRegistry& ddr, Config& config)
-        : Object     (name, parent, clock),
-          m_lineSize (config.getValue<size_t>("CacheLineSize")),
-          p_service  (*this, clock, "p_service"),
+    Interface(const std::string& name, DDRMemory& parent, Clock& clock, size_t id, const DDRChannelRegistry& ddr, const vector<ClientInfo>& clients)
+        : Object     (name, parent),
+          m_clients  (clients),
+          m_lineSize (GetTopConf("CacheLineSize", size_t)),
+          p_service  (clock, GetName() + ".p_service"),
           m_ddr      (0),
           m_ddrStorageTraces(),
-          m_requests ("b_requests", *this, clock, config.getValue<size_t>(*this, "ExternalOutputQueueSize")),
-          m_responses("b_responses", *this, clock, config.getValue<size_t>(*this, "ExternalInputQueueSize")),
+          InitStorage(m_requests, clock, GetConf("ExternalOutputQueueSize", size_t)),
+          InitStorage(m_responses, clock, GetConf("ExternalInputQueueSize", size_t)),
           m_activeRequests(),
 
-          p_Requests (*this, "requests",   delegate::create<Interface, &Interface::DoRequests>(*this)),
-          p_Responses(*this, "responses",  delegate::create<Interface, &Interface::DoResponses>(*this)),
+          InitProcess(p_Requests, DoRequests),
+          InitProcess(p_Responses, DoResponses),
           m_memory(parent),
-          m_nreads(0),
-          m_nwrites(0)
+          InitSampleVariable(nreads, SVC_CUMULATIVE),
+          InitSampleVariable(nwrites, SVC_CUMULATIVE)
     {
-        RegisterSampleVariableInObject(m_nreads, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nwrites, SVC_CUMULATIVE);
 
-        config.registerObject(*this, "extif");
-        config.registerProperty(*this, "freq", (uint32_t)clock.GetFrequency());
+        RegisterModelObject(*this, "extif");
+        RegisterModelProperty(*this, "freq", (uint32_t)clock.GetFrequency());
 
         m_requests.Sensitive( p_Requests );
         m_responses.Sensitive( p_Responses );
 
-        size_t ddrid = config.getValueOrDefault<size_t>(*this, "DDRChannelID", id);
+        size_t ddrid = GetConfOpt("DDRChannelID", size_t, id);
         if (ddrid >= ddr.size())
         {
             throw exceptf<InvalidArgumentException>(*this, "Invalid DDR channel ID: %zu", ddrid);
@@ -282,10 +272,8 @@ MCID DDRMemory::RegisterClient(IMemoryCallback& callback, Process& process, Stor
 
     MCID id = m_clients.size();
 
-    stringstream name;
-    name << "client" << id;
     ClientInfo client;
-    client.service = new ArbitratedService<>(*this, m_clock, name.str());
+    client.service = new ArbitratedService<>(m_clock, GetName() + ".client" + to_string(id));
     client.callback = &callback;
     m_clients.push_back(client);
 
@@ -296,7 +284,7 @@ MCID DDRMemory::RegisterClient(IMemoryCallback& callback, Process& process, Stor
         m_ifs[i]->RegisterClient(*client.service, process, traces, opt(m_storages));
     }
 
-    m_registry.registerRelation(callback.GetMemoryPeer(), *this, "mem");
+    RegisterModelRelation(callback.GetMemoryPeer(), *this, "mem");
 
     return id;
 }
@@ -323,7 +311,7 @@ bool DDRMemory::Read(MCID id, MemAddr address)
 
     Request request;
     request.address   = address;
-    request.client    = &m_clients[id];
+    request.client    = id;
     request.write     = false;
 
     Interface& chan = *m_ifs[ if_index ];
@@ -345,7 +333,7 @@ bool DDRMemory::Write(MCID id, MemAddr address, const MemData& data, WClientID w
 
     Request request;
     request.address   = address;
-    request.client    = &m_clients[id];
+    request.client    = id;
     request.wid       = wid;
     request.write     = true;
     COMMIT{
@@ -376,40 +364,32 @@ bool DDRMemory::Write(MCID id, MemAddr address, const MemData& data, WClientID w
     return true;
 }
 
-DDRMemory::DDRMemory(const std::string& name, Object& parent, Clock& clock, Config& config, const std::string& defaultInterfaceSelectorType)
-    : Object(name, parent, clock),
-      m_registry(config),
+DDRMemory::DDRMemory(const std::string& name, Object& parent, Clock& clock, const std::string& defaultInterfaceSelectorType)
+    : VirtualMemory(name, parent),
       m_clock(clock),
       m_clients(),
       m_storages(),
-      m_ifs            (config.getValue<size_t>(*this, "NumInterfaces")),
-      m_ddr            ("ddr", *this, config, m_ifs.size()),
-      m_lineSize       (config.getValue<size_t> ("CacheLineSize")),
-      m_selector       (IBankSelector::makeSelector(*this, config.getValueOrDefault<string>(*this, "InterfaceSelector", defaultInterfaceSelectorType), m_ifs.size())),
-      m_nreads         (0),
-      m_nread_bytes    (0),
-      m_nwrites        (0),
-      m_nwrite_bytes   (0)
+      m_ifs            (GetConf("NumInterfaces", size_t)),
+      m_ddr            ("ddr", *this, m_ifs.size()),
+      m_lineSize       (GetTopConf("CacheLineSize", size_t)),
+      m_selector       (IBankSelector::makeSelector(*this, GetConfOpt("InterfaceSelector", string, defaultInterfaceSelectorType), m_ifs.size())),
+      InitSampleVariable(nreads, SVC_CUMULATIVE),
+      InitSampleVariable(nread_bytes, SVC_CUMULATIVE),
+      InitSampleVariable(nwrites, SVC_CUMULATIVE),
+      InitSampleVariable(nwrite_bytes, SVC_CUMULATIVE)
 {
-    config.registerObject(*this, "ddrmem");
-    config.registerProperty(*this, "selector", m_selector->GetName());
+    RegisterModelObject(*this, "ddrmem");
+    RegisterModelProperty(*this, "selector", m_selector->GetName());
 
     // Create the interfaces
     for (size_t i = 0; i < m_ifs.size(); ++i)
     {
-        stringstream sname;
-        sname << "extif" << i;
+        m_ifs[i] = new Interface("extif" + to_string(i), *this, clock, i, m_ddr, m_clients);
 
-        m_ifs[i] = new Interface(sname.str(), *this, clock, i, m_ddr, config);
-
-        config.registerObject(*m_ifs[i], "extif");
-        config.registerRelation(*this, *m_ifs[i], "extif");
+        RegisterModelObject(*m_ifs[i], "extif");
+        RegisterModelRelation(*this, *m_ifs[i], "extif");
     }
 
-    RegisterSampleVariableInObject(m_nreads, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nread_bytes, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nwrites, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_nwrite_bytes, SVC_CUMULATIVE);
 }
 
 DDRMemory::~DDRMemory()

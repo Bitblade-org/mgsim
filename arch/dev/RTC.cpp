@@ -24,11 +24,11 @@ namespace Simulator
        handler then decreases it.
     */
 
-    static volatile unsigned clockSemaphore = 0;
-    static unsigned clockListeners = 0;
+    static volatile unsigned g_clockSemaphore = 0;
+    static unsigned g_clockListeners = 0;
 
-    static clock_delay_t clockResolution = 0;
-    static volatile precise_time_t currentTime = 0;
+    static clock_delay_t g_clockResolution = 0;
+    static volatile precise_time_t g_currentTime = 0;
 
     static void set_time(void)
     {
@@ -36,51 +36,55 @@ namespace Simulator
         int gtod_status = gettimeofday(&tv, NULL);
         assert(gtod_status == 0);
         precise_time_t newTime = tv.tv_usec + tv.tv_sec * 1000000;
-        currentTime = newTime;
+        g_currentTime = newTime;
     }
 
     static void alarm_handler(int)
     {
-        clockSemaphore = clockListeners;
+        g_clockSemaphore = g_clockListeners;
         set_time();
     }
 
-    static void setup_clocks(Config& config)
+    static void setup_clocks(clock_delay_t d)
     {
         static bool initialized = false;
         if (!initialized)
         {
-            set_time(); // need to have a non-zero value before the RTC starts
+            g_clockResolution = d;
 
-            // update delay in microseconds
-            clockResolution = config.getValue<clock_delay_t>("RTCMeatSpaceUpdateInterval");
+            set_time(); // need to have a non-zero value before the RTC starts
 
             if (SIG_ERR == signal(SIGALRM, alarm_handler))
             {
-                throw exceptf<SimulationException>("Cannot set alarm: %s", strerror(errno));
+                throw exceptf<>("Cannot set alarm: %s", strerror(errno));
             };
 
             struct itimerval it;
-            it.it_interval.tv_sec = clockResolution / 1000000;
-            it.it_interval.tv_usec = clockResolution % 1000000;
+            it.it_interval.tv_sec = g_clockResolution / 1000000;
+            it.it_interval.tv_usec = g_clockResolution % 1000000;
             it.it_value = it.it_interval;
 
             if (-1 == setitimer(ITIMER_REAL, &it, NULL))
             {
-                throw exceptf<SimulationException>("Cannot set timer: %s", strerror(errno));
+                throw exceptf<>("Cannot set timer: %s", strerror(errno));
             };
 
             initialized = true;
         }
     }
 
+    const std::string& RTC::RTCInterface::GetIODeviceName() const
+    {
+        return GetName();
+    }
+
     RTC::RTCInterface::RTCInterface(const std::string& name, RTC& parent, IIOBus& iobus, IODeviceID devid)
-        : Object(name, parent, iobus.GetClock()),
+        : Object(name, parent),
           m_devid(devid),
           m_iobus(iobus),
-          m_doNotify("f_interruptTriggered", *this, iobus.GetClock(), false),
-          m_interruptNumber(0),
-          p_notifyTime(*this, "notify-time", delegate::create<RTCInterface, &RTCInterface::DoNotifyTime>(*this))
+          InitStorage(m_doNotify, iobus.GetClock(), false),
+          InitStateVariable(interruptNumber, 0),
+          InitProcess(p_notifyTime, DoNotifyTime)
     {
         iobus.RegisterClient(devid, *this);
         m_doNotify.Sensitive(p_notifyTime);
@@ -91,19 +95,20 @@ namespace Simulator
         p_notifyTime.SetStorageTraces(m_iobus.GetInterruptRequestTraces());
     }
 
-    RTC::RTC(const string& name, Object& parent, Clock& rtcclock, IIOBus& iobus, IODeviceID devid, Config& config)
-        : Object(name, parent, rtcclock),
+    RTC::RTC(const string& name, Object& parent, Clock& rtcclock, IIOBus& iobus, IODeviceID devid)
+        : Object(name, parent),
           m_timerTicked(false),
-          m_timeOfLastInterrupt(0),
-          m_triggerDelay(0),
-          m_deliverAllEvents(true),
-          m_enableCheck("f_checkTime", *this, rtcclock, false),
+          InitStateVariable(timeOfLastInterrupt, 0),
+          InitStateVariable(triggerDelay, 0),
+          InitStateVariable(deliverAllEvents, true),
+          InitStorage(m_enableCheck, rtcclock, false),
           m_businterface("if", *this, iobus, devid),
-          p_checkTime(*this, "time-update", delegate::create<RTC, &RTC::DoCheckTime>(*this))
+          InitProcess(p_checkTime, DoCheckTime)
     {
-        setup_clocks(config);
-        m_timeOfLastInterrupt = currentTime;
-        ++clockListeners;
+
+        setup_clocks(GetTopConf("RTCMeatSpaceUpdateInterval", clock_delay_t));
+        m_timeOfLastInterrupt = g_currentTime;
+        ++g_clockListeners;
         m_enableCheck.Sensitive(p_checkTime);
 
         p_checkTime.SetStorageTraces(opt(m_businterface.m_doNotify));
@@ -122,17 +127,17 @@ namespace Simulator
 
     Result RTC::DoCheckTime()
     {
-        if (!m_timerTicked && (clockSemaphore != 0))
+        if (!m_timerTicked && (g_clockSemaphore != 0))
         {
             m_timerTicked = true;
-            --clockSemaphore;
+            --g_clockSemaphore;
         }
 
         if (m_timerTicked)
         {
             // The clock is configured to deliver interrupts. Check
             // for this.
-            if (m_timeOfLastInterrupt + m_triggerDelay <= currentTime)
+            if (m_timeOfLastInterrupt + m_triggerDelay <= g_currentTime)
             {
                 // Time for an interrupt.
                 m_businterface.m_doNotify.Set();
@@ -144,7 +149,7 @@ namespace Simulator
                     }
                     else
                     {
-                        m_timeOfLastInterrupt = currentTime;
+                        m_timeOfLastInterrupt = g_currentTime;
                     }
                 }
             }
@@ -203,11 +208,11 @@ namespace Simulator
 
         if (address % 4 != 0 || data.size != 4)
         {
-            throw exceptf<SimulationException>(*this, "Invalid unaligned RTC write: %#016llx (%u)", (unsigned long long)address, (unsigned)data.size);
+            throw exceptf<>(*this, "Invalid unaligned RTC write: %#016llx (%u)", (unsigned long long)address, (unsigned)data.size);
         }
         if (word == 0 || word > 3)
         {
-            throw exceptf<SimulationException>(*this, "Invalid write to RTC word: %u", word);
+            throw exceptf<>(*this, "Invalid write to RTC word: %u", word);
         }
 
         Integer value = UnserializeRegister(RT_INTEGER, data.data, data.size);
@@ -220,7 +225,7 @@ namespace Simulator
             {
                 if (value != 0)
                 {
-                    rtc.m_timeOfLastInterrupt = currentTime;
+                    rtc.m_timeOfLastInterrupt = g_currentTime;
                     rtc.m_enableCheck.Set();
                 }
                 else
@@ -256,11 +261,11 @@ namespace Simulator
 
         if (address % 4 != 0 || size != 4)
         {
-            throw exceptf<SimulationException>(*this, "Invalid unaligned RTC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>(*this, "Invalid unaligned RTC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
         }
         if (word > 9)
         {
-            throw exceptf<SimulationException>(*this, "Read from invalid RTC word: %u", word);
+            throw exceptf<>(*this, "Read from invalid RTC word: %u", word);
         }
 
         RTC& rtc = GetRTC();
@@ -268,12 +273,12 @@ namespace Simulator
         COMMIT{
             switch(word)
             {
-            case 0:   value = clockResolution; break;
+            case 0:   value = g_clockResolution; break;
             case 1:   value = rtc.m_triggerDelay; break;
             case 2:   value = m_interruptNumber; break;
             case 3:   value = (int)rtc.m_deliverAllEvents; break;
-            case 4:   value = currentTime % 1000000; break;
-            case 5:   value = currentTime / 1000000; break;
+            case 4:   value = g_currentTime % 1000000; break;
+            case 5:   value = g_currentTime / 1000000; break;
             case 6: case 7:
             {
                 time_t c = time(0);

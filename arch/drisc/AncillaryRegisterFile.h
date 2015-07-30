@@ -1,7 +1,8 @@
+// -*- c++ -*-
 #ifndef ANCILLARYREGISTERFILE_H
 #define ANCILLARYREGISTERFILE_H
 
-#include "IOMatchUnit.h"
+#include "old/IOMatchUnit.h"
 
 namespace Simulator
 {
@@ -25,7 +26,7 @@ class AncillaryRegisterFile : public MMIOComponent, public Inspect::Interface<In
     std::vector<Integer>          m_registers;
 
 public:
-    AncillaryRegisterFile(const std::string& name, Object& parent, Config& config);
+    AncillaryRegisterFile(const std::string& name, Object& parent);
 
     size_t GetSize() const;
 

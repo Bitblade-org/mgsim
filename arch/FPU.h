@@ -1,15 +1,15 @@
+// -*- c++ -*-
 #ifndef FPU_H
 #define FPU_H
 
-#include <sim/kernel.h>
-#include <sim/storage.h>
-#include <sim/inspect.h>
-#include <arch/simtypes.h>
+#include "sim/kernel.h"
+#include "sim/buffer.h"
+#include "sim/register.h"
+#include "sim/inspect.h"
+#include "arch/simtypes.h"
 
 #include <deque>
 #include <map>
-
-class Config;
 
 namespace Simulator
 {
@@ -37,21 +37,14 @@ enum FPUOperation
 class FPU : public Object, public Inspect::Interface<Inspect::Read>
 {
     /// Represents an FP operation
-    struct Operation
-    {
-            FPUOperation op;
-            int          size;
-            double       Rav, Rbv;
-            RegAddr      Rc;
-            std::string  str() const;
-    };
+    struct Operation;
 
 public:
     /// Represents a client for this FPU
     class IFPUClient
     {
     public:
-        virtual std::string GetName() const = 0;
+        virtual const std::string& GetName() const = 0;
         virtual bool CheckFPUOutputAvailability(RegAddr addr) = 0;
         virtual bool WriteFPUResult(RegAddr addr, const RegValue& value) = 0;
         virtual ~IFPUClient();
@@ -60,31 +53,19 @@ public:
 private:
 
     /// Represents a source for this FPU
-    class Source : public Object
-    {
-    private:
-        Buffer<Operation>        inputs;     ///< Input queue for operations from this source
-        StorageTraceSet          outputs;    ///< Set of storage trace each output can generate
-        IFPUClient*              client;     ///< Component accepting results for this source
-        CycleNo                  last_write; ///< Last time an FPU pipe wrote back to this source
-        unsigned int             last_unit;  ///< Unit that did the last (or current) write
-
-        friend class FPU;
-    public:
-        Source(const std::string& name, Object& parent, Clock& clock, Config& config);
-        Source(const Source&) = delete;
-        Source& operator=(const Source&) = delete;
-    };
+    class Source;
 
     /// Represents the result of an FP operation
     struct Result
     {
-            RegAddr       address;     ///< Address of destination register of result.
-            MultiFloat    value;       ///< Resulting value of the operation.
-            unsigned int  source;      ///< The source of the operation
-            unsigned int  size;        ///< Size of the resulting value.
-            unsigned int  state;       ///< Progression through the pipeline.
-            unsigned int  index;       ///< Current index of writeback.
+        RegAddr       address;     ///< Address of destination register of result.
+        MultiFloat    value;       ///< Resulting value of the operation.
+        unsigned int  source;      ///< The source of the operation
+        unsigned int  size;        ///< Size of the resulting value.
+        unsigned int  state;       ///< Progression through the pipeline.
+        unsigned int  index;       ///< Current index of writeback.
+
+        SERIALIZE(a) { a & "fpr" & address & source & state & index & Serialization::multifloat(value, size); }
     };
 
     /// Represents a pipeline for an FP operation type
@@ -95,6 +76,7 @@ private:
         bool               pipelined;   ///< Is it a pipeline or a single ex. unit?
 
         Unit() : latency(0), slots(), pipelined(false) {}
+        SERIALIZE(a) { a & slots; }
     };
 
     /**
@@ -119,7 +101,7 @@ private:
     std::vector<Unit>    m_units;                 ///< The execution units in the FPU
     std::vector<size_t>  m_mapping[FPU_NUM_OPS];  ///< List of units for each FPU op
 
-    size_t            m_last_source;
+    DefineStateVariable(size_t, last_source);
     Simulator::Result DoPipeline();
 
     void Cleanup();
@@ -128,10 +110,9 @@ public:
      * @brief Constructs the FPU.
      * @param parent     reference to the parent object
      * @param name       name of the FPU, irrelevant to simulation
-     * @param config     reference to the configuration data
      * @param num_inputs number of inputs that will be connected to this FPU
      */
-    FPU(const std::string& name, Object& parent, Clock& clock, Config& config, size_t num_inputs);
+    FPU(const std::string& name, Object& parent, Clock& clock, size_t num_inputs);
 
     /// Destroys the FPU object
     ~FPU();

@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef MEMORY_H
 #define MEMORY_H
 
@@ -5,6 +6,7 @@
 #include "symtable.h"
 #include <sim/ports.h>
 #include <sim/storage.h>
+#include <sim/inspect.h>
 
 namespace Simulator
 {
@@ -17,6 +19,12 @@ struct MemData
 {
     char    data[MAX_MEMORY_OPERATION_SIZE];
     bool    mask[MAX_MEMORY_OPERATION_SIZE];
+    SERIALIZE(a) {
+        a & "[md"
+            & Serialization::binary(data, MAX_MEMORY_OPERATION_SIZE)
+            & Serialization::bitvec(mask, MAX_MEMORY_OPERATION_SIZE)
+            & "]";
+    }
 };
 
 namespace line {
@@ -99,14 +107,16 @@ public:
                                      uint64_t& nreads_ext, uint64_t& nwrites_ext) const = 0;
 };
 
-class IMemoryAdmin
+class IMemoryAdmin : public Inspect::Interface<Inspect::Read|Inspect::Write>
 {
 public:
+	//MLDNOTE Deze 4 verdwijnen in principe
     virtual void Reserve(MemAddr address, MemSize size, ProcessID pid, int perm) = 0;
     virtual void Unreserve(MemAddr address, MemSize size) = 0;
     virtual void UnreserveAll(ProcessID pid) = 0;
     virtual bool CheckPermissions(MemAddr address, MemSize size, int access) const = 0;
 
+	//MLDNOTE Interface simulatie <> kernel, console
     virtual void Read (MemAddr address, void* data, MemSize size) const = 0;
     virtual void Write(MemAddr address, const void* data, const bool* mask, MemSize size) = 0;
 
@@ -114,6 +124,10 @@ public:
     virtual void SetSymbolTable(SymbolTable& symtable) = 0;
 
     virtual ~IMemoryAdmin();
+
+    // From Inspect::Read/Write:
+    virtual void Cmd_Read(std::ostream& o, const std::vector<std::string>& args) const override;
+    virtual void Cmd_Write(std::ostream& o, const std::vector<std::string>& args) override;
 };
 
 }

@@ -18,15 +18,15 @@ namespace drisc
 // RegisterFile implementation
 //
 
-RegisterFile::RegisterFile(const std::string& name, DRISC& parent, Clock& clock, Config& config)
-  : Object(name, parent, clock),
-    Structure<RegAddr>(name, parent, clock),
+RegisterFile::RegisterFile(const std::string& name, DRISC& parent, Clock& clock)
+  : Object(name, parent),
+    ReadWriteStructure<RegAddr>(name, parent, clock),
     Storage("storage", *this, clock),
-    p_pipelineR1(*this, "p_pipelineR1"),
-    p_pipelineR2(*this, "p_pipelineR2"),
-    p_pipelineW (*this, "p_pipelineW"),
-    p_asyncR    (*this, "p_asyncR"),
-    p_asyncW    (*this, "p_asyncW"),
+    p_pipelineR1(*this),
+    p_pipelineR2(*this),
+    p_pipelineW (*this),
+    p_asyncR    (*this, GetName() + ".p_asyncR"),
+    p_asyncW    (*this, GetName() + ".p_asyncW"),
     m_files     (),
     m_sizes     (),
     m_nUpdates(0),
@@ -36,14 +36,14 @@ RegisterFile::RegisterFile(const std::string& name, DRISC& parent, Clock& clock,
     for (size_t i = 0; i < NUM_REG_TYPES; ++i)
     {
         static constexpr std::array<const char*, NUM_REG_TYPES> cfg_names = { {"NumIntRegisters", "NumFltRegisters"} };
-        m_sizes[i] = config.getValue<size_t>(*this, cfg_names[i]);
+        m_sizes[i] = GetConf(cfg_names[i], size_t);
         m_files[i] = new RegValue[m_sizes[i]];
         for (RegSize j = 0; j < m_sizes[i]; ++j)
         {
             m_files[i][j] = MAKE_EMPTY_REG();
         }
     }
-    // Set port priorities; first port has highest priority
+    // Set write port priorities (from ReadWriteStructure); first port has highest priority
     AddPort(p_pipelineW);
     AddPort(p_asyncW);
 
@@ -51,7 +51,7 @@ RegisterFile::RegisterFile(const std::string& name, DRISC& parent, Clock& clock,
     for (size_t i = 0; i < NUM_REG_TYPES; ++i)
     {
         static constexpr std::array<const char *, NUM_REG_TYPES> cfg_names = { {"IntRegAliases", "FltRegAliases"} };
-        m_local_aliases[i] = config.getWordList(cfg_names[i]);
+        m_local_aliases[i] = GetTopConfStrings(cfg_names[i]);
         if (m_local_aliases[i].empty())
             m_local_aliases[i] = GetDefaultLocalRegisterAliases((RegType)i);
     }
@@ -137,7 +137,7 @@ bool RegisterFile::WriteRegister(const RegAddr& addr, const RegValue& data, bool
     {
         if (value.m_state == RST_WAITING && data.m_state == RST_EMPTY)
         {
-            throw exceptf<SimulationException>(*this, "Invalid reset of %s: %s becomes %s", addr.str().c_str(), value.str(addr.type).c_str(), data.str(addr.type).c_str());
+            throw exceptf<>(*this, "Invalid reset of %s: %s becomes %s", addr.str().c_str(), value.str(addr.type).c_str(), data.str(addr.type).c_str());
         }
 
         if (value.m_memory.size != 0)
@@ -153,7 +153,7 @@ bool RegisterFile::WriteRegister(const RegAddr& addr, const RegValue& data, bool
                 if (!from_memory)
                 {
                     // Only the memory can change memory-pending registers
-                    throw exceptf<SimulationException>(*this, "Invalid reset of pending load %s: %s becomes %s", addr.str().c_str(), value.str(addr.type).c_str(), data.str(addr.type).c_str());
+                    throw exceptf<>(*this, "Invalid reset of pending load %s: %s becomes %s", addr.str().c_str(), value.str(addr.type).c_str(), data.str(addr.type).c_str());
                 }
             }
         }
@@ -231,9 +231,9 @@ void RegisterFile::Cmd_Info(std::ostream& out, const std::vector<std::string>& /
 
 
 // IFPUClient::GetName()
-std::string RegisterFile::GetName() const
+const std::string& RegisterFile::GetName() const
 {
-    return GetParent()->GetFQN();
+    return GetParent()->GetName();
 }
 
 bool RegisterFile::CheckFPUOutputAvailability(RegAddr addr)

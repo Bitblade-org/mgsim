@@ -43,7 +43,7 @@ Pipeline::PipeAction Pipeline::FetchStage::OnCycle()
         {
             // We need to check for breakpoints on the control
             // word here.
-            GetKernel()->GetBreakPointManager().Check(BreakPointManager::FETCH, pc, *this);
+            GetDRISC().GetBreakPointManager().Check(BreakPointManager::FETCH, pc, *this);
 
             // Skip the control word
             pc += sizeof(Instruction);
@@ -132,7 +132,7 @@ Pipeline::PipeAction Pipeline::FetchStage::OnCycle()
         }
 
         // Check for breakpoints
-        GetKernel()->GetBreakPointManager().Check(BreakPointManager::FETCH, pc, *this);
+        GetDRISC().GetBreakPointManager().Check(BreakPointManager::FETCH, pc, *this);
 
         // Update the PC and switched state
         m_pc       = next_pc;
@@ -147,14 +147,14 @@ Pipeline::PipeAction Pipeline::FetchStage::OnCycle()
     return PIPE_CONTINUE;
 }
 
-Pipeline::FetchStage::FetchStage(Pipeline& parent, Clock& clock, FetchDecodeLatch& output, Config& config)
-  : Stage("fetch", parent, clock),
+Pipeline::FetchStage::FetchStage(Pipeline& parent, FetchDecodeLatch& output)
+  : Stage("fetch", parent),
     m_output(output),
     m_allocator(GetDRISC().GetAllocator()),
     m_familyTable(GetDRISC().GetFamilyTable()),
     m_threadTable(GetDRISC().GetThreadTable()),
     m_icache(GetDRISC().GetICache()),
-    m_controlBlockSize(config.getValue<size_t>("ControlBlockSize")),
+    m_controlBlockSize(GetTopConf("ControlBlockSize", size_t)),
     m_buffer(0),
     m_switched(true),
     m_pc(0)

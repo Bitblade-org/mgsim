@@ -1,5 +1,5 @@
-#include "IODirectCacheAccess.h"
-#include "DRISC.h"
+#include <arch/drisc/IODirectCacheAccess.h>
+#include <arch/drisc/DRISC.h>
 #include <sim/config.h>
 #include <cstring>
 
@@ -7,23 +7,23 @@ namespace Simulator
 {
 namespace drisc
 {
-    IODirectCacheAccess::IODirectCacheAccess(const std::string& name, IOInterface& parent, Clock& clock, Config& config)
-        : Object(name, parent, clock),
+    IODirectCacheAccess::IODirectCacheAccess(const std::string& name, IOInterface& parent, Clock& clock)
+        : Object(name, parent),
           m_memory(NULL),
           m_mcid(0),
           m_busif(parent.GetIOBusInterface()),
-          m_lineSize(config.getValue<MemSize>("CacheLineSize")),
-          m_requests("b_requests", *this, clock, config.getValue<BufferSize>(*this, "RequestQueueSize")),
-          m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseQueueSize")),
+          m_lineSize(GetTopConf("CacheLineSize", MemSize)),
+          InitBuffer(m_requests, clock, "RequestQueueSize"),
+          InitBuffer(m_responses, clock, "ResponseQueueSize"),
           m_pending_writes(0),
           m_outstanding_address(0),
           m_outstanding_size(0),
           m_outstanding_client(0),
           m_has_outstanding_request(false),
           m_flushing(false),
-          p_MemoryOutgoing(*this, "send-memory-requests", delegate::create<IODirectCacheAccess, &IODirectCacheAccess::DoMemoryOutgoing>(*this)),
-          p_BusOutgoing   (*this, "send-bus-responses", delegate::create<IODirectCacheAccess, &IODirectCacheAccess::DoBusOutgoing>(*this)),
-          p_service(*this, clock, "p_service")
+          InitProcess(p_MemoryOutgoing, DoMemoryOutgoing),
+          InitProcess(p_BusOutgoing, DoBusOutgoing),
+          p_service(clock, GetName() + ".p_service")
     {
         p_service.AddProcess(p_BusOutgoing);
         p_service.AddProcess(p_MemoryOutgoing);

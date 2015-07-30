@@ -1,6 +1,8 @@
-#include "monitor.h"
-#include "sampling.h"
-#include <arch/MGSystem.h>
+#include "sim/monitor.h"
+#include "sim/sampling.h"
+#include "sim/config.h"
+#include "sim/binarysampler.h"
+#include "arch/MGSystem.h"
 
 #include <ios>
 #include <iostream>
@@ -60,10 +62,11 @@ Monitor::Monitor(Simulator::MGSystem& sys, bool enabled, const string& mdfile, c
         return ;
     }
 
-    vector<string> pats = sys.GetConfig().getWordList("MonitorSampleVariables");
+    vector<string> pats = sys.GetKernel()->GetConfig()->getWordList("MonitorSampleVariables");
     pats.insert(pats.begin(), "kernel.cycle");
     pats.push_back("kernel.cycle");
-    m_sampler = new BinarySampler(metadatafile, sys.GetConfig(), pats);
+    m_sampler = new Simulator::BinarySampler(sys.GetKernel()->GetVariableRegistry());
+    m_sampler->SelectVariables(metadatafile, *sys.GetKernel()->GetConfig(), pats);
     metadatafile << "# tv_sizes: " << sizeof(((struct timeval*)(void*)0)->tv_sec)
                  << ' ' << sizeof(((struct timeval*)(void*)0)->tv_usec)
                  << ' ' << sizeof(struct timeval) << endl;
@@ -82,7 +85,7 @@ Monitor::Monitor(Simulator::MGSystem& sys, bool enabled, const string& mdfile, c
         return ;
     }
 
-    float msd = sys.GetConfig().getValue<float>("MonitorSampleDelay");
+    float msd = sys.GetKernel()->GetConfig()->getValue<float>("MonitorSampleDelay");
     msd = fabs(msd);
     m_tsdelay.tv_sec = msd;
     m_tsdelay.tv_nsec = (msd - (float)m_tsdelay.tv_sec) * 1000000000.;
@@ -168,7 +171,7 @@ void Monitor::run()
 #error No sub-microsecond wait available on this system.
 #endif
 
-        Simulator::CycleNo currentCycle = m_sys.GetKernel().GetCycleNo();
+        Simulator::CycleNo currentCycle = m_sys.GetKernel()->GetCycleNo();
         if (currentCycle == lastCycle)
             // nothing to do
             continue;

@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef CDMA_CDMA_H
 #define CDMA_CDMA_H
 
@@ -15,7 +16,7 @@ class ComponentModelRegistry;
 namespace Simulator
 {
 
-class CDMA : public Object, public IMemory, public VirtualMemory, public Inspect::Interface<Inspect::Line|Inspect::Trace>
+class CDMA : public IMemory, public VirtualMemory, public Inspect::Interface<Inspect::Line|Inspect::Trace>
 {
 public:
     class Node;
@@ -42,12 +43,11 @@ protected:
     typedef std::set<MemAddr> TraceMap;
     typedef size_t            NodeID;
 
-    ComponentModelRegistry&     m_registry;
+    Clock&                      m_clock;
     size_t                      m_numClientsPerCache;
     size_t                      m_numCachesPerLowRing;
     size_t                      m_numClients;
     size_t                      m_lineSize;
-    Config&                     m_config;
     std::vector<Cache*>         m_caches;             ///< List of caches
     std::vector<Directory*>     m_directories;        ///< List of directories
     std::vector<RootDirectory*> m_roots;              ///< List of root directories
@@ -56,7 +56,10 @@ protected:
 
     std::vector<std::pair<Cache*,MCID> > m_clientMap; ///< Mapping of MCID to caches
 
-    uint64_t                    m_nreads, m_nwrites, m_nread_bytes, m_nwrite_bytes;
+    DefineSampleVariable(uint64_t, nreads);
+    DefineSampleVariable(uint64_t, nwrites);
+    DefineSampleVariable(uint64_t, nread_bytes);
+    DefineSampleVariable(uint64_t, nwrite_bytes);
 
     unsigned int GetTotalTokens() const {
         // One token per cache
@@ -66,7 +69,7 @@ protected:
     virtual void Initialize() = 0;
 
 public:
-    CDMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
+    CDMA(const std::string& name, Simulator::Object& parent, Clock& clock);
     CDMA(const CDMA&) = delete;
     CDMA& operator=(const CDMA&) = delete;
     ~CDMA();
@@ -106,7 +109,7 @@ public:
 
     MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, const StorageTraceSet& storages, bool grouped) override;
 
-    OneLevelCDMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
+    OneLevelCDMA(const std::string& name, Simulator::Object& parent, Clock& clock);
 };
 
 class TwoLevelCDMA : public CDMA
@@ -116,7 +119,7 @@ public:
 
     MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, const StorageTraceSet& storages, bool grouped) override;
 
-    TwoLevelCDMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
+    TwoLevelCDMA(const std::string& name, Simulator::Object& parent, Clock& clock);
 };
 
 }

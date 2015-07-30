@@ -4,7 +4,6 @@
 #include <sim/log2.h>
 #include <sim/config.h>
 #include <sim/ctz.h>
-
 #include <cassert>
 
 using namespace std;
@@ -17,8 +16,10 @@ using namespace drisc;
 //
 // DRISC implementation
 //
-DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, const vector<DRISC*>& grid, Config& config)
-:   Object(name, parent, clock),
+DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, const vector<DRISC*>& grid, BreakPointManager& bp)
+:   Object(name, parent),
+    m_clock(clock),
+    m_bp_manager(bp),
     m_memory(NULL),
     m_memadmin(NULL),
     m_grid(grid),
@@ -26,58 +27,59 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_symtable(NULL),
     m_pid(pid),
     m_reginits(),
-    m_bits(),
-    m_familyTable ("families",      *this, clock, config),
-    m_threadTable ("threads",       *this, clock, config),
-    m_registerFile("registers",     *this, clock, config),
-    m_raunit      ("rau",           *this, clock, m_registerFile.GetSizes(), config),
-    m_allocator   ("alloc",         *this, clock, config),
-    m_icache      ("icache",        *this, clock, config),
-    m_dcache      ("dcache",        *this, clock, config),
-    m_pipeline    ("pipeline",      *this, clock, config),
-    m_network     ("network",       *this, clock, grid, config),
-    m_mmio        ("mmio",          *this, clock),
-    m_apr_file("aprs", *this, config),
-    m_asr_file("asrs", *this, config),
-    m_perfcounters(*this, config),
+    m_bits({ilog2(GetGridSize()), 0, 0}),
+	m_mmu("mmu", *this, m_bits.pid_bits),
+    m_familyTable ("families",      *this),
+    m_threadTable ("threads",       *this),
+    m_registerFile("registers",     *this, clock),
+    m_raunit      ("rau",           *this, m_registerFile.GetSizes()),
+    m_allocator   ("alloc",         *this, clock),
+    m_icache      ("icache",        *this, clock),
+    m_dcache      ("dcache",        *this, clock),
+    m_pipeline    ("pipeline",      *this, clock),
+    m_network     ("network",       *this, clock, grid),
+    m_mmio        ("mmio",          *this),
+    m_apr_file("aprs", *this),
+    m_asr_file("asrs", *this),
+    m_perfcounters(*this),
     m_lpout("stdout", *this, std::cout),
     m_lperr("stderr", *this, std::cerr),
-    m_mmu("mmu", *this),
+    m_oldmmu("oldmmu", *this),
     m_action("action", *this),
     m_io_if(NULL)
 {
-    config.registerProperty(*this, "pid", (uint32_t)pid);
-    config.registerProperty(*this, "ic.assoc", (uint32_t)m_icache.GetAssociativity());
-    config.registerProperty(*this, "ic.lsz", (uint32_t)m_icache.GetLineSize());
-    config.registerProperty(*this, "dc.assoc", (uint32_t)m_dcache.GetAssociativity());
-    config.registerProperty(*this, "dc.sets", (uint32_t)m_dcache.GetNumSets());
-    config.registerProperty(*this, "dc.lines", (uint32_t)m_dcache.GetNumLines());
-    config.registerProperty(*this, "dc.lsz", (uint32_t)m_dcache.GetLineSize());
-    config.registerProperty(*this, "threads", (uint32_t)m_threadTable.GetNumThreads());
-    config.registerProperty(*this, "families", (uint32_t)m_familyTable.GetFamilies().size());
-    config.registerProperty(*this, "iregs", (uint32_t)m_registerFile.GetSizes()[RT_INTEGER]);
-    config.registerProperty(*this, "fpregs", (uint32_t)m_registerFile.GetSizes()[RT_FLOAT]);
-    config.registerProperty(*this, "freq", (uint32_t)clock.GetFrequency());
+    RegisterModelProperty(*this, "pid", (uint32_t)pid);
+    RegisterModelProperty(*this, "ic.assoc", (uint32_t)m_icache.GetAssociativity());
+    RegisterModelProperty(*this, "ic.lsz", (uint32_t)m_icache.GetLineSize());
+    RegisterModelProperty(*this, "dc.assoc", (uint32_t)m_dcache.GetAssociativity());
+    RegisterModelProperty(*this, "dc.sets", (uint32_t)m_dcache.GetNumSets());
+    RegisterModelProperty(*this, "dc.lines", (uint32_t)m_dcache.GetNumLines());
+    RegisterModelProperty(*this, "dc.lsz", (uint32_t)m_dcache.GetLineSize());
+    RegisterModelProperty(*this, "threads", (uint32_t)m_threadTable.GetNumThreads());
+    RegisterModelProperty(*this, "families", (uint32_t)m_familyTable.GetFamilies().size());
+    RegisterModelProperty(*this, "iregs", (uint32_t)m_registerFile.GetSizes()[RT_INTEGER]);
+    RegisterModelProperty(*this, "fpregs", (uint32_t)m_registerFile.GetSizes()[RT_FLOAT]);
+    RegisterModelProperty(*this, "freq", (uint32_t)clock.GetFrequency());
 
     // Get the size, in bits, of various identifiers.
     // This is used for packing and unpacking various fields.
-    m_bits.pid_bits = ilog2(GetGridSize());
+//    m_bits.pid_bits = ilog2(GetGridSize());
     m_bits.fid_bits = ilog2(m_familyTable.GetFamilies().size());
     m_bits.tid_bits = ilog2(m_threadTable.GetNumThreads());
 
     // Configure the MMIO interface for the common devices
-    m_perfcounters.Connect(m_mmio, IOMatchUnit::READ, config);
-    m_apr_file.Connect(m_mmio, IOMatchUnit::READWRITE, config);
-    m_asr_file.Connect(m_mmio, IOMatchUnit::READ, config);
-    m_lpout.Connect(m_mmio, IOMatchUnit::WRITE, config);
-    m_lperr.Connect(m_mmio, IOMatchUnit::WRITE, config);
-    m_mmu.Connect(m_mmio, IOMatchUnit::WRITE, config);
-    m_action.Connect(m_mmio, IOMatchUnit::WRITE, config);
+    m_perfcounters.Connect(m_mmio, IOMatchUnit::READ);
+    m_apr_file.Connect(m_mmio, IOMatchUnit::READWRITE);
+    m_asr_file.Connect(m_mmio, IOMatchUnit::READ);
+    m_lpout.Connect(m_mmio, IOMatchUnit::WRITE);
+    m_lperr.Connect(m_mmio, IOMatchUnit::WRITE);
+    m_oldmmu.Connect(m_mmio, IOMatchUnit::WRITE);
+    m_action.Connect(m_mmio, IOMatchUnit::WRITE);
 
     // Check if there is an initial register configuration
-    if (!config.getValueOrDefault<string>(*this, "InitRegs", "").empty())
+    if (!GetConfOpt("InitRegs", string, "").empty())
     {
-        auto regs = config.getWordList(*this, "InitRegs");
+        auto regs = GetConfStrings("InitRegs");
         for (auto ri : regs)
         {
             // format is RNNN=VAL or FNNN=VAL
@@ -109,7 +111,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
             // First handle value indirections
             if (value[0] == '$')
             {
-                value = config.getValue<string>(value.substr(1));
+                value = GetTopConf(value.substr(1), string);
             }
             m_reginits[reg_addr] = value;
         }
@@ -137,34 +139,37 @@ void DRISC::ConnectLink(DRISC* prev, DRISC* next)
     m_network.Connect(prev != NULL ? &prev->m_network : NULL, next != NULL ? &next->m_network : NULL);
 }
 
-void DRISC::ConnectFPU(Config& config, FPU* fpu)
+void DRISC::ConnectFPU(FPU* fpu)
 {
     assert(fpu != NULL);
 
     m_fpu = fpu;
     m_pipeline.ConnectFPU(fpu);
 
-    config.registerBidiRelation(*this, *fpu, "fpu");
+    RegisterModelBidiRelation(*this, *fpu, "fpu");
 }
 
-void DRISC::ConnectIO(Config& config, IIOBus* iobus)
+void DRISC::ConnectIO(IIOBus* iobus)
 {
     assert(iobus != NULL);
 
     // This processor also supports I/O
-    IODeviceID devid = config.getValueOrDefault<IODeviceID>(*this, "DeviceID", iobus->GetNextAvailableDeviceID());
-
-    m_io_if = new IOInterface("io_if", *this, GetClock(), *iobus, devid, config);
+    IODeviceID devid = GetConfOpt("DeviceID", IODeviceID, iobus->GetNextAvailableDeviceID());
+    //MLDTODO Remove print after testing
+    std::cout << "Initializing IO interface on id " << devid << " for " << GetName() << std::endl;
+    m_io_if = new IOInterface("io_if", *this, m_clock, *iobus, devid);
 
     if (m_memory != NULL)
         m_io_if->ConnectMemory(m_memory);
 
-    MMIOComponent& async_if = m_io_if->GetAsyncIOInterface();
-    async_if.Connect(m_mmio, IOMatchUnit::READWRITE, config);
-    MMIOComponent& pnc_if = m_io_if->GetPNCInterface();
-    pnc_if.Connect(m_mmio, IOMatchUnit::READWRITE, config);
+    m_mmu.initializeIO(iobus);
 
-    config.registerBidiRelation(*iobus, *this, "client", (uint32_t)devid);
+    MMIOComponent& async_if = m_io_if->GetAsyncIOInterface();
+    async_if.Connect(m_mmio, IOMatchUnit::READWRITE);
+    MMIOComponent& pnc_if = m_io_if->GetPNCInterface();
+    pnc_if.Connect(m_mmio, IOMatchUnit::READWRITE);
+
+    RegisterModelBidiRelation(*iobus, *this, "client", (uint32_t)devid);
 }
 
 void DRISC::Initialize()
@@ -187,7 +192,7 @@ void DRISC::Initialize()
     // remain filled and we get deadlock because the pipeline keeps wanting to do a read.
     m_dcache.p_service.AddProcess(m_dcache.p_ReadResponses);     // Memory read returns
     m_dcache.p_service.AddProcess(m_pipeline.p_Pipeline);         // Memory read/write
-    m_dcache.p_service.AddProcess(m_allocator.p_Bundle);          // Indirect create read
+    m_dcache.p_service.AddProcess(m_allocator.p_BundleCreate);    // Indirect create read
 
     m_allocator.p_allocation.AddProcess(m_pipeline.p_Pipeline);         // ALLOCATE instruction
     m_allocator.p_allocation.AddProcess(m_network.p_DelegationIn);      // Delegated non-exclusive create
@@ -266,7 +271,7 @@ void DRISC::Initialize()
 
     m_network.m_delegateIn.AddProcess(m_allocator.p_ThreadAllocate);        // Allocate process completes family sync
     m_network.m_delegateIn.AddProcess(m_allocator.p_FamilyAllocate);        // Allocate process returning FID
-    m_network.m_delegateIn.AddProcess(m_allocator.p_Bundle);                // Create process returning FID
+    m_network.m_delegateIn.AddProcess(m_allocator.p_BundleCreate);          // Create process returning FID
     m_network.m_delegateIn.AddProcess(m_allocator.p_FamilyCreate);          // Create process returning FID
     m_network.m_delegateIn.AddProcess(m_network.p_AllocResponse);           // Allocate response writing back to parent
     m_network.m_delegateIn.AddProcess(m_pipeline.p_Pipeline);               // Sending local messages
@@ -285,7 +290,7 @@ void DRISC::Initialize()
 
     m_network.m_delegateOut.AddProcess(m_network.p_AllocResponse);    // Allocate response writing back to parent
     m_network.m_delegateOut.AddProcess(m_allocator.p_FamilyAllocate); // Allocation process sends FID
-    m_network.m_delegateOut.AddProcess(m_allocator.p_Bundle);         // Indirect creation sends bundle info
+    m_network.m_delegateOut.AddProcess(m_allocator.p_BundleCreate);   // Indirect creation sends bundle info
     m_network.m_delegateOut.AddProcess(m_allocator.p_FamilyCreate);   // Create process sends delegated create
     m_network.m_delegateOut.AddProcess(m_allocator.p_ThreadAllocate); // Thread cleanup caused sync
     m_network.m_delegateOut.AddProcess(m_network.p_Syncs);            // Family sync goes to delegation
@@ -327,7 +332,7 @@ void DRISC::Initialize()
     m_allocator.p_ThreadActivation.SetStorageTraces(
         opt(m_allocator.m_activeThreads ^ m_icache.m_outgoing) );
 
-    m_allocator.p_Bundle.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
+    m_allocator.p_BundleCreate.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
 
     m_icache.p_Incoming.SetStorageTraces(
         opt(m_allocator.m_activeThreads) );
@@ -455,7 +460,7 @@ void DRISC::InitializeRegisters()
         {
             if (m_io_if == NULL)
             {
-                clog << "#warning: -RNNN=B... specified but " << GetFQN() << " is not connected to I/O" << endl;
+                clog << "#warning: -RNNN=B... specified but " << GetName() << " is not connected to I/O" << endl;
             }
             else {
                 auto devname = m_io_if->GetIOBusInterface().GetIOBus().GetDeviceIDByName(value.substr(1));

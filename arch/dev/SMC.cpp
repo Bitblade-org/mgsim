@@ -2,13 +2,14 @@
 #include "sim/config.h"
 #include "arch/drisc/DRISC.h"
 #include "ActiveROM.h"
+#include <cstring>
 
 using namespace std;
 
 namespace Simulator
 {
     SMC::SMC(const string& name, Object& parent, IIOBus& iobus, IODeviceID devid)
-        : Object(name, parent, iobus.GetClock()),
+        : Object(name, parent),
           m_enumdata(NULL),
           m_size(0),
           m_iobus(iobus),
@@ -43,7 +44,7 @@ namespace Simulator
     {
         if (address + size > m_size)
         {
-            throw exceptf<SimulationException>(*this, "Invalid I/O read to %#016llx/%u", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>(*this, "Invalid I/O read to %#016llx/%u", (unsigned long long)address, (unsigned)size);
         }
 
         IOData iodata;
@@ -65,9 +66,9 @@ namespace Simulator
         }
     }
 
-    std::string SMC::GetIODeviceName() const
+    const std::string& SMC::GetIODeviceName() const
     {
-        return GetFQN();
+        return GetName();
     }
 
 

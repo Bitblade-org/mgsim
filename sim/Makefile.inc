@@ -1,33 +1,74 @@
 SIM_SOURCES = \
+        sim/arbitrator.cpp \
+        sim/arbitrator.hpp \
+        sim/arbitrator.h \
+        sim/binarysampler.h \
+        sim/binarysampler.cpp \
 	sim/breakpoints.cpp \
 	sim/breakpoints.h \
+        sim/buffer.hpp \
+        sim/buffer.h \
+        sim/clock.cpp \
+        sim/clock.hpp \
+        sim/clock.h \
+        sim/configmap.cpp \
+        sim/configmap.h \
         sim/configparser.cpp \
         sim/configparser.h \
 	sim/config.cpp \
 	sim/config.h \
+        sim/convertval.cpp \
+        sim/convertval.h \
         sim/ctz.h \
 	sim/delegate.h \
 	sim/except.h \
 	sim/except.cpp \
+        sim/flag.h \
+        sim/flag.hpp \
+        sim/flag.cpp \
+        sim/getclassname.h \
+        sim/getclassname.cpp \
+        sim/inputconfig.h \
+        sim/inputconfig.cpp \
 	sim/inspect.h \
 	sim/inspect.cpp \
 	sim/kernel.h \
 	sim/kernel.cpp \
+        sim/linkedlist.h \
+        sim/linkedlist.hpp \
 	sim/log2.h \
+        sim/modelregistry.h \
+        sim/modelregistry.cpp \
 	sim/monitor.h \
 	sim/monitor.cpp \
+        sim/object.h \
+        sim/object.hpp \
+        sim/object.cpp \
 	sim/ports.h \
 	sim/ports.cpp \
+        sim/process.h \
+        sim/process.hpp \
+        sim/process.cpp \
 	sim/range.h \
         sim/readfile.h \
         sim/readfile.cpp \
+        sim/register.h \
+        sim/register.hpp \
         sim/rusage.h \
         sim/rusage.cpp \
 	sim/sampling.h \
+        sim/sampling.hpp \
 	sim/sampling.cpp \
+        sim/serialization.h \
+        sim/serializationlanguage.h \
+        sim/serializationlanguage.cpp \
 	sim/storage.h \
+        sim/storage.hpp \
+        sim/storage.cpp \
 	sim/storagetrace.h \
         sim/storagetrace.cpp \
+        sim/streamserializer.h \
+        sim/streamserializer.cpp \
 	sim/types.h \
         sim/unreachable.h
  

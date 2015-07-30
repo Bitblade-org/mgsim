@@ -1,6 +1,7 @@
 #include "Node.h"
 #include <sim/config.h>
 
+#include <sstream>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -130,11 +131,11 @@ Result CDMA::Node::DoForward()
     assert(!m_outgoing.Empty());
     assert(m_next != NULL);
 
-    TraceWrite(m_outgoing.Front()->address, "Sending %s to %s", m_outgoing.Front()->str().c_str(), m_next->GetFQN().c_str());
+    TraceWrite(m_outgoing.Front()->address, "Sending %s to %s", m_outgoing.Front()->str().c_str(), m_next->GetName().c_str());
 
     if (!m_next->m_incoming.Push( m_outgoing.Front() ))
     {
-        DeadlockWrite("Unable to send request to next node (%s)", m_next->GetFQN().c_str());
+        DeadlockWrite("Unable to send request to next node (%s)", m_next->GetName().c_str());
         return FAILED;
     }
     m_outgoing.Pop();
@@ -152,15 +153,15 @@ bool CDMA::Node::SendMessage(Message* message, size_t min_space)
     return true;
 }
 
-CDMA::Node::Node(const std::string& name, CDMA& parent, Clock& clock, NodeID id, Config& config)
+CDMA::Node::Node(const std::string& name, CDMA& parent, Clock& clock, NodeID id)
     : Simulator::Object(name, parent),
       CDMA::Object(name, parent),
       m_id(id),
       m_prev(NULL),
       m_next(NULL),
-      m_incoming("b_incoming", *this, clock, config.getValue<BufferSize>(*this, "NodeBufferSize")),
-      m_outgoing("b_outgoing", *this, clock, config.getValue<BufferSize>(*this, "NodeBufferSize")),
-      p_Forward(*this, "forward", delegate::create<Node, &Node::DoForward>(*this))
+      InitBuffer(m_incoming, clock, "NodeBufferSize"),
+      InitBuffer(m_outgoing, clock, "NodeBufferSize"),
+      InitProcess(p_Forward, DoForward)
 {
     g_References++;
 

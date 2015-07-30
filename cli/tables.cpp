@@ -14,6 +14,7 @@ command_descriptor command_table[] =
     { { "breakpoint", "on", 0  },     0, 0,  cmd_bp_on,      "breakpoint on",     "Enable breakpoint detection." },
     { { "breakpoint", "state", 0  },  0, 0,  cmd_bp_state,   "breakpoint state",  "Report which breakpoints have been reached." },
     { { "disassemble", 0 },           1, 2,  cmd_disas,      "disassemble ADDR [SZ]", "Disassemble the program from address ADDR." },
+    { { "dump", 0 },                  1, 1,  cmd_dump   ,    "dump PAT",          "Dump variables with names matching PAT" },
     { { "help", 0 },                  0, 1,  cmd_help,       "help [COMMAND]",    "Print the help text for COMMAND, or this text if no command is specified." },
     { { "info", 0 },                  1, -1, cmd_info,       "info COMPONENT [ARGS...]",    "Show help/configuration/layout for COMPONENT." },
     { { "line", 0 },                  2, 2,  cmd_line,       "line COMPONENT ADDR", "Lookup the memory line at address ADDR in the memory system COMPONENT." },
@@ -21,6 +22,7 @@ command_descriptor command_table[] =
     { { "quit", 0 },                  0, 0,  cmd_quit,       "quit",              "Exit the simulation." },
     { { "inspect", 0 },               1, -1, cmd_inspect,    "inspect NAME [ARGS...]", "Inspect NAME. See 'info NAME' for details." },
     { { "run", 0 },                   0, 0,  cmd_run,        "run",               "Run the system until it is idle or deadlocks. Livelocks will not be reported." },
+    { { "set", 0 },                   2, -1, cmd_set,        "set PAT VAL...",    "Set the variables matching PAT to the value VAL..." },
     { { "show", "vars", 0 },          0, 1,  cmd_show_vars,  "show vars [PAT]",   "List monitoring variables matching PAT." },
     { { "show", "syms", 0 },          0, 1,  cmd_show_syms,  "show syms [PAT]",   "List program symbols matching PAT." },
     { { "show", "components", 0 },    0, 2,  cmd_show_components, "show components [PAT] [LEVEL]",   "List components matching PAT (at most LEVELs)." },
@@ -31,6 +33,7 @@ command_descriptor command_table[] =
     { { "step", 0 },                  0, 1,  cmd_run,         "step [N]",         "Advance the system by N clock cycles (default 1)." },
     { { "trace", "line", 0 },         2, 3,  cmd_trace_line,   "trace line COMPONENT ADDR [clear]",  "Enable/Disable tracing of the cache line at address ADDR by memory COMPONENT." },
     { { "trace", 0 },                 0, -1, cmd_trace_debug,  "trace [FLAGS...]", "Show current traces / toggle tracing of FLAGS." },
+    { { "write", 0 },                 1, -1, cmd_write,        "write NAME [ARGS...]", "Write property of object NAME." },
 
     { { 0 }, 0, 0, 0, 0, 0 }
 };
@@ -59,6 +62,7 @@ command_alias alias_table[] =
     { "s"       , { "step", 0 } },
     { "stats"   , { "statistics", 0 } },
     { "t"       , { "trace", 0 } },
+    { "w"       , { "write", 0 } },
 
     { 0, { 0 } },
 };

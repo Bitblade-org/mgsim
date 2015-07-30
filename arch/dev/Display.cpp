@@ -1,38 +1,47 @@
-#include "Display.h"
+#include <arch/dev/Display.h>
+#include <arch/dev/sdl_wrappers.h>
+#include <sim/sampling.h>
 
-#include <cstring>
 #include <fstream>
 #include <iomanip>
-
-#ifdef USE_SDL
-#include <SDL.h>
-#endif
+#include <algorithm>
+#include <cstring>
+#include <cstdlib>
 
 using namespace std;
 
 namespace Simulator
 {
-    Display * Display::m_singleton = NULL;
+    struct SDLContext
+    {
+        SDL_Window* window;
+        uint32_t windowID;
+        SDL_Renderer* renderer;
+        SDL_Texture* texture;
+    };
 
-    Display::FrameBufferInterface::FrameBufferInterface(const string& name, Display& parent, IIOBus& iobus, IODeviceID devid)
-        : Object(name, parent, iobus.GetClock()),
+    Display::FrameBufferInterface
+    ::FrameBufferInterface(const string& name, Display& parent,
+                           IIOBus& iobus, IODeviceID devid)
+        : Object(name, parent),
           m_iobus(iobus),
           m_devid(devid)
     {
         iobus.RegisterClient(devid, *this);
     }
 
-    bool Display::FrameBufferInterface::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size)
+    bool Display::FrameBufferInterface::
+    OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size)
     {
         Display& disp = GetDisplay();
-        if (address + size > disp.m_framebuffer.size())
+        if (address + size > disp.m_video_memory.size())
         {
-            throw exceptf<SimulationException>(*this, "FB read out of bounds: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>(*this, "FB read out of bounds: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
         }
 
         IOData iodata;
         COMMIT {
-            memcpy(iodata.data, &disp.m_framebuffer[address], size);
+            memcpy(iodata.data, &disp.m_video_memory[address], size);
         }
         iodata.size = size;
 
@@ -46,16 +55,19 @@ namespace Simulator
         return true;
     }
 
-    bool Display::FrameBufferInterface::OnWriteRequestReceived(IODeviceID /*from*/, MemAddr address, const IOData& iodata)
+    bool Display::FrameBufferInterface::
+    OnWriteRequestReceived(IODeviceID /*from*/,
+                           MemAddr address, const IOData& iodata)
     {
         Display& disp = GetDisplay();
-        if (address >= disp.m_framebuffer.size() || address + iodata.size >= disp.m_framebuffer.size())
+        if (address >= disp.m_video_memory.size() || address + iodata.size >= disp.m_video_memory.size())
         {
-            throw exceptf<SimulationException>(*this, "FB write out of bounds: %#016llx (%u)", (unsigned long long)address, (unsigned)iodata.size);
+            throw exceptf<>(*this, "FB write out of bounds: %#016llx (%u)", (unsigned long long)address, (unsigned)iodata.size);
         }
 
         COMMIT {
-            memcpy(&disp.m_framebuffer[address], iodata.data, iodata.size);
+            memcpy(&disp.m_video_memory[address], iodata.data, iodata.size);
+            disp.m_video_memory_updated = true;
         }
 
         DebugIOWrite("FB write: %#016llx/%u", (unsigned long long)address, (unsigned)iodata.size);
@@ -63,7 +75,8 @@ namespace Simulator
         return true;
     }
 
-    void Display::FrameBufferInterface::GetDeviceIdentity(IODeviceIdentification& id) const
+    void Display::FrameBufferInterface::
+    GetDeviceIdentity(IODeviceIdentification& id) const
     {
         if (!DeviceDatabase::GetDatabase().FindDeviceByName("MGSim", "GfxFB", id))
         {
@@ -71,17 +84,27 @@ namespace Simulator
         }
     }
 
-    Display::ControlInterface::ControlInterface(const string& name, Display& parent, IIOBus& iobus, IODeviceID devid)
-        : Object(name, parent, iobus.GetClock()),
-          m_iobus(iobus),
-          m_control(3, 0),
-          m_devid(devid),
-          m_key(0)
+    const string& Display::FrameBufferInterface::
+    GetIODeviceName() const
     {
+        return GetName();
+    }
+
+    Display::ControlInterface::
+    ControlInterface(const string& name, Display& parent,
+                     IIOBus& iobus, IODeviceID devid)
+        : Object(name, parent),
+          m_iobus(iobus),
+          m_control(2, 0),
+          m_devid(devid),
+          InitStateVariable(key, 0)
+    {
+        RegisterStateVariable(m_control, "control");
         iobus.RegisterClient(devid, *this);
     }
 
-    void Display::ControlInterface::GetDeviceIdentity(IODeviceIdentification& id) const
+    void Display::ControlInterface::
+    GetDeviceIdentity(IODeviceIdentification& id) const
     {
         if (!DeviceDatabase::GetDatabase().FindDeviceByName("MGSim", "GfxCtl", id))
         {
@@ -89,17 +112,18 @@ namespace Simulator
         }
     }
 
-    bool Display::ControlInterface::OnWriteRequestReceived(IODeviceID /*from*/, MemAddr address, const IOData& iodata)
+    bool Display::ControlInterface::
+    OnWriteRequestReceived(IODeviceID /*from*/, MemAddr address, const IOData& iodata)
     {
         unsigned word = address / 4;
 
         if (address % 4 != 0 || iodata.size != 4)
         {
-            throw exceptf<SimulationException>(*this, "Invalid unaligned GfxCtl write: %#016llx (%u)", (unsigned long long)address, (unsigned)iodata.size);
+            throw exceptf<>(*this, "Invalid unaligned GfxCtl write: %#016llx (%u)", (unsigned long long)address, (unsigned)iodata.size);
         }
-        if ((word > 5 && word < 0x100) || word > 0x1ff)
+        if (word > 5)
         {
-            throw exceptf<SimulationException>(*this, "Invalid write to GfxCtl word: %u", word);
+            throw exceptf<>(*this, "Invalid write to GfxCtl word: %u", word);
         }
 
         uint32_t value = UnserializeRegister(RT_INTEGER, iodata.data, iodata.size);
@@ -109,14 +133,8 @@ namespace Simulator
 
         if (word == 0)
         {
-            uint32_t req_w = m_control[0], req_h = m_control[1], req_bpp = m_control[2] & 0xffff;
+            uint32_t req_w = m_control[0], req_h = m_control[1];
             size_t act_w, act_h;
-            bool req_indexed = m_control[2] >> 16;
-
-            if (req_bpp != 32 && req_bpp != 24 && req_bpp != 16 && req_bpp != 8)
-            { DebugIOWrite("unsupported bits per pixel: %u", (unsigned)req_bpp); return true; }
-            if (req_indexed && req_bpp > 8)
-            { DebugIOWrite("unsupported use of indexed mode with bpp > 8: %u", (unsigned)req_bpp); return true; }
 
             if      (req_w <= 10   && req_h <= 10  ) { act_w = 10  ; act_h = 10  ; }
             else if (req_w <= 100  && req_h <= 100 ) { act_w = 100 ; act_h = 100 ; }
@@ -135,20 +153,22 @@ namespace Simulator
             if (act_w != req_w || act_h != req_h)
             { DebugIOWrite("unsupported resolution: %ux%u, adjusted to %ux%u", (unsigned)req_w, (unsigned)req_h, (unsigned)act_w, (unsigned)act_h); }
 
-            if (act_w * act_h * req_bpp / 8 > disp.m_framebuffer.size())
-            { DebugIOWrite("resolution too large for framebuffer: %ux%ux%u", (unsigned)act_w, (unsigned)act_h, (unsigned)req_bpp); return true; }
-
             COMMIT {
-                disp.m_indexed = req_indexed;
-                disp.m_bpp = req_bpp;
-                disp.Resize(act_w, act_h, !!value);
+                disp.ResizeLogicalScreen(act_w, act_h, !!value);
             }
-            DebugIOWrite("Setting resolution to %ux%ux%u", (unsigned)act_w, (unsigned)act_h, (unsigned)req_bpp);
+            DebugIOWrite("Setting resolution to %ux%u", (unsigned)act_w, (unsigned)act_h);
         }
-        else if (word <= 3)
+        else if (word < 3)
         {
             COMMIT {
                 m_control[word - 1] = value;
+            }
+        }
+        else if (word == 3)
+        {
+            COMMIT {
+                disp.m_command_offset = value;
+                disp.m_video_memory_updated = true;
             }
         }
         else if (word == 5)
@@ -160,31 +180,27 @@ namespace Simulator
         else if (word == 4)
         {
             COMMIT {
-                disp.DumpFrameBuffer(m_key, value & 0xff, (value >> 8) & 1);
+                disp.PrepareLogicalScreen();
+                disp.DumpLogicalScreen(m_key, value & 0xff, (value >> 8) & 1);
             }
             DebugIOWrite("Dumping framebuffer");
-        }
-        else // word > 0x100
-        {
-            COMMIT {
-                disp.m_palette[word - 0x100] = value;
-            }
         }
         return true;
     }
 
-    bool Display::ControlInterface::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size)
+    bool Display::ControlInterface::
+    OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size)
     {
         // the display uses 32-bit status words
         // word 0: read: display enabled; write: commit mode from words 1/2/3
-        // word 1: pixel width
-        // word 2: pixel height
-        // word 3: low 16 = current bpp; high 16 = indexed (zero: not indexed; 1: indexed)
+        // word 1: logical screen width
+        // word 2: logical screen height
+        // word 3: command offset
         // word 4: (unused)
         // word 5: next dump key
-        // word 6: max supported width
-        // word 7: max supported height
-        // word 8: refresh delay
+        // word 6: max supported screen width
+        // word 7: max supported screen height
+        // word 8: (unused)
         // word 9: devid of the companion fb device
         // words 0x100-0x1ff: color palette (index mode only)
 
@@ -193,36 +209,27 @@ namespace Simulator
 
         if (address % 4 != 0 || size != 4)
         {
-            throw exceptf<SimulationException>(*this, "Invalid unaligned GfxCtl read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>(*this, "Invalid unaligned GfxCtl read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
         }
-        if ((word > 9 && word < 0x100) || word > 0x1ff)
+        if (word > 9)
         {
-            throw exceptf<SimulationException>(*this, "Read from invalid GfxCtl word: %u", word);
+            throw exceptf<>(*this, "Read from invalid GfxCtl word: %u", word);
         }
 
         Display& disp = GetDisplay();
 
-        if (word <= 9)
+        switch(word)
         {
-            switch(word)
-            {
-            case 0: value = disp.m_enabled; break;
-            case 1: value = disp.m_width; break;
-            case 2: value = disp.m_height; break;
-            case 3: value = disp.m_bpp | ((int)disp.m_indexed << 16); break;
-            case 4: value = 0; break;
-            case 5: value = m_key; break;
-            case 6: value = disp.m_max_screen_w; break;
-            case 7: value = disp.m_max_screen_h; break;
-            case 8: value = disp.m_refreshDelay; break;
-            case 9: value = disp.m_fbinterface.m_devid; break;
-            }
-        }
-        else
-        {
-            // palette access;
-            word -= 0x100;
-            value = disp.m_palette[word];
+        case 0: value = disp.m_sdl_enabled; break;
+        case 1: value = disp.m_logical_width; break;
+        case 2: value = disp.m_logical_height; break;
+        case 3: value = disp.m_command_offset; break;
+        case 4: value = 0; break;
+        case 5: value = m_key; break;
+        case 6: value = disp.m_max_screen_w; break;
+        case 7: value = disp.m_max_screen_h; break;
+        case 8: value = 0; break;
+        case 9: value = disp.m_fbinterface.m_devid; break;
         }
 
         IOData iodata;
@@ -240,127 +247,91 @@ namespace Simulator
         return true;
     }
 
-
-    Display::Display(const string& name, Object& parent, IIOBus& iobus, IODeviceID ctldevid, IODeviceID fbdevid, Config& config)
-        : Object(name, parent),
-          m_ctlinterface("ctl", *this, iobus, ctldevid),
-          m_fbinterface("fb", *this, iobus, fbdevid),
-          m_framebuffer(config.getValue<size_t>(*this, "GfxFrameSize"), 0),
-          m_palette(256, 0),
-          m_lastUpdate(0),
-          m_screen(NULL),
-          m_bpp(8),
-          m_width(640), m_height(400),
-          m_scalex_orig(1.0f / max(1U, config.getValue<unsigned int>("SDLHorizScale"))),
-          m_scalex(m_scalex_orig),
-          m_scaley_orig(1.0f / max(1U, config.getValue<unsigned int>("SDLVertScale"))),
-          m_scaley(m_scaley_orig),
-          m_refreshDelay_orig(config.getValue<unsigned int>("SDLRefreshDelay")),
-          m_refreshDelay(m_refreshDelay_orig),
-          m_max_screen_h(1024), m_max_screen_w(1280),
-          m_indexed(false),
-          m_enabled(false)
+    const string& Display::ControlInterface::
+    GetIODeviceName() const
     {
-        if (m_framebuffer.size() < 640*400)
-            throw exceptf<InvalidArgumentException>(*this, "FrameBufferSize not set or too small for minimum resolution 640x400: %zu", m_framebuffer.size());
-
-        RegisterSampleVariableInObject(m_width,  SVC_LEVEL);
-        RegisterSampleVariableInObject(m_height, SVC_LEVEL);
-        RegisterSampleVariableInObject(m_scalex, SVC_LEVEL);
-        RegisterSampleVariableInObject(m_scaley, SVC_LEVEL);
-        RegisterSampleVariableInObject(m_refreshDelay, SVC_LEVEL);
-        RegisterSampleVariableInObject(m_lastUpdate, SVC_CUMULATIVE);
-
-#ifdef USE_SDL
-        if (config.getValue<bool>(*this, "GfxEnableSDLOutput"))
-        {
-            if (m_singleton != NULL)
-                throw InvalidArgumentException(*this, "Only one Display device can output to SDL.");
-            m_singleton = this;
-
-            if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-                cerr << "Unable to initialize SDL: " << SDL_GetError() << endl;
-            } else {
-                m_enabled = true;
-            }
-            const SDL_VideoInfo* vf = SDL_GetVideoInfo();
-            if (vf) {
-                m_max_screen_h = vf->current_h;
-                m_max_screen_w = vf->current_w;
-                cerr << "Maximum supported output size: "
-                          << m_max_screen_w << 'x' << m_max_screen_h << endl;
-            }
-        }
-#endif
-
-
+        return GetName();
     }
 
 
-    void Display::ResizeScreen(unsigned int w, unsigned int h)
+    Display::Display(const string& name, Object& parent, IIOBus& iobus, IODeviceID ctldevid, IODeviceID fbdevid)
+        : Object(name, parent),
+          m_ctlinterface("ctl", *this, iobus, ctldevid),
+          m_fbinterface("fb", *this, iobus, fbdevid),
+          m_max_screen_h(1024),
+          m_max_screen_w(1280),
+          m_video_memory_updated(false),
+          m_logical_screen_resized(false),
+          m_logical_screen_updated(false),
+          m_window_resized(false),
+          m_video_memory(GetConf("GfxFrameSize", size_t), 0),
+          m_logical_screen_pixels(),
+          m_sdl_enabled(false),
+          m_sdl_context(new SDLContext),
+          InitStateVariable(logical_width, 640),
+          InitStateVariable(logical_height, 400),
+          InitStateVariable(command_offset, 0),
+          InitStateVariable(scalex, 1.0),
+          InitStateVariable(scaley, 1.0)
     {
-#ifdef USE_SDL
-        if (!m_enabled)
-            return ;
+        RegisterStateVariable(m_video_memory, "video_memory");
 
-        float r = (float)h / (float)w;
-
-        // cerr << "DEBUG: fb size " << m_width << " " << m_height << endl;
-        // cerr << "DEBUG: resizescreen " << w << " " << h << endl;
-        w = min(m_max_screen_w, w); h = w * r;
-        h = min(m_max_screen_h, h); w = h / r;
-        // cerr << "DEBUG: after adjust " << w << " " << h << endl;
-
-//    m_screen = SDL_SetVideoMode(w, h, 32, SDL_SWSURFACE | SDL_RESIZABLE);
-
-        if ((NULL == (m_screen = SDL_SetVideoMode(w, h, 32, SDL_SWSURFACE | SDL_RESIZABLE))) &&
-            (NULL == (m_screen = SDL_SetVideoMode(640, 400, 32, SDL_SWSURFACE | SDL_RESIZABLE))))
+        if (GetConf("GfxEnableSDLOutput", bool))
         {
-            cerr << "Setting SDL video mode failed: " << SDL_GetError() << endl;
+            DisplayManager::CreateManagerIfNotExists(*GetKernel()->GetConfig());
+            auto dm = DisplayManager::GetManager();
+            if (dm == NULL || !dm->IsSDLInitialized())
+                cerr << "# " << GetName() << ": unable to use SDL, output to screen disabled" << endl;
+            else
+            {
+                m_sdl_enabled = true;
+                dm->RegisterDisplay(this);
+                dm->GetMaxWindowSize(m_max_screen_w, m_max_screen_h);
+                cerr << "# " << GetName()
+                     << ": Maximum supported output size: "
+                     << m_max_screen_w << 'x' << m_max_screen_h << endl;
+            }
         }
-        else
-        {
-            // cerr << "DEBUG: new size " << m_screen->w << " " << m_screen->h << endl;
-            // cerr << "DEBUG: before scale " << m_scalex << " " << m_scaley << endl;
-            m_scalex = (float)m_width  / (float)m_screen->w;
-            m_scaley = (float)m_height / (float)m_screen->h;
-            // cerr << "DEBUG: after scale " << m_scalex << " " << m_scaley << endl;
-            ResetCaption();
-            Refresh();
-        }
-#else
-        (void)w; (void)h;
-#endif
+
     }
 
     Display::~Display()
     {
-        m_singleton = NULL;
-#ifdef USE_SDL
-        if (m_enabled)
-            SDL_Quit();
-#endif
+        auto dm = DisplayManager::GetManager();
+        if (dm != NULL)
+            dm->UnregisterDisplay(this);
+        CloseWindow();
+        delete m_sdl_context;
+        m_sdl_context = 0;
     }
 
-    void Display::DumpFrameBuffer(unsigned key, int stream, bool gen_ts) const
-    {
-        if (m_bpp != 32)
-        {
-            throw exceptf<SimulationException>(*this, "Unable to dump the framebuffer when bpp != 32 (currently %u)", m_bpp);
-        }
 
+    void Display::ResizeLogicalScreen(unsigned int w, unsigned int h, bool erase)
+    {
+        m_logical_width  = w;
+        m_logical_height = h;
+
+        m_logical_screen_pixels.resize(w * h);
+
+        if (erase)
+            memset(&m_logical_screen_pixels[0], 0, w * h * sizeof(m_logical_screen_pixels[0]));
+
+        m_logical_screen_resized = true;
+    }
+
+    void Display::DumpLogicalScreen(unsigned key, int stream, bool gen_ts)
+    {
         ostream * os;
         bool free_os = false;
         if (stream == 0)
         {
-            ostringstream fname;
-            fname << "gfx." << key;
+            string fname = "gfx." + std::to_string(key);
             if (gen_ts)
             {
-                fname << '.' << GetKernel()->GetCycleNo();
+                fname += '.' + std::to_string(GetKernel()->GetCycleNo());
             }
-            fname << ".ppm";
-            os = new ofstream(fname.str().c_str(), ios_base::out | ios_base::trunc);
+            fname += ".ppm";
+            os = new ofstream(fname.c_str(), ios_base::out | ios_base::trunc);
             free_os = true;
         }
         else
@@ -372,12 +343,12 @@ namespace Simulator
             << dec
             << "#key: " << key << endl
             << "#" << endl
-            << m_width << ' ' << m_height << ' ' << 255 << endl;
-        for (unsigned y = 0; y < m_height; ++y)
+            << m_logical_width << ' ' << m_logical_height << ' ' << 255 << endl;
+        for (unsigned y = 0; y < m_logical_height; ++y)
         {
-            for (unsigned x = 0; x < m_width; ++x)
+            for (unsigned x = 0; x < m_logical_width; ++x)
             {
-                uint32_t d = ((uint32_t*)(void*)&m_framebuffer[0])[y * m_width + x];
+                uint32_t d = ((uint32_t*)(void*)&m_logical_screen_pixels[0])[y * m_logical_width + x];
                 *os << ((d >> 16) & 0xff) << ' '
                     << ((d >>  8) & 0xff) << ' '
                     << ((d >>  0) & 0xff) << ' ';
@@ -390,283 +361,323 @@ namespace Simulator
             delete os;
     }
 
-    void Display::Refresh() const
+
+
+    void Display::EqualizeWindowScale()
     {
-#ifdef USE_SDL
-        if (m_screen != NULL)
+        SetWindowScale(m_scalex, m_scalex, true);
+    }
+
+    void Display::SetWindowScale(double scalex, double scaley, bool set)
+    {
+        if (set)
         {
-            if (m_width == 0 || m_height == 0)
-            {
-                // No source to copy, just clear the surface
-                SDL_FillRect(m_screen, NULL, 0);
-            }
+            m_scalex = scalex;
+            m_scaley = scaley;
+        }
+        else
+        {
+            m_scalex *= scalex;
+            m_scaley *= scaley;
+        }
+        SetWindowSize(m_logical_width / m_scalex, m_logical_height / m_scaley);
+    }
+
+    void Display::SetWindowSize(unsigned int w, unsigned int h)
+    {
+        if (!m_sdl_enabled)
+            return ;
+
+        float r = (float)h / (float)w;
+
+        w = min(m_max_screen_w, w); h = w * r;
+        h = min(m_max_screen_h, h); w = h / r;
+
+        if (m_sdl_context->window == NULL)
+        {
+            m_sdl_context->texture = 0;
+            m_sdl_context->renderer = 0;
+            int res = SDL_CreateWindowAndRenderer(w, h, SDL_WINDOW_RESIZABLE,
+                                                  &m_sdl_context->window, &m_sdl_context->renderer);
+            if (res < 0)
+                cerr << "# " << GetName() << ": error creating SDL window: " << SDL_GetError() << endl;
             else
+                m_sdl_context->windowID = SDL_GetWindowID(m_sdl_context->window);
+        }
+        else
+            SDL_SetWindowSize(m_sdl_context->window, w, h);
+
+        if (m_sdl_context->window)
+        {
+            int ww, wh;
+            SDL_GetWindowSize(m_sdl_context->window, &ww, &wh);
+            w = (unsigned)ww;
+            h = (unsigned)wh;
+            ResetWindowCaption();
+            m_window_resized = true;
+        }
+
+        m_scalex = (float)m_logical_width  / (float)w;
+        m_scaley = (float)m_logical_height / (float)h;
+    }
+
+    void Display::Show()
+    {
+        bool need_redraw = false, need_reshow = false;
+        if (m_logical_screen_resized)
+        {
+            m_logical_screen_resized = false;
+            need_redraw = true;
+            SetWindowSize(m_logical_width / m_scalex, m_logical_height / m_scaley);
+
+            if (m_sdl_context->renderer)
             {
-                if (SDL_MUSTLOCK(m_screen))
-                    if (SDL_LockSurface(m_screen) < 0)
-                        return;
-                assert(m_screen->format->BytesPerPixel == 4);
+                if (m_sdl_context->texture)
+                    SDL_DestroyTexture(m_sdl_context->texture);
 
-                // Copy the buffer into the video surface
-                unsigned dx, dy;
-                float scaley = this->m_scaley,
-                    scalex = this->m_scalex;
-                unsigned width = this->m_width;
-                unsigned screen_h = m_screen->h,
-                    screen_w = m_screen->w;
-                unsigned screen_pitch = m_screen->pitch;
-                char* pixels = (char*)m_screen->pixels;
-                Uint8 Rshift = m_screen->format->Rshift,
-                    Gshift = m_screen->format->Gshift,
-                    Bshift = m_screen->format->Bshift;
-
-                if (m_indexed)
-                {
-                    assert(m_bpp == 8);
-                    /*** 1 byte per pixel, palette lookup ***/
-                    const uint8_t *src = &m_framebuffer[0];
-                    auto& palette = m_palette;
-                    for (dy = 0; dy < screen_h; ++dy)
-                    {
-                        Uint32*         dest = (Uint32*)(pixels + dy * screen_pitch);
-                        unsigned int    sy   = dy * scaley;
-                        for (dx = 0; dx < screen_w; ++dx)
-                        {
-                            unsigned int sx  = dx * scalex;
-                            Uint32 color = palette[src[sy * width + sx]];
-                            dest[dx] = (((color & 0xff0000) >> 16) << Rshift)
-                                | (((color & 0x00ff00) >> 8) << Gshift)
-                                | (((color & 0x0000ff)     ) << Bshift);
-                        }
-                    }
-                }
-                else
-                    switch(m_bpp)
-                    {
-                    case 8:
-                    {
-                        /*** 1 bytes per pixel, 3-3-2 RGB ***/
-                        const uint8_t *src = &m_framebuffer[0];
-                        static const float Rf = 0xff / (float)0xe0;
-                        static const float Gf = Rf;
-                        static const float Bf = 0xff / (float)0xc0;
-                        for (dy = 0; dy < screen_h; ++dy)
-                        {
-                            Uint32*         dest = (Uint32*)(pixels + dy * screen_pitch);
-                            unsigned int    sy   = dy * scaley;
-
-                            for (dx = 0; dx < screen_w; ++dx)
-                            {
-                                unsigned int sx  = dx * scalex;
-                                Uint8 color = src[sy * width + sx];
-                                dest[dx] =
-                                    (((uint32_t)((color & 0xe0) * Rf)) << Rshift)
-                                    | (((uint32_t)(((color & 0x1c) << 3) * Gf)) << Gshift)
-                                    | (((uint32_t)(((color & 0x03) << 6) * Bf)) << Bshift);
-                            }
-                        }
-                    }
-                    break;
-                    case 16:
-                    {
-                        /*** 2 bytes per pixel, 5-6-5 RGB ***/
-                        const uint16_t *src = (const uint16_t*)(void*)&m_framebuffer[0];
-                        static const float Rf = 0xff / (float)0xf8;
-                        static const float Gf = 0xff / (float)0xfc;
-                        static const float Bf = Rf;
-                        for (dy = 0; dy < screen_h; ++dy)
-                        {
-                            Uint32*         dest = (Uint32*)(pixels + dy * screen_pitch);
-                            unsigned int    sy   = dy * scaley;
-
-                            for (dx = 0; dx < screen_w; ++dx)
-                            {
-                                unsigned int sx  = dx * scalex;
-                                Uint16 color = src[sy * width + sx];
-                                dest[dx] =
-                                    (((uint32_t)(((color & 0xf800) >> 8) * Rf)) << Rshift)
-                                    | (((uint32_t)(((color & 0x07e0) >> 3) * Gf)) << Gshift)
-                                    | (((uint32_t)(((color & 0x001f) << 3) * Bf)) << Bshift);
-                            }
-                        }
-                    }
-                    break;
-                    case 24:
-                    {
-                        /*** 3 bytes per pixel, 8-8-8 RGB ***/
-                        const uint8_t *src = (const uint8_t*)(void*)&m_framebuffer[0];
-                        for (dy = 0; dy < screen_h; ++dy)
-                        {
-                            Uint32*         dest = (Uint32*)(pixels + dy * screen_pitch);
-                            unsigned int    sy   = dy * scaley;
-
-                            for (dx = 0; dx < screen_w; ++dx)
-                            {
-                                unsigned int sx  = dx * scalex;
-                                const Uint8 * base = &src[sy * width * 3 + sx * 3];
-                                dest[dx] = (base[0] << Rshift)
-                                    | (base[1] << Gshift)
-                                    | (base[2] << Bshift);
-                            }
-                        }
-                    }
-                    break;
-                    case 32:
-                    {
-                        /*** 4 bytes per pixel, 8-8-8 RGB ***/
-                        const uint32_t *src = (const uint32_t*)(void*)&m_framebuffer[0];
-                        for (dy = 0; dy < screen_h; ++dy)
-                        {
-                            Uint32*         dest = (Uint32*)(pixels + dy * screen_pitch);
-                            unsigned int    sy   = dy * scaley;
-
-                            for (dx = 0; dx < screen_w; ++dx)
-                            {
-                                unsigned int sx  = dx * scalex;
-                                Uint32 color = src[sy * width + sx];
-                                dest[dx] = (((color & 0xff0000) >> 16) << Rshift)
-                                    | (((color & 0x00ff00) >> 8) << Gshift)
-                                    | (((color & 0x0000ff)     ) << Bshift);
-                            }
-                        }
-                    }
-                    break;
-                    default:
-                        /* no known bpp */
-                        break;
-                    }
-
-                if (SDL_MUSTLOCK(m_screen))
-                    SDL_UnlockSurface(m_screen);
-                SDL_Flip(m_screen);
+                m_sdl_context->texture = SDL_CreateTexture(m_sdl_context->renderer,
+                                                           SDL_PIXELFORMAT_RGB888,
+                                                           SDL_TEXTUREACCESS_STREAMING,
+                                                           m_logical_width, m_logical_height);
+                if (!m_sdl_context->texture)
+                    cerr << "# " << GetName() << ": error creating SDL texture: " << SDL_GetError() << endl;
             }
         }
-#endif
+
+        if (m_video_memory_updated)
+        {
+            m_video_memory_updated = false;
+            need_redraw = true;
+        }
+
+        if (need_redraw)
+            PrepareLogicalScreen();
+
+        if (!m_sdl_context->window || !(SDL_GetWindowFlags(m_sdl_context->window) & SDL_WINDOW_SHOWN))
+            // nothing visible, stop here
+            return;
+
+        if (m_logical_screen_updated)
+        {
+            m_logical_screen_updated = false;
+            need_reshow = true;
+            if (m_sdl_context->texture)
+                SDL_UpdateTexture(m_sdl_context->texture, 0, &m_logical_screen_pixels[0], m_logical_width*4);
+        }
+
+        if (m_window_resized)
+        {
+            m_window_resized = false;
+            need_reshow = true;
+        }
+
+        if (need_reshow && m_sdl_enabled && m_sdl_context->renderer && m_sdl_context->texture)
+        {
+            SDL_RenderSetScale(m_sdl_context->renderer, m_scalex, m_scaley);
+            //SDL_SetLogicalSize(m_sdl_context->renderer, m_logical_width, m_logical_height);
+            //SDL_RenderClear(m_sdl_context->renderer);
+            SDL_RenderCopy(m_sdl_context->renderer, m_sdl_context->texture, 0, 0);
+            SDL_RenderPresent(m_sdl_context->renderer);
+        }
     }
 
-    void Display::ResetCaption() const
+    void Display::ResetWindowCaption() const
     {
-#ifdef USE_SDL
-        stringstream caption;
-        caption << "MGSim display: "
-                << m_width << "x" << m_height
-                << ", " << m_refreshDelay << " kernel cycles / frame";
-        SDL_WM_SetCaption(caption.str().c_str(), NULL);
-#endif
+        if (m_sdl_context->window)
+        {
+            auto dm = DisplayManager::GetManager();
+            assert(dm != NULL);
+
+            auto caption = "MGSim display: "
+                + to_string(m_logical_width) + "x" + to_string(m_logical_height) + ", "
+                + to_string(dm->GetRefreshDelay()) + " kernel cycles / frame";
+            SDL_SetWindowTitle(m_sdl_context->window, caption.c_str());
+        }
     }
 
-#ifdef USE_SDL
+    void Display::ResetDisplay()
+    {
+        CloseWindow();
+        m_logical_screen_resized = true;
+        m_video_memory_updated = true;
+        Show();
+    }
+
+    void Display::CloseWindow()
+    {
+        if (m_sdl_context->window)
+        {
+            if (m_sdl_context->texture)
+                SDL_DestroyTexture(m_sdl_context->texture);
+            if (m_sdl_context->renderer)
+                SDL_DestroyRenderer(m_sdl_context->renderer);
+            SDL_DestroyWindow(m_sdl_context->window);
+            m_sdl_context->window = 0;
+            m_sdl_context->renderer = 0;
+            m_sdl_context->texture = 0;
+        }
+    }
+
     static unsigned currentDelayScale(unsigned x)
     {
         for (unsigned i = 10000000; i > 0; i /= 10)
             if (x > i) return i;
         return 1;
     }
-#endif
 
-    void Display::CheckEvents()
+    void DisplayManager::RegisterDisplay(Display *disp)
     {
-#ifdef USE_SDL
-        if (!m_enabled)
-            return ;
+        for (auto p : m_displays)
+            if (p == disp)
+                return;
+        m_displays.push_back(disp);
+    }
 
-        bool do_resize = false;
-        bool do_close = false;
-        unsigned nh = 0, nw = 0;
+    void DisplayManager::UnregisterDisplay(Display *disp)
+    {
+        remove(m_displays.begin(), m_displays.end(), disp);
+    }
 
+    void DisplayManager::GetMaxWindowSize(unsigned& w, unsigned& h)
+    {
+        if (!m_sdl_initialized)
+            return;
+
+        w = h = 0;
+        int numDisplays = SDL_GetNumVideoDisplays();
+        for (int i = 0; i < numDisplays; ++i)
+        {
+            SDL_Rect r;
+            if (SDL_GetDisplayBounds(i, &r) == 0)
+            {
+                if (r.w > (int)w || r.h > (int)h)
+                {  w = r.w; h = r.h; }
+            }
+        }
+    }
+
+    void DisplayManager::ResetDisplays() const
+    {
+        for (auto d : m_displays)
+            d->ResetDisplay();
+    }
+
+    DisplayManager* DisplayManager::g_singleton = 0;
+
+    void DisplayManager::CreateManagerIfNotExists(Config& cfg)
+    {
+        if (g_singleton == 0)
+            g_singleton = new DisplayManager(cfg.getValue<unsigned>("SDLRefreshDelay"));
+    }
+
+    DisplayManager::DisplayManager(unsigned refreshDelay)
+        : m_sdl_initialized(false),
+          m_refreshDelay_orig(refreshDelay),
+          m_refreshDelay(refreshDelay),
+          m_lastUpdate(0),
+          m_displays()
+    {
+        if (SDL_Init(SDL_INIT_VIDEO) != 0)
+        {
+            cerr << "# unable to set up SDL: " << SDL_GetError() << endl;
+            return;
+        }
+        m_sdl_initialized = true;
+        if (SDL_HasQuit)
+            atexit(SDL_Quit);
+    }
+
+    void DisplayManager::CheckEvents()
+    {
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
-            switch (event.type)
+            uint32_t et = SDL_GetEventType(event);
+            Display *selected = 0;
+            switch (et)
             {
-            case SDL_QUIT:
-                do_close = true;
+            case SDL_WINDOWEVENT:
+                for (auto d : m_displays)
+                    if (d->m_sdl_context && d->m_sdl_context->windowID == SDL_GetEventWinWinID(event))
+                    { selected = d; break; }
                 break;
-
             case SDL_KEYUP:
-                switch (event.key.keysym.sym)
+                for (auto d : m_displays)
+                    if (d->m_sdl_context && d->m_sdl_context->windowID == SDL_GetEventKeyWinID(event))
+                    { selected = d; break; }
+                break;
+            }
+            if (selected == 0)
+                // stray event, ignore
+                continue;
+
+            switch(et)
+            {
+            case SDL_KEYUP:
+                switch (SDL_GetEventKeySym(event))
                 {
                 case SDLK_ESCAPE:
-                    do_close = true;
+                    selected->CloseWindow();
                     break;
                 case SDLK_PAGEDOWN:
-                    m_scalex /= 2.0; m_scaley /= 2.0; do_resize = true;
+                    selected->SetWindowScale(0.5, 0.5, false);
                     break;
                 case SDLK_PAGEUP:
-                    m_scalex *= 2.0; m_scaley *= 2.0; do_resize = true;
+                    selected->SetWindowScale(2.0, 2.0, false);
                     break;
                 case SDLK_END:
-                    m_scalex *= .9; m_scaley *= .9; do_resize = true;
+                    selected->SetWindowScale(0.9, 0.9, false);
                     break;
                 case SDLK_HOME:
-                    m_scalex *= 1.1; m_scaley *= 1.1; do_resize = true;
+                    selected->SetWindowScale(1.1, 1.1, false);
                     break;
                 case SDLK_TAB:
-                    m_scalex = m_scaley; do_resize = true;
+                    selected->EqualizeWindowScale();
+                    break;
+                case SDLK_SPACE:
+                    selected->SetWindowScale(1.0, 1.0, true);
                     break;
                 case SDLK_DOWN:
                     m_refreshDelay += currentDelayScale(m_refreshDelay);
-                    ResetCaption();
+                    for (auto d : m_displays)
+                        d->ResetWindowCaption();
                     break;
                 case SDLK_UP:
                     if (m_refreshDelay)
                         m_refreshDelay -= currentDelayScale(m_refreshDelay);
-                    ResetCaption();
+                    for (auto d : m_displays)
+                        d->ResetWindowCaption();
                     break;
                 case SDLK_r:
                     m_refreshDelay = m_refreshDelay_orig;
-                    m_scalex = m_scalex_orig;
-                    m_scaley = m_scaley_orig;
-                    do_resize = true;
+                    for (auto d : m_displays)
+                        d->SetWindowScale(1.0, 1.0, true);
                     break;
                 default:
                     // do nothing (yet)
                     break;
                 }
-                if (do_resize)
-                {
-                    nw = m_width / m_scalex;
-                    nh = m_height / m_scaley;
-                }
                 break;
 
-            case SDL_VIDEORESIZE:
-                do_resize = true;
-                nw = event.resize.w;
-                nh = event.resize.h;
+            case SDL_WINDOWEVENT:
+                switch (SDL_GetEventWinType(event))
+                {
+                case SDL_WINDOWEVENT_CLOSE:
+                    selected->CloseWindow();
+                    break;
+                case SDL_WINDOWEVENT_RESIZED:
+                    selected->SetWindowSize(SDL_GetEventWinSizeW(event),
+                                            SDL_GetEventWinSizeH(event));
+                    break;
+                }
                 break;
             }
         }
 
-        if (do_close)
-        {
-            // cerr << "Graphics output closed by user." << endl;
-            m_enabled = false;
-            m_screen  = NULL;
-            SDL_Quit();
-        }
-        if (do_resize)
-            ResizeScreen(nw, nh);
-
-        Refresh();
-#endif
+        for (auto d : m_displays)
+            d->Show();
     }
 
-
-    void Display::Resize(unsigned int w, unsigned int h, bool erase)
-    {
-        m_width  = w;
-        m_height = h;
-
-        if (erase)
-            memset(&m_framebuffer[0], 0, w * h * m_bpp / 8);
-
-#ifdef USE_SDL
-        // Try to resize the screen as well
-        ResizeScreen(m_width / m_scalex, m_height / m_scaley);
-        Refresh();
-#endif
-    }
 
 
 }

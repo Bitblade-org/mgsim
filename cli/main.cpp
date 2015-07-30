@@ -21,11 +21,6 @@
 
 #include <sys/param.h>
 #include <unistd.h>
-
-#ifdef USE_SDL
-#include <SDL.h>
-#endif
-
 #include <argp.h>
 
 using namespace Simulator;
@@ -256,13 +251,13 @@ static struct argp argp = {
 };
 
 static
-void PrintFinalVariables(const ProgramConfig& cfg)
+void PrintFinalVariables(const Kernel& kernel, const ProgramConfig& cfg)
 {
     if (!cfg.m_printvars.empty())
     {
         cout << "### begin end-of-simulation variables" << endl;
         for (auto& i : cfg.m_printvars)
-            ReadSampleVariables(cout, i);
+            kernel.GetVariableRegistry().RenderVariables(cout, i, false);
         cout << "### end end-of-simulation variables" << endl;
     }
 }
@@ -276,7 +271,7 @@ void AtEnd(const MGSystem& sys, const ProgramConfig& cfg)
         sys.PrintAllStatistics(clog);
         clog << "### end end-of-simulation statistics" << endl;
     }
-    PrintFinalVariables(cfg);
+    PrintFinalVariables(*sys.GetKernel(), cfg);
 }
 
 static
@@ -294,9 +289,6 @@ void MemoryExhausted()
     std::abort();
 }
 
-#ifdef USE_SDL
-extern "C"
-#endif
 int main(int argc, char** argv)
 {
     std::set_new_handler(MemoryExhausted);
@@ -402,7 +394,7 @@ int main(int argc, char** argv)
         // Not in configuration(yet)
         char s[20];
         snprintf(s, 20, "%u", (unsigned)time(NULL));
-        flags.m_overrides.append("RandomSeed", s);
+        config->GetOverrides().append("RandomSeed", s);
     }
     {
         unsigned seed = config->getValue<unsigned>("RandomSeed");
@@ -446,7 +438,7 @@ int main(int argc, char** argv)
     {
         // Dump the list of monitoring variables if requested.
         clog << "### begin monitor variables" << endl;
-        ListSampleVariables(clog);
+        sys->GetKernel()->GetVariableRegistry().ListVariables(clog);
         clog << "### end monitor variables" << endl;
     }
 

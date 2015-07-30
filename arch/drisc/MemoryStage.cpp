@@ -36,7 +36,7 @@ Pipeline::PipeAction Pipeline::MemoryStage::OnCycle()
             {
 
                 // Check for breakpoints
-                GetKernel()->GetBreakPointManager().Check(BreakPointManager::MEMWRITE, m_input.address, *this);
+                GetDRISC().GetBreakPointManager().Check(BreakPointManager::MEMWRITE, m_input.address, *this);
 
                 // Serialize and store data
                 char data[MAX_MEMORY_OPERATION_SIZE];
@@ -120,7 +120,7 @@ Pipeline::PipeAction Pipeline::MemoryStage::OnCycle()
         else if (m_input.Rc.valid())
         {
             // Check for breakpoints
-            GetKernel()->GetBreakPointManager().Check(BreakPointManager::MEMREAD, m_input.address, *this);
+            GetDRISC().GetBreakPointManager().Check(BreakPointManager::MEMREAD, m_input.address, *this);
 
             if (m_input.address >= 4 && m_input.address < 8)
             {
@@ -297,24 +297,19 @@ Pipeline::PipeAction Pipeline::MemoryStage::OnCycle()
     return PIPE_CONTINUE;
 }
 
-Pipeline::MemoryStage::MemoryStage(Pipeline& parent, Clock& clock,
-                                          const ExecuteMemoryLatch& input,
-                                          MemoryWritebackLatch& output,
-                                          Config& /*config*/)
-    : Stage("memory", parent, clock),
+Pipeline::MemoryStage::MemoryStage(Pipeline& parent,
+                                   const ExecuteMemoryLatch& input,
+                                   MemoryWritebackLatch& output)
+    : Stage("memory", parent),
       m_input(input),
       m_output(output),
       m_allocator(GetDRISC().GetAllocator()),
       m_dcache(GetDRISC().GetDCache()),
-      m_loads(0),
-      m_stores(0),
-      m_load_bytes(0),
-      m_store_bytes(0)
+      InitSampleVariable(loads, SVC_CUMULATIVE),
+      InitSampleVariable(stores, SVC_CUMULATIVE),
+      InitSampleVariable(load_bytes, SVC_CUMULATIVE),
+      InitSampleVariable(store_bytes, SVC_CUMULATIVE)
 {
-    RegisterSampleVariableInObject(m_loads, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_stores, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_load_bytes, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_store_bytes, SVC_CUMULATIVE);
 }
 
 }

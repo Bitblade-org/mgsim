@@ -310,10 +310,9 @@ Pipeline::PipeAction Pipeline::WritebackStage::OnCycle()
         : PIPE_DELAY;       // We still have data to write back next cycle
 }
 
-Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clock,
-                                         const MemoryWritebackLatch& input,
-                                         Config& /*config*/)
-  : Stage("writeback", parent, clock),
+Pipeline::WritebackStage::WritebackStage(Pipeline& parent,
+                                         const MemoryWritebackLatch& input)
+  : Stage("writeback", parent),
     m_input(input),
     m_stall(false),
     m_regFile(GetDRISC().GetRegisterFile()),

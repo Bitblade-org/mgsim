@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef ZLCDMA_CDMA_H
 #define ZLCDMA_CDMA_H
 
@@ -15,7 +16,7 @@ class ComponentModelRegistry;
 namespace Simulator
 {
 
-class ZLCDMA : public Object, public IMemory, public VirtualMemory, public Inspect::Interface<Inspect::Line|Inspect::Trace>
+class ZLCDMA : public IMemory, public VirtualMemory, public Inspect::Interface<Inspect::Line|Inspect::Trace>
 {
 public:
     class Node;
@@ -51,12 +52,11 @@ private:
     }
 
 
-    ComponentModelRegistry&     m_registry;
+    Clock&                      m_clock;
     size_t                      m_numClientsPerCache;
     size_t                      m_numCachesPerDir;
     size_t                      m_numClients;
     size_t                      m_lineSize;
-    Config&                     m_config;
     IBankSelector*              m_selector;           ///< Mapping of line addresses to set indexes
     std::vector<Cache*>         m_caches;             ///< List of caches
     std::vector<Directory*>     m_directories;        ///< List of directories
@@ -66,7 +66,12 @@ private:
 
     std::vector<std::pair<Cache*,MCID> > m_clientMap; ///< Mapping of MCID to caches
 
-    uint64_t                    m_nreads, m_nwrites, m_nread_bytes, m_nwrite_bytes;
+    DefineSampleVariable(uint64_t, nreads);
+    DefineSampleVariable(uint64_t, nwrites);
+    DefineSampleVariable(uint64_t, nread_bytes);
+    DefineSampleVariable(uint64_t, nwrite_bytes);
+
+    Clock& GetClock() { return m_clock; }
 
     void ConfigureTopRing();
 
@@ -78,7 +83,7 @@ private:
     void Initialize();
 
 public:
-    ZLCDMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
+    ZLCDMA(const std::string& name, Simulator::Object& parent, Clock& clock);
     ZLCDMA(const ZLCDMA&) = delete;
     ZLCDMA& operator=(const ZLCDMA&) = delete;
     ~ZLCDMA();

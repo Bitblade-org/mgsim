@@ -103,7 +103,7 @@ Pipeline::PipeAction Pipeline::ExecuteStage::OnCycle()
     }
 
     // Check for breakpoints
-    GetKernel()->GetBreakPointManager().Check(BreakPointManager::EXEC, m_input.pc, *this);
+    GetDRISC().GetBreakPointManager().Check(BreakPointManager::EXEC, m_input.pc, *this);
 
     PipeAction action = ExecuteInstruction();
     if (action != PIPE_STALL)
@@ -466,9 +466,7 @@ void Pipeline::ExecuteStage::ExecStatusAction(Integer value, int command, int fl
     case 3:
     {
         int code = value & 0xff;
-        ostringstream emsg;
-        emsg << "Program requested simulator to exit with code " << code << ".";
-        throw ProgramTerminationException(*this, emsg.str(), code, false);
+        throw ProgramTerminationException(*this, "Program requested simulator to exit with code " + to_string(code) + ".", code, false);
     }
     }
 }
@@ -564,11 +562,10 @@ void Pipeline::ExecuteStage::ExecDebug(double value, Integer stream) const
     }
 }
 
-Pipeline::ExecuteStage::ExecuteStage(Pipeline& parent, Clock& clock,
+Pipeline::ExecuteStage::ExecuteStage(Pipeline& parent,
                                      const ReadExecuteLatch& input,
-                                     ExecuteMemoryLatch& output,
-                                     Config& /*config*/)
-  : Stage("execute", parent, clock),
+                                     ExecuteMemoryLatch& output)
+  : Stage("execute", parent),
     m_input(input),
     m_output(output),
     m_allocator(GetDRISC().GetAllocator()),
@@ -576,11 +573,9 @@ Pipeline::ExecuteStage::ExecuteStage(Pipeline& parent, Clock& clock,
     m_threadTable(GetDRISC().GetThreadTable()),
     m_fpu(NULL),
     m_fpuSource(0),
-    m_flop(0),
-    m_op(0)
+    InitSampleVariable(flop, SVC_CUMULATIVE),
+    InitSampleVariable(op, SVC_CUMULATIVE)
 {
-    RegisterSampleVariableInObject(m_flop, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_op, SVC_CUMULATIVE);
 }
 
 void Pipeline::ExecuteStage::ConnectFPU(FPU* fpu, size_t fpu_source)

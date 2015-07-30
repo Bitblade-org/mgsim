@@ -7,14 +7,19 @@
 #include <cerrno>
 #include <fcntl.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wshadow"
 #ifndef __STDC_VERSION__
-#define __STDC_VERSION__ 201101
+#define __STDC_VERSION__ 201101L
+#endif
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Weffc++"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 #include <ev++.h>
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 
 using namespace std;
 
@@ -170,14 +175,14 @@ namespace Simulator
 
     Selector* Selector::m_singleton = NULL;
 
-    Selector::Selector(const std::string& name, Object& parent, Clock& clock, Config& /*config*/)
-        : Object(name, parent, clock),
-          m_doCheckStreams("f_checking", *this, clock, false),
-          p_checkStreams(*this, "check-streams", delegate::create<Selector, &Selector::DoCheckStreams>(*this))
+    Selector::Selector(const std::string& name, Object& parent, Clock& clock)
+        : Object(name, parent),
+          InitStorage(m_doCheckStreams, clock, false),
+          InitProcess(p_checkStreams, DoCheckStreams)
     {
         if (m_singleton != NULL)
         {
-            throw InvalidArgumentException(*this, "More than one selector defined, previous at " + m_singleton->GetFQN());
+            throw InvalidArgumentException(*this, "More than one selector defined, previous at " + m_singleton->GetName());
         }
         m_singleton = this;
 

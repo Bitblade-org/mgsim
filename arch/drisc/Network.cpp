@@ -1,5 +1,5 @@
-#include "Network.h"
-#include "DRISC.h"
+#include <arch/drisc/Network.h>
+#include <arch/drisc/DRISC.h>
 #include <sim/config.h>
 #include <sim/log2.h>
 
@@ -18,10 +18,8 @@ Network::Network(
     const std::string&    name,
     DRISC&                parent,
     Clock&                clock,
-    const vector<DRISC*>& grid,
-    Config&               config
-) :
-    Object(name, parent, clock),
+    const vector<DRISC*>& grid)
+  : Object(name, parent),
 
     m_regFile    (parent.GetRegisterFile()),
     m_familyTable(parent.GetFamilyTable()),
@@ -31,27 +29,25 @@ Network::Network(
     m_next(NULL),
     m_grid(grid),
 
-    m_loadBalanceThreshold(config.getValue<unsigned>(*this, "LoadBalanceThreshold")),
+    m_loadBalanceThreshold(GetConf("LoadBalanceThreshold", unsigned)),
 
-    m_numAllocates(0),
-    m_numCreates(0),
+    InitSampleVariable(numAllocates, SVC_CUMULATIVE),
+    InitSampleVariable(numCreates, SVC_CUMULATIVE),
 
-#define CONSTRUCT_REGISTER(name) name(*this, #name)
+#define CONSTRUCT_REGISTER(name) name((((const char*)#name)+2), *this, clock)
     CONSTRUCT_REGISTER(m_delegateOut),
     CONSTRUCT_REGISTER(m_delegateIn),
     CONSTRUCT_REGISTER(m_link),
     CONSTRUCT_REGISTER(m_allocResponse),
 #undef CONTRUCT_REGISTER
-    m_syncs ("b_syncs", *this, clock, m_familyTable.GetNumFamilies(), 3 ),
+    InitStorage(m_syncs, clock, m_familyTable.GetNumFamilies(), 3),
 
-    p_DelegationOut(*this, "delegation-out", delegate::create<Network, &Network::DoDelegationOut>(*this)),
-    p_DelegationIn (*this, "delegation-in",  delegate::create<Network, &Network::DoDelegationIn >(*this)),
-    p_Link         (*this, "link",           delegate::create<Network, &Network::DoLink         >(*this)),
-    p_AllocResponse(*this, "alloc-response", delegate::create<Network, &Network::DoAllocResponse>(*this)),
-    p_Syncs        (*this, "syncs",          delegate::create<Network, &Network::DoSyncs        >(*this))
+    InitProcess(p_DelegationOut, DoDelegationOut),
+    InitProcess(p_DelegationIn, DoDelegationIn),
+    InitProcess(p_Link, DoLink),
+    InitProcess(p_AllocResponse, DoAllocResponse),
+    InitProcess(p_Syncs, DoSyncs)
 {
-    RegisterSampleVariableInObject(m_numAllocates, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numCreates, SVC_CUMULATIVE);
 
     m_delegateOut.Sensitive(p_DelegationOut);
     m_delegateIn .Sensitive(p_DelegationIn);

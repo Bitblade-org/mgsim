@@ -1,8 +1,10 @@
+// -*- c++ -*-
 #ifndef FAMILYTABLE_H
 #define FAMILYTABLE_H
 
 #include <sim/kernel.h>
 #include <sim/inspect.h>
+#include <sim/sampling.h>
 #include <arch/simtypes.h>
 #include <vector>
 #include "forward.h"
@@ -107,7 +109,7 @@ struct Family
 class FamilyTable : public Object, public Inspect::Interface<Inspect::Read>
 {
 public:
-    FamilyTable(const std::string& name, DRISC& parent, Clock& clock, Config& config);
+    FamilyTable(const std::string& name, DRISC& parent);
 
     FSize GetNumFamilies() const { return m_families.size(); }
 
@@ -139,10 +141,10 @@ private:
     FSize               m_free[NUM_CONTEXT_TYPES];
 
     // Admin
-    CycleNo             m_lastcycle;
-    FSize               m_totalalloc;
-    FSize               m_maxalloc;
-    FSize               m_curalloc;
+    DefineSampleVariable(CycleNo, lastcycle);
+    DefineSampleVariable(FSize, totalalloc);
+    DefineSampleVariable(FSize, maxalloc);
+    DefineSampleVariable(FSize, curalloc);
 
     void UpdateStats();
     void CheckStateSanity() const;

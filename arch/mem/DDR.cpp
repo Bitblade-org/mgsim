@@ -1,8 +1,8 @@
-#include "DDR.h"
-#include <sim/config.h>
-#include <sim/log2.h>
+#include "arch/mem/DDR.h"
+#include "sim/config.h"
+#include "sim/log2.h"
+#include "sim/sampling.h"
 
-#include <sstream>
 #include <limits>
 #include <cstdio>
 
@@ -70,7 +70,7 @@ Result DDRChannel::DoRequest()
 {
     assert(m_busy.IsSet());
 
-    const CycleNo now = GetClock().GetCycleNo();
+    const CycleNo now = GetKernel()->GetActiveClock()->GetCycleNo();
     if (now < m_next_command)
     {
         // Can't continue yet
@@ -174,7 +174,7 @@ Result DDRChannel::DoRequest()
 Result DDRChannel::DoPipeline()
 {
     assert(!m_pipeline.Empty());
-    const CycleNo  now     = GetClock().GetCycleNo();
+    const CycleNo  now     = GetKernel()->GetActiveClock()->GetCycleNo();
     const Request& request = m_pipeline.Front();
     if (now >= request.done)
     {
@@ -190,27 +190,27 @@ Result DDRChannel::DoPipeline()
     return SUCCESS;
 }
 
-DDRChannel::DDRConfig::DDRConfig(const std::string& name, Object& parent, Clock& clock, Config& config)
-    : Object(name, parent, clock),
-      m_nBurstLength(config.getValue<size_t> (*this, "BurstLength")),
-      m_tRCD (config.getValue<unsigned> (*this, "tRCD")),
-      m_tRP  (config.getValue<unsigned> (*this, "tRP")),
-      m_tCL  (config.getValue<unsigned> (*this, "tCL")),
+DDRChannel::DDRConfig::DDRConfig(const std::string& name, Object& parent, Clock& clock)
+    : Object(name, parent),
+      m_nBurstLength(GetConf("BurstLength", size_t)),
+      m_tRCD (GetConf("tRCD", unsigned)),
+      m_tRP  (GetConf("tRP", unsigned)),
+      m_tCL  (GetConf("tCL", unsigned)),
       // tWR is expressed in DDR specs in nanoseconds, see
       // http://www.samsung.com/global/business/semiconductor/products/dram/downloads/applicationnote/tWR.pdf
       // Frequency is in MHz.
-      m_tWR  (config.getValue<unsigned> (*this, "tWR") / 1e3 * clock.GetFrequency()),
+      m_tWR  (GetConf("tWR", unsigned) / 1e3 * clock.GetFrequency()),
 
-      m_tCCD (config.getValue<unsigned> (*this, "tCCD")),
-      m_tCWL (config.getValue<unsigned> (*this, "tCWL")),
-      m_tRAS (config.getValue<unsigned> (*this, "tRAS")),
+      m_tCCD (GetConf("tCCD", unsigned)),
+      m_tCWL (GetConf("tCWL", unsigned)),
+      m_tRAS (GetConf("tRAS", unsigned)),
 
       // Address bit mapping.
-      m_nDevicesPerRank (config.getValue<size_t> (*this, "DevicesPerRank")),
-      m_nBankBits (ilog2(config.getValue<size_t> (*this, "Banks"))),
-      m_nRankBits (ilog2(config.getValue<size_t> (*this, "Ranks"))),
-      m_nRowBits (config.getValue<size_t> (*this, "RowBits")),
-      m_nColumnBits (config.getValue<size_t> (*this, "ColumnBits")),
+      m_nDevicesPerRank (GetConf("DevicesPerRank", size_t)),
+      m_nBankBits (ilog2(GetConf("Banks", size_t))),
+      m_nRankBits (ilog2(GetConf("Ranks", size_t))),
+      m_nRowBits (GetConf("RowBits", size_t)),
+      m_nColumnBits (GetConf("ColumnBits", size_t)),
 
       m_nColumnStart (0),
       m_nBankStart (m_nColumnStart + m_nColumnBits),
@@ -222,48 +222,55 @@ DDRChannel::DDRConfig::DDRConfig(const std::string& name, Object& parent, Clock&
     if (m_nBurstLength != 8)
         throw SimulationException(*this, "This implementation only supports m_nBurstLength = 8");
 
-    size_t cellsize = config.getValue<size_t> (*this, "CellSize");
+    size_t cellsize = GetConf("CellSize", size_t);
     if (cellsize != 8)
         throw SimulationException(*this, "This implementation only supports CellSize = 8");
 }
 
-DDRChannel::DDRChannel(const std::string& name, Object& parent, Clock& clock, Config& config)
-    : Object(name, parent, clock),
-      m_registry(config),
-      m_ddrconfig("config", *this, clock, config),
+DDRChannel::DDRChannel(const std::string& name, Object& parent, Clock& clock)
+    : Object(name, parent),
+      m_ddrconfig("config", *this, clock),
       // Initialize each rank at 'no row selected'
       m_currentRow(1 << (m_ddrconfig.m_nRankBits + m_ddrconfig.m_nBankBits), INVALID_ROW),
       m_callback(0),
       m_request(),
-      m_pipeline("b_pipeline", *this, clock, m_ddrconfig.m_tCL),
-      m_busy("f_busy", *this, clock, false),
-      m_next_command(0),
-      m_next_precharge(0),
+      InitStorage(m_pipeline, clock, m_ddrconfig.m_tCL),
+      InitStorage(m_busy, clock, false),
+      InitStateVariable(next_command, 0),
+      InitStateVariable(next_precharge, 0),
       m_traces(),
 
-      p_Request (*this, "request",  delegate::create<DDRChannel, &DDRChannel::DoRequest >(*this)),
-      p_Pipeline(*this, "pipeline", delegate::create<DDRChannel, &DDRChannel::DoPipeline>(*this)),
+      InitProcess(p_Request, DoRequest),
+      InitProcess(p_Pipeline, DoPipeline),
 
-      m_busyCycles(0)
+      InitSampleVariable(busyCycles, SVC_CUMULATIVE)
 {
+    RegisterStateVariable(m_currentRow, "currentRow");
+    RegisterStateVariable(m_request.address, "request.address");
+    RegisterStateVariable(m_request.write, "request.write");
+    RegisterStateVariable(m_request.size, "request.size");
+    RegisterStateVariable(m_request.offset, "request.offset");
+    RegisterStateArray(m_request.data.data, sizeof(m_request.data.data)/sizeof(m_request.data.data[0]), "request.data");
+    RegisterStateArray(m_request.data.mask, sizeof(m_request.data.mask)/sizeof(m_request.data.mask[0]), "request.mask");
+    RegisterStateVariable(m_request.done, "request.done");
+
     m_busy.Sensitive(p_Request);
     m_pipeline.Sensitive(p_Pipeline);
 
-    config.registerObject(*this, "ddr");
-    config.registerProperty(*this, "CL", (uint32_t)m_ddrconfig.m_tCL);
-    config.registerProperty(*this, "RCD", (uint32_t)m_ddrconfig.m_tRCD);
-    config.registerProperty(*this, "RP", (uint32_t)m_ddrconfig.m_tRP);
-    config.registerProperty(*this, "RAS", (uint32_t)m_ddrconfig.m_tRAS);
-    config.registerProperty(*this, "CWL", (uint32_t)m_ddrconfig.m_tCWL);
-    config.registerProperty(*this, "CCD", (uint32_t)m_ddrconfig.m_tCCD);
-    config.registerProperty(*this, "WR", (uint32_t)m_ddrconfig.m_tWR);
-    config.registerProperty(*this, "chips/rank", (uint32_t)m_ddrconfig.m_nDevicesPerRank);
-    config.registerProperty(*this, "ranks", (uint32_t)(1UL<<m_ddrconfig.m_nRankBits));
-    config.registerProperty(*this, "rows", (uint32_t)(1UL<<m_ddrconfig.m_nRowBits));
-    config.registerProperty(*this, "columns", (uint32_t)(1UL<<m_ddrconfig.m_nColumnBits));
-    config.registerProperty(*this, "freq", (uint32_t)clock.GetFrequency());
+    RegisterModelObject(*this, "ddr");
+    RegisterModelProperty(*this, "CL", (uint32_t)m_ddrconfig.m_tCL);
+    RegisterModelProperty(*this, "RCD", (uint32_t)m_ddrconfig.m_tRCD);
+    RegisterModelProperty(*this, "RP", (uint32_t)m_ddrconfig.m_tRP);
+    RegisterModelProperty(*this, "RAS", (uint32_t)m_ddrconfig.m_tRAS);
+    RegisterModelProperty(*this, "CWL", (uint32_t)m_ddrconfig.m_tCWL);
+    RegisterModelProperty(*this, "CCD", (uint32_t)m_ddrconfig.m_tCCD);
+    RegisterModelProperty(*this, "WR", (uint32_t)m_ddrconfig.m_tWR);
+    RegisterModelProperty(*this, "chips/rank", (uint32_t)m_ddrconfig.m_nDevicesPerRank);
+    RegisterModelProperty(*this, "ranks", (uint32_t)(1UL<<m_ddrconfig.m_nRankBits));
+    RegisterModelProperty(*this, "rows", (uint32_t)(1UL<<m_ddrconfig.m_nRowBits));
+    RegisterModelProperty(*this, "columns", (uint32_t)(1UL<<m_ddrconfig.m_nColumnBits));
+    RegisterModelProperty(*this, "freq", (uint32_t)clock.GetFrequency());
 
-    RegisterSampleVariableInObject(m_busyCycles, SVC_CUMULATIVE);
 }
 
 void DDRChannel::SetClient(ICallback& cb, StorageTraceSet& sts, const StorageTraceSet& storages)
@@ -278,23 +285,22 @@ void DDRChannel::SetClient(ICallback& cb, StorageTraceSet& sts, const StorageTra
     p_Request.SetStorageTraces(opt(m_pipeline));
     p_Pipeline.SetStorageTraces(opt(storages));
 
-    m_registry.registerBidiRelation(cb, *this, "ddr");
+    RegisterModelBidiRelation(cb, *this, "ddr");
 }
 
 DDRChannel::~DDRChannel()
 {
 }
 
-DDRChannelRegistry::DDRChannelRegistry(const std::string& name, Object& parent, Config& config, size_t defaultNumChannels)
+DDRChannelRegistry::DDRChannelRegistry(const std::string& name, Object& parent, size_t defaultNumChannels)
     : Object(name, parent),
-      m_channels(config.getValueOrDefault<size_t>(*this, "NumChannels", defaultNumChannels))
+      m_channels(GetConfOpt("NumChannels", size_t, defaultNumChannels))
 {
     for (size_t i = 0; i < m_channels.size(); ++i)
     {
-        std::stringstream ss;
-        ss << "channel" << i;
-        Clock &ddrclock = GetKernel()->CreateClock(config.getValue<size_t>(*this, ss.str(), "Freq"));
-        m_channels[i] = new DDRChannel(ss.str(), *this, ddrclock, config);
+        auto cname = "channel" + std::to_string(i);
+        Clock &ddrclock = GetKernel()->CreateClock(GetSubConf(cname, "Freq", Clock::Frequency));
+        m_channels[i] = new DDRChannel(cname, *this, ddrclock);
     }
 }
 
@@ -305,5 +311,3 @@ DDRChannelRegistry::~DDRChannelRegistry()
 }
 
 }
-
-

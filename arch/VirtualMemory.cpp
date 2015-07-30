@@ -17,10 +17,7 @@ namespace Simulator
 {
 
 // We allocate per block, this is the size of each block. Must be a power of two
-static const int BLOCK_SIZE = (1 << 12);
-
-// Align allocations on 64 bytes
-static const MemAddr ALIGNMENT = 64;
+#define BLOCK_SIZE (1 << 12)
 
 void VirtualMemory::ReportOverlap(MemAddr address, MemSize size) const
 {
@@ -62,8 +59,8 @@ void VirtualMemory::Reserve(MemAddr address, MemSize size, ProcessID pid, int pe
         range.owner       = pid;
         range.permissions = perm;
         m_ranges.insert(p, make_pair(address, range));
-        m_totalreserved += size;
-        ++m_nRanges;
+        m_total_reserved += size;
+        ++m_number_of_ranges;
     }
 }
 
@@ -95,8 +92,8 @@ void VirtualMemory::Unreserve(MemAddr address, MemSize size)
                                                 (unsigned long long)address,
                                                 (unsigned long long)p->second.size);
     }
-    m_totalreserved -= p->second.size;
-    --m_nRanges;
+    m_total_reserved -= p->second.size;
+    --m_number_of_ranges;
     m_ranges.erase(p);
 }
 
@@ -108,8 +105,8 @@ void VirtualMemory::UnreserveAll(ProcessID pid)
     {
         if (p->second.owner == pid)
         {
-            m_totalreserved -= p->second.size;
-            --m_nRanges;
+            m_total_reserved -= p->second.size;
+            --m_number_of_ranges;
             m_ranges.erase(p++); // careful that iterator is invalidated by erase()
         }
         else
@@ -195,7 +192,7 @@ void VirtualMemory::Write(MemAddr address, const void* _data, const bool* mask, 
         if (ins.second) {
             // A new element was inserted, allocate and clear memory
             memset(pos->second.data, 0, BLOCK_SIZE);
-            m_totalallocated += BLOCK_SIZE;
+            m_total_allocated += BLOCK_SIZE;
         }
 
         // Number of bytes to write, initially
@@ -226,19 +223,17 @@ SymbolTable& VirtualMemory::GetSymbolTable() const
 }
 
 
-VirtualMemory::VirtualMemory()
-    : m_blocks(), m_ranges(),
-      m_totalreserved(0), m_totalallocated(0), m_nRanges(0), m_symtable(0)
+VirtualMemory::VirtualMemory(const std::string& name, Object& parent)
+    : Object(name, parent),
+      m_blocks(),
+      m_ranges(),
+      InitSampleVariable(total_reserved, SVC_LEVEL),
+      InitSampleVariable(total_allocated, SVC_LEVEL),
+      InitSampleVariable(number_of_ranges, SVC_LEVEL),
+      m_symtable(0)
 {
-    // to create unique sample variable names when there are multiple 
-    // virtual memories
-    static int vmcount = 0;
-    ostringstream ss;
-    ss << "vm" << vmcount;
-    RegisterSampleVariable(m_totalreserved, ss.str() + ":reserved", SVC_LEVEL);
-    RegisterSampleVariable(m_totalallocated, ss.str() + ":allocated", SVC_LEVEL);
-    RegisterSampleVariable(m_nRanges, ss.str() + ":nRanges", SVC_LEVEL);
-    vmcount++;
+    RegisterStateObject(m_blocks, "blocks");
+    RegisterStateObject(m_ranges, "ranges");
 }
 
 VirtualMemory::~VirtualMemory()
@@ -298,7 +293,7 @@ void VirtualMemory::Cmd_Info(ostream& out, const vector<string>& /* arguments */
     static const char* Mods[] = { "B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
 
     // Print total memory reservation
-    assert(m_totalreserved == total);
+    assert(m_total_reserved == total);
     int mod;
     for(mod = 0; total >= 1024 && mod < 9; ++mod)
     {
@@ -308,7 +303,7 @@ void VirtualMemory::Cmd_Info(ostream& out, const vector<string>& /* arguments */
     out << "Total reserved memory:  " << setw(4) << total << " " << Mods[mod] << endl;
 
     total = m_blocks.size() * BLOCK_SIZE;
-    assert(m_totalallocated == total);
+    assert(m_total_allocated == total);
     // Print total memory usage
     for (mod = 0; total >= 1024 && mod < 4; ++mod)
     {
@@ -316,81 +311,5 @@ void VirtualMemory::Cmd_Info(ostream& out, const vector<string>& /* arguments */
     }
     out << "Total allocated memory: " << setw(4) << total << " " << Mods[mod] << endl;
 }
-
-void VirtualMemory::Cmd_Read(ostream& out, const vector<string>& arguments) const
-{
-    MemAddr addr = 0;
-    MemSize size = 0;
-    char* endptr = NULL;
-
-    if (arguments.size() == 2)
-    {
-        addr = (MemAddr)strtoull( arguments[0].c_str(), &endptr, 0 );
-        if (*endptr == '\0')
-        {
-            size = strtoul( arguments[1].c_str(), &endptr, 0 );
-        }
-    }
-
-    if (arguments.size() != 2 || *endptr != '\0')
-    {
-        out << "Usage: read <mem> <address> <count>" << endl;
-        return;
-    }
-
-    static const unsigned int BYTES_PER_LINE = 16;
-
-    // Calculate aligned start and end addresses
-    MemAddr start = addr / BYTES_PER_LINE * BYTES_PER_LINE;
-    MemAddr end   = (addr + size + BYTES_PER_LINE - 1) / BYTES_PER_LINE * BYTES_PER_LINE;
-
-    try
-    {
-        // Read the data
-        vector<uint8_t> buf((size_t)size);
-        Read(addr, &buf[0], size);
-
-        // Print it
-        for (MemAddr y = start; y < end; y += BYTES_PER_LINE)
-        {
-            // The address
-            out << setw(8) << hex << setfill('0') << y << " | ";
-
-            // The bytes
-            for (MemAddr x = y; x < y + BYTES_PER_LINE; ++x)
-            {
-                if (x >= addr && x < addr + size)
-                    out << setw(2) << (unsigned int)buf[(size_t)(x - addr)];
-                else
-                    out << "  ";
-
-                // Print some space at half the grid
-                if ((x - y) == BYTES_PER_LINE / 2 - 1) out << "  ";
-                out << " ";
-            }
-            out << "| ";
-
-            // The bytes, as characters
-            for (MemAddr x = y; x < y + BYTES_PER_LINE; ++x)
-            {
-                char c = ' ';
-                if (x >= addr && x < addr + size) {
-                    c = buf[(size_t)(x - addr)];
-                    c = (isprint(c) ? c : '.');
-                }
-                out << c;
-            }
-            out << endl;
-        }
-    }
-    catch (exception &e)
-    {
-        out << "An exception occured while reading the memory:" << endl;
-        out << e.what() << endl;
-    }
-}
-
-IMemoryAdmin::~IMemoryAdmin()
-{}
 
 }

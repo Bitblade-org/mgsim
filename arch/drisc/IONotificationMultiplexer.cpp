@@ -2,7 +2,6 @@
 #include "DRISC.h"
 #include <sim/config.h>
 
-#include <sstream>
 #include <iomanip>
 
 using namespace std;
@@ -13,43 +12,34 @@ namespace drisc
 {
 
 IONotificationMultiplexer::IONotificationMultiplexer(const string& name, IOInterface& parent, Clock& clock,
-                                                     size_t numChannels,
-                                                     Config& config)
-    : Object(name, parent, clock),
+                                                     size_t numChannels)
+    : Object(name, parent),
       m_writebacks(numChannels, 0),
       m_mask(numChannels, false),
       m_interrupts(numChannels, 0),
       m_notifications(numChannels, 0),
       m_services(numChannels, 0),
       m_lastNotified(0),
-      p_IncomingNotifications(*this, "received-notifications", delegate::create<IONotificationMultiplexer, &IONotificationMultiplexer::DoReceivedNotifications>(*this))
+      InitProcess(p_IncomingNotifications, DoReceivedNotifications)
 {
-    BufferSize nqs = config.getValue<BufferSize>(*this, "NotificationQueueSize");
+    BufferSize nqs = GetConf("NotificationQueueSize", BufferSize);
 
     for (size_t i = 0; i < numChannels; ++i)
     {
         {
-            stringstream ss;
-            ss << "wb" << i;
-            m_writebacks[i] = new Register<RegAddr>(ss.str(), *this, clock);
+            m_writebacks[i] = MakeStorage(Register<RegAddr>, "wb" + to_string(i), clock);
             m_writebacks[i]->Sensitive(p_IncomingNotifications);
         }
         {
-            stringstream ss;
-            ss << "latch" << i;
-            m_interrupts[i] = new SingleFlag(ss.str(), *this, clock, false);
+            m_interrupts[i] = MakeStorage(Flag, "latch" + to_string(i), clock, false);
             m_interrupts[i]->Sensitive(p_IncomingNotifications);
         }
         {
-            stringstream ss;
-            ss << "b_notification" << i;
-            m_notifications[i] = new Buffer<Integer>(ss.str(), *this, clock, nqs);
+            m_notifications[i] = MakeStorage(Buffer<Integer>, "notification" + to_string(i), clock, nqs);
             m_notifications[i]->Sensitive(p_IncomingNotifications);
         }
         {
-            stringstream ss;
-            ss << "p_service" << i;
-            m_services[i] = new ArbitratedService<>(*this, clock, ss.str());
+            m_services[i] = new ArbitratedService<>(clock, GetName() + ".p_service" + to_string(i));
         }
     }
 

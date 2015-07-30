@@ -1,39 +1,41 @@
 #include "MGSystem.h"
 
-#include <arch/drisc/DRISC.h>
+#include "arch/drisc/DRISC.h"
 
 #ifdef ENABLE_MEM_SERIAL
-#include <arch/mem/SerialMemory.h>
+#include "arch/mem/SerialMemory.h"
 #endif
 #ifdef ENABLE_MEM_PARALLEL
-#include <arch/mem/ParallelMemory.h>
+#include "arch/mem/ParallelMemory.h"
 #endif
 #ifdef ENABLE_MEM_BANKED
-#include <arch/mem/BankedMemory.h>
+#include "arch/mem/BankedMemory.h"
 #endif
 #ifdef ENABLE_MEM_DDR
-#include <arch/mem/DDRMemory.h>
+#include "arch/mem/DDRMemory.h"
 #endif
 #ifdef ENABLE_MEM_CDMA
-#include <arch/mem/cdma/CDMA.h>
+#include "arch/mem/cdma/CDMA.h"
 #endif
 #ifdef ENABLE_MEM_ZLCDMA
-#include <arch/mem/zlcdma/CDMA.h>
+#include "arch/mem/zlcdma/CDMA.h"
 #endif
 
-#include <arch/dev/NullIO.h>
-#include <arch/dev/LCD.h>
-#include <arch/dev/RTC.h>
-#include <arch/dev/Display.h>
-#include <arch/dev/ActiveROM.h>
-#include <arch/dev/Selector.h>
-#include <arch/dev/SMC.h>
-#include <arch/dev/UART.h>
-#include <arch/dev/RPC.h>
-#include <arch/dev/RPC_unix.h>
+#include "arch/dev/NullIO.h"
+#include "arch/dev/LCD.h"
+#include "arch/dev/RTC.h"
+#include "arch/dev/Display.h"
+#include "arch/dev/ActiveROM.h"
+#include "arch/dev/Selector.h"
+#include "arch/dev/SMC.h"
+#include "arch/dev/UART.h"
+#include "arch/dev/RPC.h"
+#include "arch/dev/RPC_unix.h"
 
-#include <sim/rusage.h>
+#include "sim/rusage.h"
+#include "sim/getclassname.h"
 
+#include <sstream>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -42,11 +44,6 @@
 #include <limits>
 #include <fnmatch.h>
 #include <cstring>
-
-#ifdef HAVE_GCC_ABI_DEMANGLE
-#include <cxxabi.h>
-#endif
-#include <typeinfo>
 
 using namespace Simulator;
 using namespace std;
@@ -90,28 +87,6 @@ auto operator<<(basic_ostream<_CharT, _Traits>&os, my_iomanip_p /*unused*/) -> d
     return os << left << setprecision(1) << setw(8);
 }
 
-static string GetClassName(const type_info& info)
-{
-    const char* name = info.name();
-
-    int status = 0;
-    char *res = 0;
-
-#ifdef HAVE_GCC_ABI_DEMANGLE
-    res = abi::__cxa_demangle(name, NULL, NULL, &status);
-#endif
-
-    if (res && status == 0)
-    {
-        string ret = res;
-        free(res);
-        return ret;
-    }
-    else
-    {
-        return name;
-    }
-}
 
 static
 void GetComponents(map<string, Object*>& ret, Object *cur, const string& pat)
@@ -119,7 +94,7 @@ void GetComponents(map<string, Object*>& ret, Object *cur, const string& pat)
     for (unsigned int i = 0; i < cur->GetNumChildren(); ++i)
     {
         Object* child = cur->GetChild(i);
-        string childname = child->GetFQN();
+        string childname = child->GetName();
         if (FNM_NOMATCH != fnmatch(pat.c_str(), childname.c_str(), 0))
         {
             ret[childname] = child;
@@ -131,13 +106,13 @@ void GetComponents(map<string, Object*>& ret, Object *cur, const string& pat)
 map<string, Object*> MGSystem::GetComponents(const string& pat)
 {
     map<string, Object*> ret;
-    ::GetComponents(ret, &m_root, pat);
+    ::GetComponents(ret, m_root, pat);
 
     if (ret.empty())
     {
         // try to match with the system name inserted as prefix.
-        string syspat = m_root.GetName() + '.' + pat;
-        ::GetComponents(ret, &m_root, syspat);
+        string syspat = m_root->GetName() + '.' + pat;
+        ::GetComponents(ret, m_root, syspat);
     }
 
     return ret;
@@ -161,7 +136,7 @@ static string StringReplace(string arg, string pat, string repl)
 
 void MGSystem::PrintProcesses(ostream& out, const string& pat) const
 {
-    auto& allprocs = Process::GetAllProcesses();
+    auto& allprocs = GetKernel()->GetAllProcesses();
     for (const Process* p : allprocs)
     {
         std::string name = p->GetName();
@@ -216,7 +191,7 @@ static void PrintComponents(ostream& out, const Object* cur, const string& inden
 
 void MGSystem::PrintComponents(ostream& out, const string& pat, size_t levels) const
 {
-    ::PrintComponents(out, &m_root, "", pat, levels, 0, false);
+    ::PrintComponents(out, m_root, "", pat, levels, 0, false);
 }
 
 static size_t CountComponents(const Object& obj)
@@ -263,7 +238,7 @@ void MGSystem::PrintCoreStats(ostream& os) const {
         types[j] = I; c[i][j++].i = pl.GetStagesRun();
         types[j] = I; c[i][j++].i = pl.GetStalls();
         types[j] = PC; c[i][j++].f = 100. * pl.GetEfficiency();
-        types[j] = PC; c[i][j++].f = 100. * (float)pl.GetOp() / (float)pl.GetCycleNo();
+        types[j] = PC; c[i][j++].f = 100. * (float)pl.GetOp() / (float)p.GetCycleNo();
         types[j] = I; c[i][j++].i = p.GetMaxThreadsAllocated();
         types[j] = I; c[i][j++].i = p.GetTotalThreadsAllocated();
         types[j] = I; c[i][j++].i = p.GetThreadTableSize();
@@ -431,7 +406,7 @@ void MGSystem::PrintMemoryStatistics(ostream& os) const {
 void MGSystem::PrintState(const vector<string>& /*unused*/) const
 {
     // This should be all non-idle processes
-    for (const Clock* clock = m_kernel.GetActiveClocks(); clock != NULL; clock = clock->GetNext())
+    for (const Clock* clock = GetKernel()->GetActiveClocks(); clock != NULL; clock = clock->GetNext())
     {
         if (clock->GetActiveProcesses() != NULL || clock->GetActiveStorages() != NULL || clock->GetActiveArbitrators() != NULL)
         {
@@ -462,7 +437,7 @@ void MGSystem::PrintState(const vector<string>& /*unused*/) const
                 cout << "- the following storages need updating:" << endl;
                 for (const Storage* storage = clock->GetActiveStorages(); storage != NULL; storage = storage->GetNext())
                 {
-                    cout << "  - " << storage->GetFQN() << endl;
+                    cout << "  - " << storage->GetName() << endl;
                 }
             }
 
@@ -471,7 +446,7 @@ void MGSystem::PrintState(const vector<string>& /*unused*/) const
                 cout << "- the following arbitrators need updating:" << endl;
                 for (const Arbitrator* arbitrator = clock->GetActiveArbitrators(); arbitrator != NULL; arbitrator = arbitrator->GetNext())
                 {
-                    cout << "  - " << arbitrator->GetFQN() << endl;
+                    cout << "  - " << arbitrator->GetName() << endl;
                 }
             }
         }
@@ -479,7 +454,7 @@ void MGSystem::PrintState(const vector<string>& /*unused*/) const
 
     for (DRISC* p : m_procs)
         if (!p->IsIdle())
-            cout << p->GetFQN() << ": non-empty" << endl;
+            cout << p->GetName() << ": non-empty" << endl;
 }
 
 void MGSystem::PrintAllStatistics(ostream& os) const
@@ -487,8 +462,8 @@ void MGSystem::PrintAllStatistics(ostream& os) const
     ResourceUsage ru(true);
 
     os << dec
-       << GetKernel().GetCycleNo() << "\t# master cycle counter" << endl
-       << m_clock.GetCycleNo() << "\t# core cycle counter" << endl
+       << GetKernel()->GetCycleNo() << "\t# master cycle counter" << endl
+       << m_clock->GetCycleNo() << "\t# core cycle counter" << endl
        << GetOp() << "\t# total executed instructions" << endl
        << GetFlop() << "\t# total issued fp instructions" << endl
        << ru.GetUserTime() << "\t# total real time in user mode (us)" << endl
@@ -503,7 +478,7 @@ void MGSystem::PrintAllStatistics(ostream& os) const
 void MGSystem::Step(CycleNo nCycles)
 {
     m_breakpoints.Resume();
-    RunState state = GetKernel().Step(nCycles);
+    RunState state = GetKernel()->Step(nCycles);
     switch(state)
     {
     case STATE_ABORTED:
@@ -535,7 +510,7 @@ void MGSystem::Step(CycleNo nCycles)
         // either there are no processes at all, or they are all
         // stalled. Deadlock only exists in the latter case, so
         // we only check for the existence of an active process.
-        for (const Clock* clock = m_kernel.GetActiveClocks(); clock != NULL; clock = clock->GetNext())
+        for (const Clock* clock = GetKernel()->GetActiveClocks(); clock != NULL; clock = clock->GetNext())
         {
             if (clock->GetActiveProcesses() != NULL)
             {
@@ -548,11 +523,11 @@ void MGSystem::Step(CycleNo nCycles)
     case STATE_DEADLOCK:
     deadlock:
     {
-        cerr << "Deadlock at cycle " << GetKernel().GetCycleNo() << "; replaying the last cycle:" << endl;
+        cerr << "Deadlock at cycle " << GetKernel()->GetCycleNo() << "; replaying the last cycle:" << endl;
 
         int savemode = GetDebugMode();
         SetDebugMode(-1);
-        (void) GetKernel().Step(1);
+        (void) GetKernel()->Step(1);
         SetDebugMode(savemode);
 
         ostringstream ss;
@@ -561,7 +536,7 @@ void MGSystem::Step(CycleNo nCycles)
         // See how many processes are in each of the states
         unsigned int num_stalled = 0, num_running = 0;
 
-        for (const Clock* clock = m_kernel.GetActiveClocks(); clock != NULL; clock = clock->GetNext())
+        for (const Clock* clock = GetKernel()->GetActiveClocks(); clock != NULL; clock = clock->GetNext())
         {
             for (const Process* process = clock->GetActiveProcesses(); process != NULL; process = process->GetNext())
             {
@@ -588,12 +563,12 @@ void MGSystem::Step(CycleNo nCycles)
         {
             unsigned suspended = p->GetNumSuspendedRegisters();
             if (suspended > 0)
-                ss << "  " << p->GetFQN() << ": " << suspended << endl;
+                ss << "  " << p->GetName() << ": " << suspended << endl;
             num_regs += suspended;
         }
 
         ss << endl
-           << "Deadlock! (at cycle " << m_kernel.GetCycleNo() << ')' << endl
+           << "Deadlock! (at cycle " << GetKernel()->GetCycleNo() << ')' << endl
            << "(" << num_stalled << " processes stalled;  " << num_running << " processes running; "
            << num_regs << " registers waited on)";
         throw DeadlockException(ss.str());
@@ -619,21 +594,33 @@ void MGSystem::Disassemble(MemAddr addr, size_t sz) const
 }
 
 MGSystem::MGSystem(Config& config, bool quiet)
-    : m_kernel(m_breakpoints),
-      m_clock(m_kernel.CreateClock(config.getValue<unsigned long>("CoreFreq"))),
-      m_root("", m_clock),
+    :
+#ifndef STATIC_KERNEL
+      m_kernel(),
+#endif
+      m_clock(0),
+      m_root(0),
       m_procs(),
       m_fpus(),
       m_iobuses(),
       m_devices(),
       m_symtable(),
-      m_breakpoints(m_kernel),
+      m_breakpoints(),
       m_memory(0),
       m_objdump_cmd(),
-      m_config(config),
       m_bootrom(0),
-      m_selector(0)
+      m_selector(0),
+	  m_jtag(0) //MLDTODO Remove after testing
 {
+#ifdef STATIC_KERNEL
+    Kernel::InitGlobalKernel();
+#endif
+    auto& kernel = *GetKernel();
+    kernel.AttachConfig(config);
+
+    m_clock = &kernel.CreateClock(GetTopConf("CoreFreq", Clock::Frequency));
+    m_root = new Object("", kernel);
+    m_breakpoints.AttachKernel(kernel);
 
     if (!quiet)
     {
@@ -643,63 +630,63 @@ MGSystem::MGSystem(Config& config, bool quiet)
 
     ResourceUsage ru1(true); // mark resource usage so far
 
-    PSize numProcessors = m_config.getValue<PSize>("NumProcessors");
+    PSize numProcessors = GetTopConf("NumProcessors", PSize);
 
-    const size_t numProcessorsPerFPU = config.getValue<size_t>("NumProcessorsPerFPU");
+    const size_t numProcessorsPerFPU = GetTopConf("NumProcessorsPerFPU", size_t);
     const PSize  numFPUs             = (numProcessors + numProcessorsPerFPU - 1) / numProcessorsPerFPU;
 
-    string memory_type = config.getValue<string>("MemoryType");
+    string memory_type = GetTopConf("MemoryType", string);
     transform(memory_type.begin(), memory_type.end(), memory_type.begin(), ::toupper);
 
-    Clock& memclock = m_kernel.CreateClock(config.getValue<size_t>("MemoryFreq"));
+    Clock& memclock = kernel.CreateClock(GetTopConf("MemoryFreq", size_t));
 
     IMemoryAdmin *memadmin;
 
 #ifdef ENABLE_MEM_SERIAL
     if (memory_type == "SERIAL") {
-        SerialMemory* memory = new SerialMemory("memory", m_root, memclock, config);
+        SerialMemory* memory = new SerialMemory("memory", *m_root, memclock);
         memadmin = memory; m_memory = memory;
     } else
 #endif
 #ifdef ENABLE_MEM_PARALLEL
     if (memory_type == "PARALLEL") {
-        ParallelMemory* memory = new ParallelMemory("memory", m_root, memclock, config);
+        ParallelMemory* memory = new ParallelMemory("memory", *m_root, memclock);
         memadmin = memory; m_memory = memory;
     } else
 #endif
 #ifdef ENABLE_MEM_BANKED
     if (memory_type == "BANKED") {
-        BankedMemory* memory = new BankedMemory("memory", m_root, memclock, config, "DIRECT");
+        BankedMemory* memory = new BankedMemory("memory", *m_root, memclock, "DIRECT");
         memadmin = memory; m_memory = memory;
     } else
     if (memory_type == "RANDOMBANKED") {
-        BankedMemory* memory = new BankedMemory("memory", m_root, memclock, config, "RMIX");
+        BankedMemory* memory = new BankedMemory("memory", *m_root, memclock, "RMIX");
         memadmin = memory; m_memory = memory;
     } else
 #endif
 #ifdef ENABLE_MEM_DDR
     if (memory_type == "DDR") {
-        DDRMemory* memory = new DDRMemory("memory", m_root, memclock, config, "DIRECT");
+        DDRMemory* memory = new DDRMemory("memory", *m_root, memclock, "DIRECT");
         memadmin = memory; m_memory = memory;
     } else
     if (memory_type == "RANDOMDDR") {
-        DDRMemory* memory = new DDRMemory("memory", m_root, memclock, config, "RMIX");
+        DDRMemory* memory = new DDRMemory("memory", *m_root, memclock, "RMIX");
         memadmin = memory; m_memory = memory;
     } else
 #endif
 #ifdef ENABLE_MEM_CDMA
     if (memory_type == "CDMA" || memory_type == "COMA") {
-        CDMA* memory = new TwoLevelCDMA("memory", m_root, memclock, config);
+        CDMA* memory = new TwoLevelCDMA("memory", *m_root, memclock);
         memadmin = memory; m_memory = memory;
     } else
     if (memory_type == "FLATCDMA" || memory_type == "FLATCOMA") {
-        CDMA* memory = new OneLevelCDMA("memory", m_root, memclock, config);
+        CDMA* memory = new OneLevelCDMA("memory", *m_root, memclock);
         memadmin = memory; m_memory = memory;
     } else
 #endif
 #ifdef ENABLE_MEM_ZLCDMA
     if (memory_type == "ZLCDMA") {
-        ZLCDMA* memory = new ZLCDMA("memory", m_root, memclock, config);
+        ZLCDMA* memory = new ZLCDMA("memory", *m_root, memclock);
         memadmin = memory; m_memory = memory;
     } else
 #endif
@@ -714,26 +701,24 @@ MGSystem::MGSystem(Config& config, bool quiet)
     m_breakpoints.SetSymbolTable(m_symtable);
 
     // Create the event selector
-    Clock& selclock = m_kernel.CreateClock(config.getValue<unsigned long>("EventCheckFreq"));
-    m_selector = new Selector("selector", m_root, selclock, config);
+    Clock& selclock = kernel.CreateClock(GetTopConf("EventCheckFreq", Clock::Frequency));
+    m_selector = new Selector("selector", *m_root, selclock);
 
     // Create the I/O Buses
-    const size_t numIOBuses = config.getValue<size_t>("NumIOBuses");
+    const size_t numIOBuses = GetTopConf("NumIOBuses", size_t);
     m_iobuses.resize(numIOBuses);
     for (size_t b = 0; b < numIOBuses; ++b)
     {
-        stringstream ss;
-        ss << "iobus" << b;
-        string name = ss.str();
+        auto name = "iobus" + to_string(b);
 
-        string bus_type = config.getValue<string>(m_root, name, "Type");
-        Clock& ioclock = m_kernel.CreateClock(config.getValue<unsigned long>(m_root, name, "Freq"));
+        auto bus_type = GetTopSubConf(name, "Type", string);
+        Clock& ioclock = kernel.CreateClock(GetTopSubConf(name, "Freq", Clock::Frequency));
 
         if (bus_type == "NULLIO") {
-            NullIO* bus = new NullIO(name, m_root, ioclock);
+            NullIO* bus = new NullIO(name, *m_root, ioclock);
             m_iobuses[b] = bus;
-            config.registerObject(*bus, "nullio");
-            config.registerProperty(*bus, "freq", (uint32_t)ioclock.GetFrequency());
+            RegisterModelObject(*bus, "nullio");
+            RegisterModelProperty(*bus, "freq", (uint32_t)ioclock.GetFrequency());
         } else {
             throw runtime_error("Unknown I/O bus type for " + name + ": " + bus_type);
         }
@@ -748,12 +733,11 @@ MGSystem::MGSystem(Config& config, bool quiet)
     m_fpus.resize(numFPUs);
     for (size_t f = 0; f < numFPUs; ++f)
     {
-        stringstream name;
-        name << "fpu" << f;
-        m_fpus[f] = new FPU(name.str(), m_root, m_clock, config, numProcessorsPerFPU);
+        auto name = "fpu" + to_string(f);
+        m_fpus[f] = new FPU(name, *m_root, *m_clock, numProcessorsPerFPU);
 
-        config.registerObject(*m_fpus[f], "fpu");
-        config.registerProperty(*m_fpus[f], "freq", (uint32_t)m_clock.GetFrequency());
+        RegisterModelObject(*m_fpus[f], "fpu");
+        RegisterModelProperty(*m_fpus[f], "freq", (uint32_t)m_clock->GetFrequency());
     }
     if (!quiet)
     {
@@ -764,24 +748,21 @@ MGSystem::MGSystem(Config& config, bool quiet)
     m_procs.resize(numProcessors);
     for (size_t i = 0; i < numProcessors; ++i)
     {
-
-        stringstream ss;
-        ss << "cpu" << i;
-        string name = ss.str();
-        m_procs[i]   = new DRISC(name, m_root, m_clock, i, m_procs, config);
+        auto name = "cpu" + to_string(i);
+        m_procs[i]   = new DRISC(name, *m_root, *m_clock, i, m_procs, m_breakpoints);
         m_procs[i]->ConnectMemory(m_memory, memadmin);
-        m_procs[i]->ConnectFPU(config, m_fpus[i / numProcessorsPerFPU]);
+        m_procs[i]->ConnectFPU(m_fpus[i / numProcessorsPerFPU]);
 
-        if (config.getValueOrDefault<bool>(m_root, name, "EnableIO", false)) // I/O disabled unless specified
+        if (GetTopSubConfOpt(name, "EnableIO", bool, false)) // I/O disabled unless specified
         {
-            size_t busid = config.getValue<size_t>(m_root, name, "BusID");
+            size_t busid = GetTopSubConf(name, "BusID", size_t);
             if (busid >= m_iobuses.size())
             {
                 throw runtime_error("DRISC " + name + " set to connect to non-existent bus");
             }
 
             auto iobus = m_iobuses[busid];
-            m_procs[i]->ConnectIO(config, iobus);
+            m_procs[i]->ConnectIO(iobus);
 
             if (!quiet)
             {
@@ -802,29 +783,29 @@ MGSystem::MGSystem(Config& config, bool quiet)
     m_devices.resize(numIODevices);
     vector<ActiveROM*> aroms;
 
-    UnixInterface *uif = new UnixInterface("unix_if", m_root);
+    UnixInterface *uif = new UnixInterface("unix_if", *m_root);
     m_devices.push_back(uif);
 
     for (size_t i = 0; i < numIODevices; ++i)
     {
         string name = dev_names[i];
 
-        bool enable_dev = config.getValueOrDefault<bool>(m_root, name, "EnableDevice", true);
+        auto enable_dev = GetTopSubConfOpt(name, "EnableDevice", bool, true);
         if (!enable_dev)
             continue;
 
-        size_t busid = config.getValue<size_t>(m_root, name, "BusID");
+        auto busid = GetTopSubConf(name, "BusID", size_t);
 
         if (busid >= m_iobuses.size())
         {
             throw runtime_error("Device " + name + " set to connect to non-existent bus");
         }
 
-        IIOBus& iobus = *m_iobuses[busid];
+        auto& iobus = *m_iobuses[busid];
 
-        IODeviceID devid = config.getValueOrDefault<IODeviceID>(m_root, name, "DeviceID", iobus.GetNextAvailableDeviceID());
+        auto devid = GetTopSubConfOpt(name, "DeviceID", IODeviceID, iobus.GetNextAvailableDeviceID());
 
-        string dev_type = config.getValue<string>(m_root, name, "Type");
+        auto dev_type = GetTopSubConf(name, "Type", string);
 
         if (!quiet)
         {
@@ -832,41 +813,45 @@ MGSystem::MGSystem(Config& config, bool quiet)
         }
 
         if (dev_type == "LCD") {
-            LCD *lcd = new LCD(name, m_root, iobus, devid, config);
+            LCD *lcd = new LCD(name, *m_root, iobus, devid);
             m_devices[i] = lcd;
-            config.registerObject(*lcd, "lcd");
+            RegisterModelObject(*lcd, "lcd");
         } else if (dev_type == "RTC") {
-            Clock& rtcclock = m_kernel.CreateClock(config.getValue<size_t>(m_root, name, "RTCUpdateFreq"));
-            RTC *rtc = new RTC(name, m_root, rtcclock, iobus, devid, config);
+            Clock& rtcclock = kernel.CreateClock(GetTopSubConf(name, "RTCUpdateFreq", Clock::Frequency));
+            RTC *rtc = new RTC(name, *m_root, rtcclock, iobus, devid);
             m_devices[i] = rtc;
-            config.registerObject(*rtc, "rtc");
+            RegisterModelObject(*rtc, "rtc");
         } else if (dev_type == "GFX") {
-            size_t fbdevid = config.getValueOrDefault<size_t>(m_root, name, "GfxFrameBufferDeviceID", devid + 1);
-            Display *disp = new Display(name, m_root, iobus, devid, fbdevid, config);
+            size_t fbdevid = GetTopSubConfOpt(name, "GfxFrameBufferDeviceID", size_t, devid + 1);
+            Display *disp = new Display(name, *m_root, iobus, devid, fbdevid);
             m_devices[i] = disp;
-            config.registerObject(*disp, "gfx");
+            RegisterModelObject(*disp, "gfx");
         } else if (dev_type == "AROM") {
-            ActiveROM *rom = new ActiveROM(name, m_root, *memadmin, iobus, devid, config, quiet);
+            ActiveROM *rom = new ActiveROM(name, *m_root, *memadmin, iobus, devid, quiet);
             m_devices[i] = rom;
             aroms.push_back(rom);
-            config.registerObject(*rom, "arom");
+            RegisterModelObject(*rom, "arom");
         } else if (dev_type == "UART") {
-            UART *uart = new UART(name, m_root, iobus, devid, config);
+            UART *uart = new UART(name, *m_root, iobus, devid);
             m_devices[i] = uart;
-            config.registerObject(*uart, "uart");
+            RegisterModelObject(*uart, "uart");
         } else if (dev_type == "SMC") {
-            SMC * smc = new SMC(name, m_root, iobus, devid);
+            SMC * smc = new SMC(name, *m_root, iobus, devid);
             m_devices[i] = smc;
-            config.registerObject(*smc, "smc");
+            RegisterModelObject(*smc, "smc");
         } else if (dev_type == "RPC") {
-            RPCInterface* rpc = new RPCInterface(name, m_root, iobus, devid, config, *uif);
+            RPCInterface* rpc = new RPCInterface(name, *m_root, iobus, devid, *uif);
             m_devices[i] = rpc;
-            config.registerObject(*rpc, "rpc");
+            RegisterModelObject(*rpc, "rpc");
+        } else if (dev_type == "JTAG"){ //MLDTODO Remove after testing!
+        	m_jtag = new JTAG(name, *m_root, iobus, devid);
+        	m_devices[i] = m_jtag;
+        	RegisterModelObject(*m_jtag, "jtag");
         } else {
             throw runtime_error("Unknown I/O device type: " + dev_type);
         }
 
-        config.registerBidiRelation(iobus, *m_devices[i], "client", (uint32_t)devid);
+        RegisterModelBidiRelation(iobus, *m_devices[i], "client", (uint32_t)devid);
     }
 
 
@@ -874,12 +859,12 @@ MGSystem::MGSystem(Config& config, bool quiet)
     // We need to register the master frequency into the
     // configuration, because both in-program and external monitoring
     // want to know it.
-    unsigned long masterfreq = m_kernel.GetMasterFrequency();
-    config.getValueOrDefault("MasterFreq", masterfreq); // The lookup will set the config key as side effect
+    auto masterfreq = kernel.GetMasterFrequency();
+    (void)GetTopConfOpt("MasterFreq", Clock::Frequency, masterfreq); // The lookup will set the config key as side effect
 
-    config.registerObject(m_root, "system");
-    config.registerProperty(m_root, "version", PACKAGE_VERSION);
-    config.registerProperty(m_root, "masterfreq", (uint32_t)masterfreq);
+    RegisterModelObject(*m_root, "system");
+    RegisterModelProperty(*m_root, "version", PACKAGE_VERSION);
+    RegisterModelProperty(*m_root, "masterfreq", (uint32_t)masterfreq);
 
     if (!quiet)
     {
@@ -897,7 +882,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
         DRISC* next = (i == numProcessors - 1) ? NULL : m_procs[i + 1];
         m_procs[i]->ConnectLink(prev, next);
         if (next)
-            config.registerRelation(*m_procs[i], *next, "link", true);
+            RegisterModelRelation(*m_procs[i], *next, "link", true);
     }
 
     // Initialize the buses. This initializes the devices as well.
@@ -915,7 +900,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
         {
             if (m_bootrom != NULL)
             {
-                throw runtime_error("More than one bootable ROM detected: " + rom->GetName() + ", " + m_bootrom->GetFQN());
+                throw runtime_error("More than one bootable ROM detected: " + rom->GetName() + ", " + m_bootrom->GetName());
             }
             m_bootrom = rom;
         }
@@ -932,17 +917,15 @@ MGSystem::MGSystem(Config& config, bool quiet)
     }
 
     // Set up the initial memory ranges
-    size_t numRanges = config.getValue<size_t>("NumMemoryRanges");
+    size_t numRanges = GetTopConf("NumMemoryRanges", size_t);
     for (size_t i = 0; i < numRanges; ++i)
     {
-        stringstream ss;
-        ss << "MemoryRange" << i;
-        string name = ss.str();
+        auto name = "MemoryRange" + to_string(i);
 
-        MemAddr address = config.getValue<MemAddr>(name, "Address");
-        MemSize size = config.getValue<MemSize>(name, "Size");
-        string mode = config.getValue<string>(name, "Mode");
-        ProcessID pid = config.getValue<ProcessID>(name, "PID");
+        auto address = GetTopSubConf(name, "Address", MemAddr);
+        auto size = GetTopSubConf(name, "Size", MemSize);
+        auto mode = GetTopSubConf(name, "Mode", string);
+        auto pid = GetTopSubConf(name, "PID", ProcessID);
         int perm = 0;
         if (mode.find("R") != string::npos)
             perm |= IMemory::PERM_READ;
@@ -955,7 +938,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
     }
 
     // Set program debugging per default
-    m_kernel.SetDebugMode(Kernel::DEBUG_PROG);
+    kernel.SetDebugMode(Kernel::DEBUG_PROG);
 
     // Find objdump command
 #if defined(TARGET_MTALPHA)
@@ -1015,13 +998,16 @@ MGSystem::MGSystem(Config& config, bool quiet)
         }
         clog << "Created Microgrid: "
              << dec
-             << CountComponents(m_root) << " components, "
-             << Process::GetAllProcesses().size() << " processes, "
+             << CountComponents(*m_root) << " components, "
+             << GetKernel()->GetAllProcesses().size() << " processes, "
              << "simulation running at " << dec << masterfreq << " " << qual[q] << "Hz" << endl
              << "Instantiation costs: "
              << ru2.GetUserTime() << " us, "
              << ru2.GetMaxResidentSize() << " KiB (approx)" << endl;
     }
+
+    //MLDTODO Remove after testing
+    if(m_jtag != NULL){ m_jtag->start(); }
 }
 
 MGSystem::~MGSystem()

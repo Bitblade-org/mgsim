@@ -11,7 +11,7 @@ namespace Simulator
 
 
     NullIO::NullIO(const std::string& name, Object& parent, Clock& clock)
-        : Object(name, parent, clock), m_clients()
+        : Object(name, parent), m_clock(clock), m_clients()
     {
     }
 
@@ -19,18 +19,19 @@ namespace Simulator
     {
         if (from >= m_clients.size() || m_clients[from] == NULL)
         {
-            throw exceptf<SimulationException>(*this, "I/O from non-existent device %u", (unsigned)from);
+            throw exceptf<>(*this, "I/O from non-existent device %u", (unsigned)from);
         }
 
         if (to >= m_clients.size() || m_clients[to] == NULL)
         {
-            throw exceptf<SimulationException>(*this, "I/O from device %u to non-existent device %u", (unsigned)from, (unsigned)to);
+            throw exceptf<>(*this, "I/O from device %u to non-existent device %u", (unsigned)from, (unsigned)to);
         }
 
     }
 
     bool NullIO::RegisterClient(IODeviceID id, IIOBusClient& client)
     {
+    	//MLDNOTE BUG! Some parts of MGSim expect the largest ID to equal the number of devices - 1.
         if (id >= m_clients.size())
         {
             m_clients.resize(id + 1, NULL);
@@ -79,7 +80,7 @@ namespace Simulator
     {
         if (from >= m_clients.size() || m_clients[from] == NULL)
         {
-            throw exceptf<SimulationException>(*this, "I/O from non-existent device %u", (unsigned)from);
+            throw exceptf<>(*this, "I/O from non-existent device %u", (unsigned)from);
         }
 
         DebugIONetWrite("Sending interrupt request from device %u to channel %u", (unsigned)from, (unsigned)which);
@@ -96,7 +97,7 @@ namespace Simulator
     {
         if (from >= m_clients.size() || m_clients[from] == NULL)
         {
-            throw exceptf<SimulationException>(*this, "I/O from non-existent device %u", (unsigned)from);
+            throw exceptf<>(*this, "I/O from non-existent device %u", (unsigned)from);
         }
 
         DebugIONetWrite("Sending notification from device %u to channel %u (tag %#016llx)", (unsigned)from, (unsigned)which, (unsigned long long)tag);
@@ -114,7 +115,7 @@ namespace Simulator
         StorageTraceSet res;
         for (auto p : m_clients)
         {
-            res ^= p->GetReadRequestTraces() * opt(m_clients[from]->GetReadResponseTraces());
+           	res ^= p->GetReadRequestTraces() * opt(m_clients[from]->GetReadResponseTraces());
         }
         return res;
     }
@@ -124,7 +125,7 @@ namespace Simulator
         StorageTraceSet res;
         for (auto p : m_clients)
         {
-            res ^= p->GetWriteRequestTraces();
+           	res ^= p->GetWriteRequestTraces();
         }
         return res;
     }
@@ -134,7 +135,7 @@ namespace Simulator
         StorageTraceSet res;
         for (auto p : m_clients)
         {
-            res ^= p->GetReadResponseTraces();
+           	res ^= p->GetReadResponseTraces();
         }
         return res;
     }

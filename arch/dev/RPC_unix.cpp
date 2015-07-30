@@ -18,21 +18,14 @@ namespace Simulator
     UnixInterface::UnixInterface(const string& name, Object& parent)
         : Object(name, parent),
           m_vfds(17),
-          m_nrequests(0),
-          m_nfailures(0),
-          m_nstats(0),
-          m_nreads(0),
-          m_nread_bytes(0),
-          m_nwrites(0),
-          m_nwrite_bytes(0)
+          InitSampleVariable(nrequests, SVC_CUMULATIVE),
+          InitSampleVariable(nfailures, SVC_CUMULATIVE),
+          InitSampleVariable(nstats, SVC_CUMULATIVE),
+          InitSampleVariable(nreads, SVC_CUMULATIVE),
+          InitSampleVariable(nread_bytes, SVC_CUMULATIVE),
+          InitSampleVariable(nwrites, SVC_CUMULATIVE),
+          InitSampleVariable(nwrite_bytes, SVC_CUMULATIVE)
     {
-        RegisterSampleVariableInObject(m_nrequests, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nfailures, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nstats, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nreads, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nread_bytes, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nwrites, SVC_CUMULATIVE);
-        RegisterSampleVariableInObject(m_nwrite_bytes, SVC_CUMULATIVE);
     }
 
     UnixInterface::VirtualDescriptor* UnixInterface::GetEntry(UnixInterface::VirtualFD vfd)
@@ -40,6 +33,11 @@ namespace Simulator
         if (vfd >= m_vfds.size() || !m_vfds[vfd].active)
             return NULL;
         return &m_vfds[vfd];
+    }
+
+    const string& UnixInterface::GetName() const
+    {
+        return Object::GetName();
     }
 
     UnixInterface::VirtualFD UnixInterface::GetNewVFD(UnixInterface::HostFD hfd)
@@ -81,12 +79,12 @@ namespace Simulator
 #define RequireArgs(Arg1Size, Arg2Size)                                 \
     do {                                                                \
         if ((Arg1Size) && (int)arg1.size() < (Arg1Size))                \
-            throw exceptf<SimulationException>("Procedure %u requires at least %zu bytes in 1st memory argument, %zu were provided", \
+            throw exceptf<>("Procedure %u requires at least %zu bytes in 1st memory argument, %zu were provided", \
                                                (unsigned)procedure_id,  \
                                                (size_t)(Arg1Size),      \
                                                arg1.size());            \
         if ((Arg2Size) && (int)arg2.size() < (Arg2Size))                \
-            throw exceptf<SimulationException>("Procedure %u requires at least %zu bytes in 2nd memory argument, %zu were provided", \
+            throw exceptf<>("Procedure %u requires at least %zu bytes in 2nd memory argument, %zu were provided", \
                                                (unsigned)procedure_id,  \
                                                (size_t)(Arg2Size),      \
                                                arg2.size());            \
@@ -102,7 +100,7 @@ namespace Simulator
     {
         if (res1_maxsize < 12)
         {
-            throw exceptf<SimulationException>("Procedure %u requires at least 12 bytes available in 1st result area", (unsigned)procedure_id);
+            throw exceptf<>("Procedure %u requires at least 12 bytes available in 1st result area", (unsigned)procedure_id);
         }
 
         uint64_t rval = 0;

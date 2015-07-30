@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef IOBUS_H
 #define IOBUS_H
 
@@ -19,8 +20,14 @@ static const size_t MAX_IO_OPERATION_SIZE = 64;
 /* the data for an I/O request. */
 struct IOData
 {
-    char    data[MAX_IO_OPERATION_SIZE];
     MemSize size;
+    char    data[MAX_IO_OPERATION_SIZE];
+    SERIALIZE(a) {
+        a & "[iod";
+        a & size;
+        a & Serialization::binary(data, size);
+        a & "]";
+    }
 };
 
 class IIOBusClient
@@ -42,7 +49,7 @@ public:
 
     // Admin
     virtual void Initialize();
-    virtual std::string GetIODeviceName() const = 0;
+    virtual const std::string& GetIODeviceName() const = 0;
     virtual void GetDeviceIdentity(IODeviceIdentification& id) const = 0;
 
     virtual ~IIOBusClient();

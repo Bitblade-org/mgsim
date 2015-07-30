@@ -29,7 +29,7 @@ Result DebugChannel::Write(MemAddr address, const void *data, MemSize size, LFID
 {
     if (address % sizeof(Integer) != 0 || (size != 1 && size != sizeof(Integer)))
     {
-        throw exceptf<SimulationException>(*this, "Invalid debug channel access: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+        throw exceptf<>(*this, "Invalid debug channel access: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
     }
 
     address /= sizeof(Integer);
@@ -73,7 +73,7 @@ Result DebugChannel::Write(MemAddr address, const void *data, MemSize size, LFID
 }
 
 DebugChannel::DebugChannel(const std::string& name, Object& parent, std::ostream& output)
-    : MMIOComponent("debug_" + name, parent, parent.GetClock()),
+    : MMIOComponent("debug_" + name, parent),
       m_output(output),
       m_floatprecision(6)
 {

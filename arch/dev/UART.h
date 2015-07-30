@@ -1,12 +1,14 @@
+// -*- c++ -*-
 #ifndef UART_H
 #define UART_H
 
 #include "Selector.h"
 
-#include <arch/IOBus.h>
-#include <sim/kernel.h>
-#include <sim/storage.h>
-#include <sim/inspect.h>
+#include "arch/IOBus.h"
+#include "sim/kernel.h"
+#include "sim/flag.h"
+#include "sim/buffer.h"
+#include "sim/inspect.h"
 
 class Config;
 
@@ -18,13 +20,13 @@ namespace Simulator
         IIOBus& m_iobus;
         IODeviceID m_devid;
 
-        bool m_hwbuf_in_full;
-        unsigned char m_hwbuf_in;
+        DefineStateVariable(bool, hwbuf_in_full);
+        DefineStateVariable(unsigned char, hwbuf_in);
 
-        bool m_hwbuf_out_full;
-        unsigned char m_hwbuf_out;
+        DefineStateVariable(bool, hwbuf_out_full);
+        DefineStateVariable(unsigned char, hwbuf_out);
 
-        SingleFlag m_receiveEnable;
+        Flag    m_receiveEnable;
         Buffer<unsigned char> m_fifo_in;
         Process p_Receive;
         Result DoReceive();
@@ -33,9 +35,9 @@ namespace Simulator
         Process p_Transmit;
         Result DoTransmit();
 
-        unsigned char m_write_buffer;
+        DefineStateVariable(unsigned char, write_buffer);
 
-        SingleFlag m_sendEnable;
+        Flag    m_sendEnable;
         Process p_Send;
         Result DoSend();
 
@@ -43,42 +45,42 @@ namespace Simulator
         int m_error_in;
         int m_error_out;
 
-        bool m_readInterruptEnable;
+        DefineStateVariable(bool, readInterruptEnable);
 
-        SingleFlag m_readInterrupt;
+        Flag    m_readInterrupt;
         Process p_ReadInterrupt;
-        IONotificationChannelID m_readInterruptChannel;
+        DefineStateVariable(IONotificationChannelID, readInterruptChannel);
         Result DoSendReadInterrupt();
 
-        bool m_writeInterruptEnable;
-        size_t m_writeInterruptThreshold;
+        DefineStateVariable(bool, writeInterruptEnable);
+        DefineStateVariable(size_t, writeInterruptThreshold);
 
-        SingleFlag m_writeInterrupt;
+        Flag    m_writeInterrupt;
         Process p_WriteInterrupt;
-        IONotificationChannelID m_writeInterruptChannel;
+        DefineStateVariable(IONotificationChannelID, writeInterruptChannel);
         Result DoSendWriteInterrupt();
 
-        bool m_loopback;
-        unsigned char m_scratch;
+        DefineStateVariable(bool, loopback);
+        DefineStateVariable(unsigned char, scratch);
 
         std::string m_fin_name;
         std::string m_fout_name;
         int m_fd_in;
         int m_fd_out;
-        bool m_enabled;
+        DefineStateVariable(bool, enabled);
 
         Process p_dummy;
         Result DoNothing() { COMMIT{ p_dummy.Deactivate(); }; return SUCCESS; }
 
     public:
-        UART(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid, Config& config);
+        UART(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid);
 
 
         // from IIOBusClient
         bool OnReadRequestReceived(IODeviceID from, MemAddr addr, MemSize size);
         bool OnWriteRequestReceived(IODeviceID from, MemAddr addr, const IOData& data);
         void GetDeviceIdentity(IODeviceIdentification& id) const;
-        std::string GetIODeviceName() const;
+        const std::string& GetIODeviceName() const;
 
         // From ISelectorClient
         bool OnStreamReady(int fd, Selector::StreamState state);

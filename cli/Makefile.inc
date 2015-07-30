@@ -1,4 +1,6 @@
 CLI_SOURCES = \
+    cli/argument.cpp \
+    cli/argument.h \
 	cli/commands.h \
         cli/tables.cpp \
         cli/aliases.cpp \

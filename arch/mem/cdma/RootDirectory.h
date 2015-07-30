@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef CDMA_ROOTDIRECTORY_H
 #define CDMA_ROOTDIRECTORY_H
 
@@ -63,14 +64,14 @@ private:
     Result DoResponses();
 
     // Statistics
-    uint64_t          m_nreads;
-    uint64_t          m_nwrites;
+    DefineSampleVariable(uint64_t, nreads);
+    DefineSampleVariable(uint64_t, nwrites);
 
     // Administrative
     friend class CDMA;
 
 public:
-    RootDirectory(const std::string& name, CDMA& parent, Clock& clock, size_t id, const DDRChannelRegistry& ddr, Config& config);
+    RootDirectory(const std::string& name, CDMA& parent, Clock& clock, size_t id, const DDRChannelRegistry& ddr);
     RootDirectory(const RootDirectory&) = delete;
     RootDirectory& operator=(const RootDirectory&) = delete;
 

@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef COMMANDS_H
 #define COMMANDS_H
 
@@ -30,9 +31,10 @@ extern command_handler
     cmd_bp_disable,
     cmd_bp_enable,
     cmd_bp_off,
-     cmd_bp_on,
+    cmd_bp_on,
     cmd_bp_state,
     cmd_disas,
+    cmd_dump,
     cmd_help,
     cmd_info,
     cmd_line,
@@ -40,6 +42,7 @@ extern command_handler
     cmd_quit,
     cmd_inspect,
     cmd_run,
+    cmd_set,
     cmd_show_vars,
     cmd_show_syms,
     cmd_show_components,
@@ -50,7 +53,8 @@ extern command_handler
     cmd_run,
     cmd_trace_show,
     cmd_trace_debug,
-    cmd_trace_line;
+    cmd_trace_line,
+    cmd_write;
 
 struct command_descriptor
 {

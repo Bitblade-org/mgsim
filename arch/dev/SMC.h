@@ -1,3 +1,4 @@
+// -*- c++ -*-
 #ifndef SMC_H
 #define SMC_H
 
@@ -27,7 +28,7 @@ namespace Simulator
         bool OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size);
 
         void GetDeviceIdentity(IODeviceIdentification& id) const;
-        std::string GetIODeviceName() const;
+        const std::string& GetIODeviceName() const;
     };
 
 

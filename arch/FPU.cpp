@@ -1,6 +1,8 @@
-#include "FPU.h"
-#include <sim/config.h>
+#include "sim/config.h"
+#include "arch/FPU.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cassert>
 #include <cmath>
 #include <iomanip>
@@ -9,6 +11,33 @@ using namespace std;
 
 namespace Simulator
 {
+
+struct FPU::Operation
+{
+    FPUOperation op;
+    int          size;
+    double       Rav, Rbv;
+    RegAddr      Rc;
+    std::string  str() const;
+    SERIALIZE(a) { a & op & size & Rav & Rbv & Rc; }
+};
+
+class FPU::Source : public Object
+{
+private:
+    Buffer<Operation>        inputs;     ///< Input queue for operations from this source
+    StorageTraceSet          outputs;    ///< Set of storage trace each output can generate
+    IFPUClient*              client;     ///< Component accepting results for this source
+    DefineStateVariable(CycleNo, last_write); ///< Last time an FPU pipe wrote back to this source
+    DefineStateVariable(unsigned, last_unit);  ///< Unit that did the last (or current) write
+
+    friend class FPU;
+public:
+    Source(const std::string& name, Object& parent, Clock& clock);
+    Source(const Source&) = delete;
+    Source& operator=(const Source&) = delete;
+};
+
 
 static const char* const OperationNames[FPU_NUM_OPS] = {
     "ADD", "SUB", "MUL", "DIV", "SQRT"
@@ -59,12 +88,10 @@ size_t FPU::RegisterSource(IFPUClient& client, const StorageTraceSet& output)
 
 string FPU::Operation::str() const
 {
-    ostringstream ss;
-    ss << OperationNames[op] << size * 8
-       << ' ' << setprecision(12) << Rav
-       << ", " << setprecision(12) << Rbv
-       << ", " << Rc.str();
-    return ss.str();
+    return OperationNames[op] + std::to_string(size * 8)
+        + ' ' + std::to_string(Rav)
+        + ", " + std::to_string(Rbv)
+        + ", " + Rc.str();
 }
 
 bool FPU::QueueOperation(size_t source, FPUOperation fop, int size, double Rav, double Rbv, const RegAddr& Rc)
@@ -119,17 +146,17 @@ FPU::Result FPU::CalculateResult(const Operation& op) const
 
 bool FPU::OnCompletion(unsigned int unit, const Result& res) const
 {
-    const CycleNo now = GetCycleNo();
+    const CycleNo now = GetKernel()->GetActiveClock()->GetCycleNo();
 
     Source *source = m_sources[res.source];
 
-    if (source->last_write == now && source->last_unit != unit)
+    if (source->m_last_write == now && source->m_last_unit != unit)
     {
         DeadlockWrite("Unable to write back result because another FPU pipe already wrote back this cycle");
         return false;
     }
-    source->last_write = now;
-    source->last_unit  = unit;
+    source->m_last_write = now;
+    source->m_last_unit  = unit;
 
     // Calculate the address of this register
     RegAddr addr = res.address;
@@ -282,23 +309,23 @@ Result FPU::DoPipeline()
     return (num_units_failed == num_units_active && num_sources_failed == num_sources_active) ? FAILED : SUCCESS;
 }
 
-FPU::Source::Source(const std::string& name, Object& parent, Clock& clock, Config& config)
-    : Object(name, parent, clock),
-      inputs("b_source", *this, clock, config.getValue<BufferSize>(*this, "InputQueueSize")),
+FPU::Source::Source(const std::string& name, Object& parent, Clock& clock)
+    : Object(name, parent),
+      InitBuffer(inputs, clock, "InputQueueSize"),
       outputs(),
       client(NULL),
-      last_write(0),
-      last_unit(0)
+      InitStateVariable(last_write, 0),
+      InitStateVariable(last_unit, 0)
 {}
 
 
-FPU::FPU(const std::string& name, Object& parent, Clock& clock, Config& config, size_t num_inputs)
-    : Object(name, parent, clock),
-      m_active("r_active", *this, clock),
+FPU::FPU(const std::string& name, Object& parent, Clock& clock, size_t num_inputs)
+    : Object(name, parent),
+      InitStorage(m_active, clock),
       m_sources(),
       m_units(),
       m_last_source(0),
-      p_Pipeline(*this, "pipeline", delegate::create<FPU, &FPU::DoPipeline>(*this) )
+      InitProcess(p_Pipeline, DoPipeline)
 {
     m_active.Sensitive(p_Pipeline);
     try
@@ -308,21 +335,19 @@ FPU::FPU(const std::string& name, Object& parent, Clock& clock, Config& config, 
         };
 
         // Construct the FP units
-        size_t nUnits = config.getValue<size_t>(*this, "NumUnits");
+        size_t nUnits = GetConf("NumUnits", size_t);
         if (nUnits == 0)
         {
             throw InvalidArgumentException(*this, "NumUnits not set or zero");
         }
         for (size_t i = 0; i < nUnits; ++i)
         {
-            stringstream ssname;
-            ssname << "Unit" << i;
-            string uname = ssname.str();
+            auto uname = "Unit" + std::to_string(i);
 
             set<FPUOperation> ops;
 
             // Get ops for this unit
-            auto strops = config.getWordList(*this, uname + "Ops");
+            auto strops = GetConfStrings(uname + "Ops");
             for (auto& p : strops)
             {
                 transform(p.begin(), p.end(), p.begin(), ::toupper);
@@ -345,20 +370,20 @@ FPU::FPU(const std::string& name, Object& parent, Clock& clock, Config& config, 
             }
 
             Unit unit;
-            unit.latency   = config.getValue<CycleNo>(*this, uname+"Latency");
-            unit.pipelined = config.getValue<bool>   (*this, uname+"Pipelined");
+            unit.latency   = GetConf(uname + "Latency", CycleNo);
+            unit.pipelined = GetConf(uname + "Pipelined", bool);
             m_units.push_back(unit);
         }
+        for (auto &unit : m_units)
+            RegisterStateObject(unit, "unit" + to_string(&unit - &m_units[0]));
 
         // Construct the sources
         for (size_t i = 0; i < num_inputs; ++i)
         {
-            stringstream ssname;
-            ssname << "source" << i;
-            string sname = ssname.str();
+            auto sname = "source" + std::to_string(i);
 
             m_sources.push_back(NULL);
-            Source* source = new Source(sname, *this, clock, config);
+            Source* source = new Source(sname, *this, clock);
             source->inputs.Sensitive(p_Pipeline);
             m_sources.back() = source;
         }
@@ -467,9 +492,12 @@ void FPU::Cmd_Read(std::ostream& out, const std::vector<std::string>& /*argument
                 out << setw(2) << p.state << " | "
                     << setw(2) << p.size * 8 << " | "
                     << setw(20) << setprecision(12) << p.value.tofloat(p.size)  << " | "
-                    << p.address.str() << " | "
-                    << m_sources[p.source]->client->GetName()
-                    << endl;
+                    << p.address.str() << " | ";
+                if (p.source < m_sources.size() && m_sources[p.source]->client)
+                    out << m_sources[p.source]->client->GetName();
+                else
+                    out << "<invalid source>";
+                out << endl;
             }
             out << endl;
         }

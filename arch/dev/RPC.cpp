@@ -1,5 +1,6 @@
-#include "RPC.h"
-#include <sim/config.h>
+#include <cstring>
+#include "sim/config.h"
+#include <arch/dev/RPC.h>
 
 /*
 
@@ -88,45 +89,58 @@ The following processes run concurrently (pipeline):
 namespace Simulator
 {
 
-    RPCInterface::RPCInterface(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid, Config& config, IRPCServiceProvider& provider)
-        : Object(name, parent, iobus.GetClock()),
+    RPCInterface::RPCInterface(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid, IRPCServiceProvider& provider)
+        : Object(name, parent),
           m_iobus(iobus),
           m_devid(devid),
 
-          m_lineSize(config.getValueOrDefault<size_t>(*this, "RPCLineSize", config.getValue<size_t>("CacheLineSize"))),
+          m_lineSize(GetConfOpt("RPCLineSize", size_t, GetTopConf("CacheLineSize", size_t))),
 
           m_inputLatch(),
 
-          m_fetchState(ARGFETCH_READING1),
-          m_currentArgumentOffset(0),
-          m_numPendingDCAReads(0),
-          m_maxArg1Size(config.getValue<size_t>(*this, "RPCBufferSize1")),
-          m_maxArg2Size(config.getValue<size_t>(*this, "RPCBufferSize2")),
+          InitStateVariable(fetchState, ARGFETCH_READING1),
+          InitStateVariable(currentArgumentOffset, 0),
+          InitStateVariable(numPendingDCAReads, 0),
+          m_maxArg1Size(GetConf("RPCBufferSize1", size_t)),
+          m_maxArg2Size(GetConf("RPCBufferSize2", size_t)),
           m_maxRes1Size(m_maxArg1Size),
           m_maxRes2Size(m_maxArg2Size),
           m_currentArgData1(m_maxArg1Size, 0),
           m_currentArgData2(m_maxArg2Size, 0),
 
-          m_writebackState(RESULTWB_WRITING1),
-          m_currentResponseOffset(0),
+          InitStateVariable(writebackState, RESULTWB_WRITING1),
+          InitStateVariable(currentResponseOffset, 0),
 
-          m_queueEnabled ("f_queue",         *this, iobus.GetClock(), false),
-          m_incoming     ("b_incoming",      *this, iobus.GetClock(), config.getValue<BufferSize>(*this, "RPCIncomingQueueSize")),
-          m_ready        ("b_ready",         *this, iobus.GetClock(), config.getValue<BufferSize>(*this, "RPCReadyQueueSize")),
-          m_completed    ("b_completed",     *this, iobus.GetClock(), config.getValue<BufferSize>(*this, "RPCCompletedQueueSize")),
-          m_notifications("b_notifications", *this, iobus.GetClock(), config.getValue<BufferSize>(*this, "RPCNotificationQueueSize")),
+          InitStorage(m_queueEnabled, iobus.GetClock(), false),
+          InitBuffer(m_incoming, iobus.GetClock(), "RPCIncomingQueueSize"),
+          InitBuffer(m_ready, iobus.GetClock(), "RPCReadyQueueSize"),
+          InitBuffer(m_completed, iobus.GetClock(), "RPCCompletedQueueSize"),
+          InitBuffer(m_notifications, iobus.GetClock(), "RPCNotificationQueueSize"),
 
           m_provider(provider),
 
-          p_queue                      (*this, "queue-request",                 delegate::create<RPCInterface, &RPCInterface::DoQueue>(*this)),
-          p_argumentFetch              (*this, "fetch-argument-data",           delegate::create<RPCInterface, &RPCInterface::DoArgumentFetch>(*this)),
-          p_processRequests            (*this, "process-requests",              delegate::create<RPCInterface, &RPCInterface::DoProcessRequests>(*this)),
-          p_writeResponse              (*this, "write-response",                delegate::create<RPCInterface, &RPCInterface::DoWriteResponse>(*this)),
-          p_sendCompletionNotifications(*this, "send-completion-notifications", delegate::create<RPCInterface, &RPCInterface::DoSendCompletionNotifications>(*this))
+          InitProcess(p_queueRequest, DoQueue),
+          InitProcess(p_argumentFetch, DoArgumentFetch),
+          InitProcess(p_processRequests, DoProcessRequests),
+          InitProcess(p_writeResponse, DoWriteResponse),
+          InitProcess(p_sendCompletionNotifications, DoSendCompletionNotifications)
     {
+        RegisterStateVariable(m_inputLatch.procedure_id, "inputLatch.pid");
+        RegisterStateVariable(m_inputLatch.extra_arg1, "inputLatch.ea1");
+        RegisterStateVariable(m_inputLatch.extra_arg2, "inputLatch.ea2");
+        RegisterStateVariable(m_inputLatch.dca_device_id, "inputLatch.ddid");
+        RegisterStateVariable(m_inputLatch.arg1_base_address, "inputLatch.a1b");
+        RegisterStateVariable(m_inputLatch.arg1_size, "inputLatch.a1s");
+        RegisterStateVariable(m_inputLatch.arg2_base_address, "inputLatch.a2b");
+        RegisterStateVariable(m_inputLatch.arg2_size, "inputLatch.a2s");
+        RegisterStateVariable(m_inputLatch.res1_base_address, "inputLatch.r1b");
+        RegisterStateVariable(m_inputLatch.res2_base_address, "inputLatch.r2b");
+        RegisterStateVariable(m_inputLatch.completion_tag, "inputLatch.ct");
+        RegisterStateVariable(m_inputLatch.notification_channel_id, "inputLatch.ncid");
+
         iobus.RegisterClient(devid, *this);
 
-        m_queueEnabled.Sensitive(p_queue);
+        m_queueEnabled.Sensitive(p_queueRequest);
         m_incoming.Sensitive(p_argumentFetch);
         m_ready.Sensitive(p_processRequests);
         m_completed.Sensitive(p_writeResponse);
@@ -137,7 +151,7 @@ namespace Simulator
             throw exceptf<InvalidArgumentException>(*this, "RPCLineSize cannot be zero");
         }
 
-        p_queue.SetStorageTraces(m_incoming);
+        p_queueRequest.SetStorageTraces(m_incoming);
         p_argumentFetch.SetStorageTraces(m_iobus.GetReadRequestTraces(m_devid) ^ m_ready);
         p_processRequests.SetStorageTraces(m_completed);
         p_writeResponse.SetStorageTraces(m_iobus.GetWriteRequestTraces() ^ m_iobus.GetReadRequestTraces(m_devid) ^ m_notifications);
@@ -220,16 +234,14 @@ namespace Simulator
         }
         case ARGFETCH_FINALIZE:
         {
-            ProcessRequest preq(
-                req.procedure_id,
-                req.extra_arg1,
-                req.extra_arg2,
-                req.dca_device_id,
-                req.res1_base_address,
-                req.res2_base_address,
-                req.notification_channel_id,
-                req.completion_tag
-                );
+            ProcessRequest preq(req.procedure_id,
+                                req.extra_arg1,
+                                req.extra_arg2,
+                                req.dca_device_id,
+                                req.res1_base_address,
+                                req.res2_base_address,
+                                req.completion_tag,
+                                req.notification_channel_id);
 
             COMMIT {
                 preq.data1.insert(preq.data1.begin(), m_currentArgData1.begin(), m_currentArgData1.begin() + req.arg1_size);
@@ -518,14 +530,14 @@ namespace Simulator
 
         if (address % 4 != 0 || data.size != 4)
         {
-            throw exceptf<SimulationException>(*this, "Invalid unaligned RPC write: %#016llx (%u)", (unsigned long long)address, (unsigned)data.size);
+            throw exceptf<>(*this, "Invalid unaligned RPC write: %#016llx (%u)", (unsigned long long)address, (unsigned)data.size);
         }
 
         unsigned word = address / 4;
 
         if (word == 3 || word > 17)
         {
-            throw exceptf<SimulationException>(*this, "Invalid RPC write to word: %u", word);
+            throw exceptf<>(*this, "Invalid RPC write to word: %u", word);
         }
 
         uint32_t value = UnserializeRegister(RT_INTEGER, data.data, 4);
@@ -615,14 +627,14 @@ namespace Simulator
 
         if (address % 4 != 0 || size != 4)
         {
-            throw exceptf<SimulationException>(*this, "Invalid unaligned RPC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+            throw exceptf<>(*this, "Invalid unaligned RPC read: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
         }
 
         unsigned word = address / 4;
 
         if (word == 3 || (word > 17 && word < 64) || word > 75)
         {
-            throw exceptf<SimulationException>(*this, "Invalid RPC read from word: %u", word);
+            throw exceptf<>(*this, "Invalid RPC read from word: %u", word);
         }
 
         uint32_t value = 0;
@@ -699,8 +711,9 @@ namespace Simulator
         }
     }
 
-
-
-
+    const std::string& RPCInterface::GetIODeviceName() const
+    {
+        return GetName();
+    }
 
 }

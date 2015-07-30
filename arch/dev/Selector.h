@@ -1,10 +1,11 @@
+// -*- c++ -*-
 #ifndef SELECTOR_H
 #define SELECTOR_H
 
-#include <sim/delegate.h>
-#include <sim/kernel.h>
-#include <sim/storage.h>
-#include <sim/inspect.h>
+#include "sim/delegate.h"
+#include "sim/kernel.h"
+#include "sim/flag.h"
+#include "sim/inspect.h"
 
 class Config;
 
@@ -17,7 +18,7 @@ namespace Simulator
     {
         static Selector*     m_singleton;
 
-        SingleFlag m_doCheckStreams;
+        Flag       m_doCheckStreams;
 
     public:
 
@@ -27,7 +28,7 @@ namespace Simulator
             WRITABLE = 2,
         };
 
-        Selector(const std::string& name, Object& parent, Clock& clock, Config& config);
+        Selector(const std::string& name, Object& parent, Clock& clock);
         ~Selector();
 
         Process p_checkStreams;

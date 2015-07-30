@@ -1,10 +1,11 @@
+// -*- c++ -*-
 #ifndef RTC_H
 #define RTC_H
 
-#include <arch/IOBus.h>
-#include <sim/kernel.h>
-#include <sim/config.h>
-#include <sim/storage.h>
+#include "arch/IOBus.h"
+#include "sim/kernel.h"
+#include "sim/config.h"
+#include "sim/flag.h"
 
 #include <ctime>
 #include <sys/time.h>
@@ -19,19 +20,19 @@ namespace Simulator
     {
         bool            m_timerTicked;
 
-        precise_time_t  m_timeOfLastInterrupt;
-        clock_delay_t   m_triggerDelay;
-        bool            m_deliverAllEvents;
+        DefineStateVariable(precise_time_t, timeOfLastInterrupt);
+        DefineStateVariable(clock_delay_t, triggerDelay);
+        DefineStateVariable(bool, deliverAllEvents);
 
-        SingleFlag      m_enableCheck;
+        Flag            m_enableCheck;
 
 
         class RTCInterface : public IIOBusClient, public Object
         {
             IODeviceID      m_devid;
             IIOBus&         m_iobus;
-            SingleFlag      m_doNotify;
-            IONotificationChannelID   m_interruptNumber;
+            Flag            m_doNotify;
+            DefineStateVariable(IONotificationChannelID, interruptNumber);
 
             RTC&            GetRTC() { return *dynamic_cast<RTC*>(GetParent()); }
 
@@ -49,7 +50,7 @@ namespace Simulator
 
             // Admin
             void Initialize();
-            std::string GetIODeviceName() const { return GetFQN(); }
+            const std::string& GetIODeviceName() const;
             void GetDeviceIdentity(IODeviceIdentification& id) const;
         };
 
@@ -58,7 +59,7 @@ namespace Simulator
 
     public:
 
-        RTC(const std::string& name, Object& parent, Clock& clock, IIOBus& iobus, IODeviceID devid, Config& config);
+        RTC(const std::string& name, Object& parent, Clock& clock, IIOBus& iobus, IODeviceID devid);
 
         Process p_checkTime;
 

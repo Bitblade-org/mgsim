@@ -1,5 +1,5 @@
-#include "DCache.h"
-#include "DRISC.h"
+#include <arch/drisc/DCache.h>
+#include <arch/drisc/DRISC.h>
 #include <sim/log2.h>
 #include <sim/config.h>
 #include <sim/sampling.h>
@@ -16,54 +16,45 @@ namespace Simulator
 namespace drisc
 {
 
-DCache::DCache(const std::string& name, DRISC& parent, Clock& clock, Config& config)
-:   Object(name, parent, clock),
+DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
+:   Object(name, parent),
     m_memory(NULL),
     m_mcid(0),
     m_lines(),
+    m_data(),
+    m_valid(0),
 
-    m_assoc          (config.getValue<size_t>(*this, "Associativity")),
-    m_sets           (config.getValue<size_t>(*this, "NumSets")),
-    m_lineSize       (config.getValue<size_t>("CacheLineSize")),
-    m_selector       (IBankSelector::makeSelector(*this, config.getValue<string>(*this, "BankSelector"), m_sets)),
-    m_read_responses ("b_read_responses", *this, clock, config.getValue<BufferSize>(*this, "ReadResponsesBufferSize")),
-    m_write_responses("b_write_responses", *this, clock, config.getValue<BufferSize>(*this, "WriteResponsesBufferSize")),
-    m_writebacks     ("b_writebacks", *this, clock, config.getValue<BufferSize>(*this, "ReadWritebacksBufferSize")),
-    m_outgoing       ("b_outgoing", *this, clock, config.getValue<BufferSize>(*this, "OutgoingBufferSize")),
+    m_assoc          (GetConf("Associativity", size_t)),
+    m_sets           (GetConf("NumSets", size_t)),
+    m_lineSize       (GetTopConf("CacheLineSize", size_t)),
+    m_selector       (IBankSelector::makeSelector(*this, GetConf("BankSelector", string), m_sets)),
+    InitBuffer(m_read_responses, clock, "ReadResponsesBufferSize"),
+    InitBuffer(m_write_responses, clock, "WriteResponsesBufferSize"),
+    InitBuffer(m_writebacks, clock, "ReadWritebacksBufferSize"),
+    InitBuffer(m_outgoing, clock, "OutgoingBufferSize"),
     m_wbstate(),
-    m_numRHits        (0),
-    m_numDelayedReads (0),
-    m_numEmptyRMisses (0),
-    m_numInvalidRMisses(0),
-    m_numLoadingRMisses(0),
-    m_numHardConflicts(0),
-    m_numResolvedConflicts(0),
-    m_numWAccesses    (0),
-    m_numWHits        (0),
-    m_numPassThroughWMisses(0),
-    m_numLoadingWMisses(0),
-    m_numStallingRMisses(0),
-    m_numStallingWMisses(0),
-    m_numSnoops(0),
+    InitSampleVariable(numRHits, SVC_CUMULATIVE),//MLDTODO Registreren variabelen voorbeeld
+    InitSampleVariable(numDelayedReads, SVC_CUMULATIVE),
+    InitSampleVariable(numEmptyRMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numInvalidRMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numLoadingRMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numHardConflicts, SVC_CUMULATIVE),
+    InitSampleVariable(numResolvedConflicts, SVC_CUMULATIVE),
+    InitSampleVariable(numWAccesses, SVC_CUMULATIVE),
+    InitSampleVariable(numWHits, SVC_CUMULATIVE),
+    InitSampleVariable(numPassThroughWMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numLoadingWMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numStallingRMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numStallingWMisses, SVC_CUMULATIVE),
+    InitSampleVariable(numSnoops, SVC_CUMULATIVE),
 
-    p_ReadWritebacks(*this, "read-writebacks", delegate::create<DCache, &DCache::DoReadWritebacks  >(*this) ),
-    p_ReadResponses (*this, "read-responses",  delegate::create<DCache, &DCache::DoReadResponses   >(*this) ),
-    p_WriteResponses(*this, "write-responses", delegate::create<DCache, &DCache::DoWriteResponses  >(*this) ),
-    p_Outgoing      (*this, "outgoing",        delegate::create<DCache, &DCache::DoOutgoingRequests>(*this) ),
+    InitProcess(p_ReadWritebacks, DoReadWritebacks),
+    InitProcess(p_ReadResponses, DoReadResponses),
+    InitProcess(p_WriteResponses, DoWriteResponses),
+    InitProcess(p_Outgoing, DoOutgoingRequests),
 
-    p_service        (*this, clock, "p_service")
+    p_service       (clock, GetName() + ".p_service")
 {
-    RegisterSampleVariableInObject(m_numRHits, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numEmptyRMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numLoadingRMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numInvalidRMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numHardConflicts, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numResolvedConflicts, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numWHits, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numLoadingWMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numStallingRMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numStallingWMisses, SVC_CUMULATIVE);
-    RegisterSampleVariableInObject(m_numPassThroughWMisses, SVC_CUMULATIVE);
 
     m_writebacks.Sensitive(p_ReadWritebacks);
     m_read_responses.Sensitive(p_ReadResponses);
@@ -93,16 +84,25 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock, Config& con
     }
 
     m_lines.resize(m_sets * m_assoc);
+    m_data.resize(m_lines.size() * m_lineSize);
+    m_valid = new bool[m_lines.size() * m_lineSize];
+
+    RegisterStateArray(m_valid, m_lines.size() * m_lineSize, "valid"); //MLDTODO Registreren variabelen voorbeeld
+    RegisterStateVariable(m_data, "data");//MLDTODO Registreren variabelen voorbeeld
+
     for (size_t i = 0; i < m_lines.size(); ++i)
     {
-        m_lines[i].state  = LINE_EMPTY;
-        m_lines[i].data   = new char[m_lineSize];
-        m_lines[i].valid  = new bool[m_lineSize];
-        m_lines[i].create = false;
+        auto &line = m_lines[i];
+        line.state  = LINE_EMPTY;
+        line.data   = &m_data[i * m_lineSize];
+        line.valid  = &m_valid[i * m_lineSize];
+        line.create = false;
+        RegisterStateObject(line, "line" + to_string(i));
     }
 
     m_wbstate.size   = 0;
     m_wbstate.offset = 0;
+    RegisterStateObject(m_wbstate, "wbstate");//MLDTODO Registreren variabelen voorbeeld
 }
 
 void DCache::ConnectMemory(IMemory* memory)
@@ -119,11 +119,7 @@ void DCache::ConnectMemory(IMemory* memory)
 
 DCache::~DCache()
 {
-    for (size_t i = 0; i < m_lines.size(); ++i)
-    {
-        delete[] m_lines[i].data;
-        delete[] m_lines[i].valid;
-    }
+    delete m_valid;
     delete m_selector;
 }
 
@@ -222,6 +218,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         return FAILED;
     }
 
+    //MLDTODO Perform TLB request
+
     Line*  line;
     Result result;
     // SUCCESS - A line with the address was found
@@ -231,16 +229,22 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     {
         // Cache-miss and no free line
         // DeadlockWrite() is done in FindLine
+
+    	//MLDNOTE (first) LOAD, MISS, WAITING, != tag
+    	//MLDTODO Handle TLB request result
         ++m_numHardConflicts;
         return FAILED;
     }
 
     // Update last line access
-    COMMIT{ line->access = GetCycleNo(); }
+    COMMIT{ line->access = cpu.GetCycleNo(); }
 
     if (result == DELAYED)
     {
+    	//MLDNOTE LOAD, MISS, AVAIL
+    	//MLDTODO Handle TLB request result
         // A new line has been allocated; send the request to memory
+
         Request request;
         request.write     = false;
         request.address   = address - offset;
@@ -276,6 +280,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         if (i == size)
         {
             // Data is entirely in the cache, copy it
+        	//MLDNOTE LOAD, HIT
+        	//MLDTODO Handle TLB request result
             COMMIT
             {
                 memcpy(data, line->data + offset, (size_t)size);
@@ -287,6 +293,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         // Data is not entirely in the cache; it should be loading from memory
         if (line->state != LINE_LOADING)
         {
+        	//MLDNOTE (second) LOAD, MISS, WAITING, != tag
+        	//MLDTODO Handle TLB request result
             assert(line->state == LINE_INVALID);
             ++m_numInvalidRMisses;
             return FAILED;
@@ -301,6 +309,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     COMMIT
     {
         line->state = LINE_LOADING;
+        //MLDNOTE LOAD, MISS, WAITING, == tag
+        //MLDTODO Handle TLB request result
         if (reg != NULL && reg->valid())
         {
             // We're loading to a valid register, queue it
@@ -354,6 +364,8 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
         return FAILED;
     }
 
+    //MLDTODO Perform TLB Request
+
     Line* line = NULL;
     Result result = FindLine(address, line, true);
     if (result == SUCCESS)
@@ -362,6 +374,8 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
 
         if (line->state == LINE_LOADING || line->state == LINE_INVALID)
         {
+        	//MLDNOTE STORE, MISS, WAITING, *
+        	//MLDTODO Handle TLB request result
             // We cannot write into a loading line or we might violate the
             // sequential semantics of a single thread because pending reads
             // might get the later write's data.
@@ -382,6 +396,7 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
             // Update the line
             assert(line->state == LINE_FULL);
             COMMIT{
+            	//MLDNOTE STORE, HIT
                 std::copy((char*)data, (char*)data + size, line->data + offset);
                 std::fill(line->valid + offset, line->valid + offset + size, true);
 
@@ -395,11 +410,15 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
         COMMIT{ ++m_numPassThroughWMisses; }
     }
 
-    // Store request for memory (pass-through)
+    //MLDNOTE STORE, MISS, AVAIL
+    //MLDTODO Handle TLB request result
     Request request;
     request.write     = true;
     request.address   = address - offset;
-    request.wid       = tid;
+    request.wid       = tid;//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
+    //MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
+    //MLDNOTE Beginnen met een stall.
+    //MLDTODO-DOC Hoort ook weer in scriptie.
 
     COMMIT{
     std::copy((char*)data, ((char*)data)+size, request.data.data+offset);
