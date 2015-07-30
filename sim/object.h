@@ -130,6 +130,7 @@ namespace Simulator
 
 
 #define COMMIT  if (IsCommitting())
+#define COMMITCLI if(IsCommitting() || GetKernel()->GetActiveProcess() == NULL)
 
 // Define these "methods" as macros to allow for optimizations
 #define DebugDo_(CAT, msg, ...) \
