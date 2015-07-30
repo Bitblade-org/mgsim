@@ -241,31 +241,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     // Update last line access
     COMMIT{ line->access = cpu.GetCycleNo(); }
 
-    if (result == DELAYED)
-    {
-    	//MLDNOTE LOAD, MISS, AVAIL
-    	//MLDTODO Handle TLB request result
-        // A new line has been allocated; send the request to memory
 
-        Request request;
-        request.write     = false;
-        request.address   = address - offset;
-        if (!m_outgoing.Push(request))
-        {
-            ++m_numStallingRMisses;
-            DeadlockWrite("Unable to push request to outgoing buffer");
-            return FAILED;
-        }
-
-        // statistics
-        COMMIT {
-            if (line->state == LINE_EMPTY)
-                ++m_numEmptyRMisses;
-            else
-                ++m_numResolvedConflicts;
-        }
-    }
-    else // result == SUCCESS
+    if(result == SUCCESS)
     {
         // Check if the data that we want is valid in the line.
         // This happens when the line is FULL, or LOADING and has been
@@ -305,6 +282,33 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         COMMIT{ ++m_numLoadingRMisses; }
 
     }
+    else if (result == DELAYED)
+    {
+    	//MLDNOTE LOAD, MISS, AVAIL
+    	//MLDTODO Handle TLB request result
+        // A new line has been allocated; send the request to memory
+
+        Request request;
+        request.write     = false;
+        request.address   = address - offset;
+        if (!m_outgoing.Push(request))
+        {
+            ++m_numStallingRMisses;
+            DeadlockWrite("Unable to push request to outgoing buffer");
+            return FAILED;
+        }
+
+        // statistics
+        COMMIT {
+            if (line->state == LINE_EMPTY)
+                ++m_numEmptyRMisses;
+            else
+                ++m_numResolvedConflicts;
+        }
+    }
+    else
+    { UNREACHABLE }
+
 
     // Data is being loaded, add request to the queue
     COMMIT
