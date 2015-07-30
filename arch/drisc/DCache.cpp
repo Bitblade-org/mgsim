@@ -221,11 +221,11 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     //MLDTODO Perform TLB request
 
     Line*  line;
-    Result result;
+    Result result = FindLine(address - offset, line, false);
     // SUCCESS - A line with the address was found
     // DELAYED - The line with the address was not found, but a line has been allocated
     // FAILED  - No usable line was found at all and could not be allocated
-    if ((result = FindLine(address - offset, line, false)) == FAILED)
+    if (result == FAILED)
     {
         // Cache-miss and no free line
         // DeadlockWrite() is done in FindLine
