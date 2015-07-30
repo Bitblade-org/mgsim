@@ -1,0 +1,13 @@
+BUG: 
+
+    NullIO::RegisterClient(IODeviceID id, IIOBusClient& client) seems to allow a 
+    random IODeviceID. However, the implementation requires the id's to start at 
+    zero and be contiguous. 
+
+
+
+REPRODUCE: 
+
+    - Build mgsim using the configure arguments in ../conf.args
+    - Run mgsim using ../config.ini and ../boot.bin and the 
+      command-line option "--override=jtag:deviceid=42"  

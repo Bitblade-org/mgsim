@@ -1,0 +1,15 @@
+BUG: 
+
+    Whilst checking of storage traces can be disabled during the configuration
+    step, it is not possible to stop the simulator from storing them without
+    code modifications. 
+    
+    This limits the number of IO devices severely, since the number of storage
+    traces increases polynomially with the number of IO devices.
+    
+    
+REPRODUCE: 
+
+    - Replace sim/storagetrace.h with ./storagetrace.enabled.h
+    - Build mgsim using the configure arguments in ../conf.args
+    - Run mgsim using ../config.ini and ../boot.bin

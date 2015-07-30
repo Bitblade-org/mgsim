@@ -1,0 +1,11 @@
+#Modified version of coma128
+
+DESCRIPTION="8-core, ML's COMA, 1GHz cores, 4xDDR3-1600, 128K L2 caches"
+simargs_base+=(-o NumProcessors=8)
+
+# DDR timings for DDR3-1600 and 1GHz cores are defaults in mgsim
+simargs_base+=(-o MemoryType=COMA)
+
+# Four channels = 4 root directories
+# simargs_base+=(-o \*Memory:NumRootDirectories=4) # should be default now
+

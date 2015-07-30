@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+rm ./test.bin
+slc -b mta test.c -I../../programs -o test.bin
+cp test.bin ../../bugs/memory_not_shared
+cp test.c ../../bugs/memory_not_shared
+cp test.bin ../../../../mgexec/slr/assets/boot.bin
+../../../../mgexec/slr/run_normal 
+

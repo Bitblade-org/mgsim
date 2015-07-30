@@ -1,0 +1,13 @@
+BUG: 
+
+    The architecture simulated in mgsim has cores sharing the same system 
+    memory. However, during the simulation the memory contents as seen from 
+    different cores differs. It does seem to synchronise when certain functions
+    like printf are called. 
+    
+    
+REPRODUCE: 
+    N.B. The source for test.bin is included in ./test.c
+
+    - Build mgsim using the configure arguments in ../conf.args
+    - Run mgsim using ../config.ini and ./test.bin (NOT ../boot.bin)

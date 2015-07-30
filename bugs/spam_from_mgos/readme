@@ -1,0 +1,13 @@
+BUG: 
+
+    There seems to be a bug in mgos, causing it to communicate with the wrong
+    devices over the IO bus.  
+
+
+REPRODUCE: 
+
+    - Build mgsim using the configure arguments in ../conf.args
+    - Run mgsim using ../config.ini and ../boot.bin and the 
+      command-line option "--override=CPU*.IO_IF.AIO:DeviceAddressBits=24"  
+    - Notice the TLB's outputting a lot of warnings in the following format:
+        "Unexpected read request on %s from device %u, Address %u, size %u
