@@ -13,19 +13,6 @@ const char* const ThreadStateNames[TST_NUMSTATES] = {
     "", "WAITING", "READY", "ACTIVE", "RUNNING", "SUSPENDED", "UNUSED", "TERMINATED"
 };
 
-TlbPropertyMsgType getTlbPropertyMsgType(const std::string name){
-	if (name == "ENABLED" || name == "E") {
-		return TlbPropertyMsgType::ENABLED;
-	}
-	if (name == "PT_ADDRESS" || name == "PTADDR" || name == "PTA" || name == "PT") {
-		return TlbPropertyMsgType::PT_ADDRESS;
-	}
-	if (name == "MANAGER_ADDRESS" || name == "MANAGER" || name == "PTADDR" || name == "MA") {
-		return TlbPropertyMsgType::MANAGER_ADDRESS;
-	}
-	throw exceptf<SimulationException>("Unknown TlbPropertyMsgType"); //MLDTODO Figure out exception system
-}
-
 string PlaceID::str() const
 {
     ostringstream ss;
