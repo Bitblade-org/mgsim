@@ -309,7 +309,11 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     else
     { UNREACHABLE }
 
+    Queue_Read(line, reg);
+    return DELAYED;
+}
 
+void DCache::Queue_Read(Line* line, RegAddr* reg){
     // Data is being loaded, add request to the queue
     COMMIT
     {
@@ -331,7 +335,6 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
         // Statistics:
         ++m_numDelayedReads;
     }
-    return DELAYED;
 }
 
 Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid)

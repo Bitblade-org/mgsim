@@ -7,6 +7,7 @@
 #include <sim/buffer.h>
 #include <arch/Memory.h>
 #include <arch/drisc/forward.h>
+#include <arch/simtypes.h>
 
 namespace Simulator
 {
@@ -119,6 +120,8 @@ private:
 
     DefineSampleVariable(uint64_t, numSnoops);
 
+
+    void Queue_Read(Line* line, RegAddr* reg);
 
     Result DoReadWritebacks();
     Result DoReadResponses();
