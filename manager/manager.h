@@ -21,11 +21,8 @@
 
 //MLDTODO Manager parametriseren
 
-//MLDQUESTION Hoe extra instructies definieren?
-//MLDQUESTION Hoe oude geheugenmanager checks uitschakelen (voor manager)? (Invalid access by memory....)
-//MLDQUESTION Hoe manager draaien naast test binary? ("os" binary die beide initialiseert!)
 
-#define NOTIFICATION_CHANNEL 2
+#define TRANSMIT_ADDR(ioDevId) mg_devinfo.base_addrs[ioDevId]
 
 /*
  * Statically stores the pointer to the first PT
@@ -69,7 +66,7 @@ int disableDTlb(void);
 /*
  * Main function
  */
-int main();
+int manager_loop(unsigned channelNr);
 
 int handleMsg(MgtMsg_t* msg);
 int handleInvalidation(MgtMsg_t* req);

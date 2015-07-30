@@ -1,20 +1,16 @@
 #include "manager.h"
 
 //MLDTODO Remove all printf after testing
-
-int main(){
-	volatile uint64_t *channel = &(mg_devinfo.channels[NOTIFICATION_CHANNEL]);
-
+//MLDTODO React correctly to TLS requests
+#include <svp/abort.h>
+int manager_loop(unsigned channelNr){
+	volatile uint64_t *channel = &(mg_devinfo.channels[channelNr]);
 	MgtMsg_t msgBuffer;
 	int result;
 
+	printf("Channel %u resides @ %p\n", channelNr, channel);
 	//Tell cpu.io_if.nmux that we want to receive notifications for this channel
 	*channel = 1;
-
-	//MLDTODO Remove after testing
-	//Inform JTAG about our existence
-	volatile uint64_t* jtag = mg_devinfo.base_addrs[12];
-	jtag[5] = NOTIFICATION_CHANNEL;
 
 	while(1){
 		printf("Manager ready to receive request\n");
@@ -27,12 +23,7 @@ int main(){
 			result = handleMsg(&msgBuffer);
 			if(result < 0)	{ return result; } //A whoopsie occurred
 //		}while(result == 0);
-
-//		do{
-			printf("Manager sending response\n");
-			result = send_net_msg(&msgBuffer, mg_devinfo.base_addrs[result]);
-			if(result < 0)	{ return result; } //A whoopsie occurred
-//		}while(result == 0);
+		svp_abort();
 	}
 
 }
@@ -51,7 +42,7 @@ int send_net_msg(MgtMsg_t* const msg, volatile uint64_t* dst){
 }
 
 
-pt_t* firstPt(pt_t* ptr){
+pt_t* first_pt(pt_t* ptr){
 	static pt_t* pointer;
 
 	if(ptr != NULL){
@@ -65,10 +56,10 @@ int handleMsg(MgtMsg_t* msg){
 	if(msg->type == MISS){
 		return handleMiss(msg);
 	}
-	if(msg->type == INV_RQ){
+	if(msg->type == INV){
 		return handleInvalidation(msg);
 	}
-	if(msg->type == SET_PT){
+	if(msg->type == SET && msg->set.property == SET_PT_ON_MGT){
 		return handleSetPT(msg);
 	}
 
@@ -76,8 +67,8 @@ int handleMsg(MgtMsg_t* msg){
 }
 
 int handleSetPT(MgtMsg_t* msg){
-	printf("Setting PT pointer from %p to %p\n", getPointer(NULL), (void*)msg->data.part[2]);
-	getPointer((pte_t*)msg->setPT.pointer);
+	printf("Setting PT pointer from %p to %p\n", get_pointer(NULL), (void*)msg->data.part[2]);
+	get_pointer((pte_t*)msg->set.val0);
 	return 1;
 }
 
@@ -90,7 +81,7 @@ int handleInvalidation(MgtMsg_t* req){
 
 int handleMiss(MgtMsg_t* msg){
 	printf("\nHandling miss for context:%u, addr:%lu\n", msg->mReq.contextId, msg->mReq.vAddr);
-	printf("Using pagetable start ptr: %p\n", firstPt(NULL));
+	printf("Using pagetable start ptr: %p\n", first_pt(NULL));
 
 
 //  000000000 000000000 111111111 111111111 000000000 000000000 ADDR
@@ -98,15 +89,15 @@ int handleMiss(MgtMsg_t* msg){
 	uint64_t addr = msg->mReq.vAddr;
 
 
-	addr |= ((uint64_t)msg->mReq.contextId) << VADDR_SIGNIFICANT_WIDTH;
+	addr |= ((uint64_t)msg->mReq.contextId) << (VADDR_WIDTH - VADDR_LSO);
 //  000000000 000000000 111111111 111111111 000000000 000000000 ADDR
 //  001111111 111111111 000000000 000000000 000000000 000000000 PROCID
 //  001111111 111111111 111111111 111111111 000000000 000000000 |=
 
 	pte_t* entry;
 	unsigned levels;
-	int result = walkPageTable(addr, VADDR_SIGNIFICANT_WIDTH + PROCID_WIDTH, &entry, &levels);
-	printf("Walk result: (%d) Levels: %d, Address:%p\n", result, levels, getPointer(entry));
+	int result = walkPageTable(addr, (VADDR_WIDTH - VADDR_LSO) + CONTEXTID_WIDTH, &entry, &levels);
+	printf("Walk result: (%d) Levels: %d, Address:%p\n", result, levels, get_pointer(entry));
 
 	if(result < 0){ return result; }
 
@@ -115,7 +106,7 @@ int handleMiss(MgtMsg_t* msg){
 		assert(((int)levels - TABLE_OFFSET) >= 0);
 		msg->type = REFILL;
 		msg->refill.table = levels - TABLE_OFFSET;
-		msg->refill.pAddr = entry->base.addr;
+		msg->refill.pAddr = entry->addr;
 		if(msg->mReq.tlbType == ITLB){
 			msg->iRefill.execute = entry->page_p.x;
 		}else{
@@ -127,7 +118,7 @@ int handleMiss(MgtMsg_t* msg){
 		msg->refill.present = 0;
 	}
 
-	return caller;
+	return send_net_msg(msg, TRANSMIT_ADDR(caller));
 }
 
 /*
@@ -148,7 +139,7 @@ int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
 
 	static uint64_t mask = ~(UINT64_MAX << PT_INDEX_WIDTH);
 
-	pt_t* t = firstPt(NULL);
+	pt_t* t = first_pt(NULL);
 	*levels = 0;
 
 	while(len >= PT_INDEX_WIDTH){
@@ -162,17 +153,17 @@ int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
 		len -= PT_INDEX_WIDTH;
 		(*levels)++;
 
-		if((*entry)->base.p != 1){ return 0; }
-		if((*entry)->base.t != 1){ return 1; }
-		else{ t = (pt_t*)getPointer(*entry); }
+		if((*entry)->p != 1){ return 0; }
+		if((*entry)->t != 1){ return 1; }
+		else{ t = (pt_t*)get_pointer(*entry); }
 	}
 	return -16;
 }
 
 void printTable(pt_t* t){
 	for(int i=0; i<512; i++){
-		if(t->entries[i].base.p){
-			printf("Entry %d: p=%u, t=%u\n", i, t->entries[i].base.p, t->entries[i].base.t);
+		if(t->entries[i].p){
+			printf("Entry %d: p=%u, t=%u\n", i, t->entries[i].p, t->entries[i].t);
 		}
 	}
 }

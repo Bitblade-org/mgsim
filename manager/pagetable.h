@@ -1,9 +1,10 @@
 #ifndef MANAGER_PAGETABLE_H_
 #define MANAGER_PAGETABLE_H_
 
-#include <stddef.h>
+#include <stdint.h>
 
 #include "defines.h"
+
 
 struct __attribute__((packed)) pte_tableptr{ //MLDTODO Use C packed equivalent
 	uint64_t p		: 1;	// Present bit
@@ -22,31 +23,22 @@ struct __attribute__((packed)) pte_pageptr{ //MLDTODO Use C packed equivalent
 	uint64_t addr	: 52;	// Address bits
 };
 
-struct __attribute__((packed)) pte_base{
-	uint64_t p		: 1;	// Present bit
-	uint64_t t		: 1;	// Table bit. 0 for page, 1 for table.
-	uint64_t _res   :10;	// Type-specific bits.
-	uint64_t addr	:52;	// Address bits
-};
-
 typedef union {
-	struct pte_base		base;
-	struct pte_tableptr table_p;
-	struct pte_pageptr 	page_p;
-} pte_t;
-
-void* getPointer(pte_t* pte);
+			struct __attribute__((packed)){
+				uint64_t p		: 1;	// Present bit
+				uint64_t t		: 1;	// Table bit. 0 for page, 1 for table.
+				uint64_t _res   :10;	// Type-specific bits.
+				uint64_t addr	:52;	// Address bits
+			};
+			struct pte_tableptr table_p;
+			struct pte_pageptr 	page_p;
+		} pte_t;
 
 typedef struct {
 	pte_t entries[512];
 } pt_t;
 
-
-/*
- * Will not test if p=1
- *///MLDTODO Really....
-void* getPointer(pte_t* pte){ return (void*)(uint64_t)(pte->base.addr << ((uint64_t)PT_LSB_OFFSET)); }
-
-
+void* get_pointer(pte_t* entry);
+void set_pointer(pte_t* entry, void* pointer);
 
 #endif /* MANAGER_PAGETABLE_H_ */

@@ -8,22 +8,29 @@
 	namespace manager{
 #else
 #	include <stddef.h>
+#	include <stdint.h>
 #	define MGT_ENUM(name) enum name
 #	define MGT_UNION(name, contents) typedef union {contents}name ## _t;
 #endif
 
 MGT_ENUM(MgtMsgType){
-	NO_MSG	= 0,
-	MISS 	= 1,
-	INV_RQ 	= 2,
-	REFILL 	= 3,
-	INV		= 4,
-	SET_PT  = 5
+	NO_MSG		= 0,
+	MISS 		= 1,
+	INVALIDATE 	= 2,
+	REFILL 		= 3,
+	INV			= 4,
+	SET			= 5
 };
 
 MGT_ENUM(TlbType){
 	ITLB	= 0,
 	DTLB	= 1
+};
+
+MGT_ENUM(SetType){
+	SET_PT_ON_MGT 		= 0,
+	SET_MGT_ADDR_ON_TLB = 1,
+	SET_STATE_ON_TLB 	= 2
 };
 
 //C, C++
@@ -88,10 +95,11 @@ struct TlbRefill {
 	uint64_t pAddr;			 //128
 };
 
-struct SetPT {
+struct Set {
 	uint64_t type		: 3; //  3
-	uint64_t reserved	:61; // 64
-	uint64_t pointer;		 //128
+	uint64_t property	: 5; //  8
+	uint64_t val1		:56; // 64
+	uint64_t val0;			 //128
 };
 
 MGT_UNION(MgtMsg,
@@ -102,7 +110,7 @@ MGT_UNION(MgtMsg,
 	struct TlbRefill			refill;
 	struct TlbRefill_I			iRefill;
 	struct TlbRefill_D			dRefill;
-	struct SetPT				setPT;
+	struct Set					set;
 )
 
 #undef MGT_ENUM
