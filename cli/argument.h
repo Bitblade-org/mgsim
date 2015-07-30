@@ -31,6 +31,7 @@ public:
 	void set(unsigned int index, RAddr &addr);
 
 	bool getBool(unsigned int index);
+	unsigned long long getUnsigned(unsigned int index);
 	unsigned long long getULL(unsigned int index, unsigned long long max);
 	Addr getMAddr(unsigned int index);
 	Addr getMAddr(unsigned int index, AddrWidth width);

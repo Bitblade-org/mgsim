@@ -106,6 +106,7 @@ void Arguments::set(unsigned int index, bool &var){
 void Arguments::set(unsigned int index, Addr &addr){
 	addr = getULL(index, std::numeric_limits<Addr>::max());
 }
+
 void Arguments::set(unsigned int index, RAddr &addr){
 	addr = getULL(index, std::numeric_limits<Addr>::max());
 	addr.alwaysExpect(addr.m_width);
@@ -113,6 +114,10 @@ void Arguments::set(unsigned int index, RAddr &addr){
 
 bool Arguments::getBool(unsigned int index){
 	return getBool(m_source[index]);
+}
+
+unsigned long long Arguments::getUnsigned(unsigned int index){
+	return getULL(m_source[index], ULLONG_MAX);
 }
 
 unsigned long long Arguments::getULL(unsigned int index, unsigned long long max){
