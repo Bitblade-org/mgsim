@@ -225,6 +225,8 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
     // SUCCESS - A line with the address was found
     // DELAYED - The line with the address was not found, but a line has been allocated
     // FAILED  - No usable line was found at all and could not be allocated
+
+
     if (result == FAILED)
     {
         // Cache-miss and no free line
@@ -263,7 +265,7 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
                 ++m_numResolvedConflicts;
         }
     }
-    else
+    else // result == SUCCESS
     {
         // Check if the data that we want is valid in the line.
         // This happens when the line is FULL, or LOADING and has been
@@ -299,10 +301,9 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
             ++m_numInvalidRMisses;
             return FAILED;
         }
-        else
-        {
-            COMMIT{ ++m_numLoadingRMisses; }
-        }
+
+        COMMIT{ ++m_numLoadingRMisses; }
+
     }
 
     // Data is being loaded, add request to the queue
