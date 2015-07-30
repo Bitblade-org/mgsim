@@ -279,11 +279,12 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
             return FAILED;
         }
 
-        COMMIT{ ++m_numLoadingRMisses; }
+        COMMIT{
+        	++m_numLoadingRMisses;
+            Queue_Read(line, reg);
+        }
 
-        Queue_Read(line, reg);
         return DELAYED;
-
     }
     else if (result == DELAYED)
     {
@@ -301,15 +302,16 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
             return FAILED;
         }
 
-        // statistics
         COMMIT {
-            if (line->state == LINE_EMPTY)
-                ++m_numEmptyRMisses;
-            else
+            if (line->state == LINE_EMPTY){
+            	++m_numEmptyRMisses;
+            }else{
                 ++m_numResolvedConflicts;
+            }
+
+            Queue_Read(line, reg);
         }
 
-        Queue_Read(line, reg);
         return DELAYED;
     }
 
@@ -318,26 +320,23 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
 
 void DCache::Queue_Read(Line* line, RegAddr* reg){
     // Data is being loaded, add request to the queue
-    COMMIT
-    {
-        line->state = LINE_LOADING;
-        //MLDNOTE LOAD, MISS, WAITING, == tag
-        //MLDTODO Handle TLB request result
-        if (reg != NULL && reg->valid())
-        {
-            // We're loading to a valid register, queue it
-            RegAddr old   = line->waiting;
-            line->waiting = *reg;
-            *reg = old;
-        }
-        else
-        {
-            line->create  = true;
-        }
+	line->state = LINE_LOADING;
+	//MLDNOTE LOAD, MISS, WAITING, == tag
+	//MLDTODO Handle TLB request result
+	if (reg != NULL && reg->valid())
+	{
+		// We're loading to a valid register, queue it
+		RegAddr old   = line->waiting;
+		line->waiting = *reg;
+		*reg = old;
+	}
+	else
+	{
+		line->create  = true;
+	}
 
-        // Statistics:
-        ++m_numDelayedReads;
-    }
+	// Statistics:
+	++m_numDelayedReads;
 }
 
 Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid)
