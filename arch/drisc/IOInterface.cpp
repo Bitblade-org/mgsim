@@ -303,10 +303,10 @@ namespace drisc
         // ASR_IO_PARAMS2 has 32 bits:
         // bits 0-7:   log2 of the AIO address space per device
         // bits 8-31:  (unused)
-        assert(m_numDevices < 256);
+        assert(m_numDevices < 256); //MLDNOTE This is going to cause problems!
         assert(m_numChannels < 256);
         IODeviceID devid = m_iobus_if.GetHostID();
-        assert(devid < 256);
+        assert(devid < 256); //MLDNOTE This is going to cause problems!
         Integer value =
             m_numDevices |
             m_numChannels << 8 |
