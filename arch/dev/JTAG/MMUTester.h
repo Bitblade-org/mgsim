@@ -32,7 +32,7 @@ private:
 
 	void mmuFiller();
 
-	void doSet(TlbPropertyMsgType type, TlbType tlbType, Addr value);
+	//void doSet(TlbPropertyMsgType type, TlbType tlbType, Addr value);
 	Result doLookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bool& r, bool& w, RAddr& pAddr, bool mayUnlock);
 	void doLookupAndStore(RAddr const processId, RAddr const vAddr, bool r, bool w, RAddr pAddr, int table);
 

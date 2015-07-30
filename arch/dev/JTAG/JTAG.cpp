@@ -13,7 +13,6 @@
 #include <sim/process.h>
 
 #include "../../Address.h"
-#include "../../drisc/RemoteMessage.h"
 #include "MMUTester.h"
 #include "MgrTester.h"
 
@@ -28,7 +27,6 @@ JTAG::JTAG(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID de
 		Object(name, parent),
 		m_fifo_out("m_fifo_out", *this, iobus.GetClock(), 10, 4),
 		InitBuffer(m_fifo_in, iobus.GetClock(), "inFifoSize"),
-		//InitStorage(m_transmitting, iobus.GetClock(), true),
 		InitProcess(p_transmit, doTransmit),
 		InitProcess(p_receive, doReceive),
 		InitStorage(m_receiving, iobus.GetClock(), false),
@@ -52,6 +50,8 @@ JTAG::JTAG(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID de
     m_fifo_out.Sensitive(p_transmit);
     m_fifo_in.Sensitive(p_dummy);
     m_receiving.Sensitive(p_receive);
+
+    std::cout << "JTAG " << GetName() << " initialised with IO devID " << m_ioDevId << std::endl;
 
     //m_transmitting.Sensitive(p_transmit);
 }
@@ -135,9 +135,10 @@ void JTAG::startMgrTest(){
 
 	std::cout << "Manager detected on id: " << m_mgtAddr.devid << ", channel:" << m_mgtAddr.chan << std::endl;
 	MgtMsg msg;
-	msg.setPT.pointer = 0x123456;
-	msg.type = (uint64_t)MgtMsgType::SET_PT;
-	sendMgtMsg(msg);
+//	msg.set.property = (uint64_t)manager::SetType::SET_PT_ON_MGT;
+//	msg.set.val0 = 0x123456;
+//	msg.type = (uint64_t)MgtMsgType::SET;
+//	sendMgtMsg(msg);
 
 	msg.mReq.tlbType = 1;
 	msg.mReq.caller = m_ioDevId;
@@ -255,22 +256,22 @@ TestNet::TestNet(const std::string& name, Object& parent):
 		Object(name, parent)
 {}
 
-void TestNet::mgrPush(const RemoteMessage &msg){
-	assert(msg.type == RemoteMessage::MSG_TLB_MISS_MESSAGE);
-	assert(msg.TlbMissMessage.dest == 42);
+//void TestNet::mgrPush(const RemoteMessage &msg){
+//	assert(msg.type == RemoteMessage::MSG_TLB_MISS_MESSAGE);
+//	assert(msg.TlbMissMessage.dest == 42);
+//
+//	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Relaying message to MgrTester: " << msg.str() << std::endl;
+//
+//	JTAG::getJTAG().getMgrTester().in_MissMessage(msg);
+//}
 
-	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Relaying message to MgrTester: " << msg.str() << std::endl;
 
-	JTAG::getJTAG().getMgrTester().in_MissMessage(msg);
-}
-
-
-void TestNet::netPushRefill(const tlbRefillMsg &msg){
-
-	s_netMsg = tlbRefillMsg(msg);
-
-	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Refill message posted to testing \"network\"" << std::endl;
-}
+//void TestNet::netPushRefill(const tlbRefillMsg &msg){
+//
+//	s_netMsg = tlbRefillMsg(msg);
+//
+//	std::cout << std::setw(JTAG::s_indent * 4) << " " << "Refill message posted to testing \"network\"" << std::endl;
+//}
 
 tlbRefillMsg TestNet::netPopRefill(){
 

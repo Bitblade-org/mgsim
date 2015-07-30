@@ -1,7 +1,7 @@
 #ifndef ARCH_DEV_JTAG_JTAG_H_
 #define ARCH_DEV_JTAG_JTAG_H_
 
-#define JTAG_CPU 4
+#define JTAG_CPU 2
 
 #include <string>
 #include <iostream>
@@ -19,7 +19,6 @@
 
 
 namespace Simulator {
-using drisc::RemoteMessage;
 using manager::MgtMsg;
 using manager::MgtMsgType;
 
@@ -27,8 +26,8 @@ class TestNet: public Object{
 
 public:
 	TestNet(const std::string& name, Object& parent);
-	static void mgrPush(const RemoteMessage &msg);
-	static void netPushRefill(const tlbRefillMsg &msg);
+	//static void mgrPush(const RemoteMessage &msg);
+	//static void netPushRefill(const tlbRefillMsg &msg);
 	static tlbRefillMsg netPopRefill();
 	static void d$Push(Addr line);
 
