@@ -204,11 +204,11 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
 
     // Check that we're reading readable memory
     auto& cpu = GetDRISC();
-    if (!cpu.CheckPermissions(address, size, IMemory::PERM_READ))
-    {
-        throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory",
-                                         (unsigned long long)address, (size_t)size);
-    }
+//    if (!cpu.CheckPermissions(address, size, IMemory::PERM_READ))
+//    {
+//        throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory",
+//                                         (unsigned long long)address, (size_t)size);
+//    }
 
     if (!p_service.Invoke())
     {
@@ -351,11 +351,11 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
 
     // Check that we're writing writable memory
     auto& cpu = GetDRISC();
-    if (!cpu.CheckPermissions(address, size, IMemory::PERM_WRITE))
-    {
-        throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory",
-                                         (unsigned long long)address, (size_t)size);
-    }
+//    if (!cpu.CheckPermissions(address, size, IMemory::PERM_WRITE))
+//    {
+//        throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory",
+//                                         (unsigned long long)address, (size_t)size);
+//    }
 
     if (!p_service.Invoke())
     {

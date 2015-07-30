@@ -20,7 +20,6 @@ namespace Simulator {
 using drisc::RemoteMessage;
 using manager::MgtMsg;
 
-tlbRefillMsg TestNet::s_netMsg;
 int JTAG::s_indent = 0;
 
 JTAG::JTAG(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid):
