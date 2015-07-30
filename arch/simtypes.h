@@ -106,6 +106,7 @@ struct Float64
 
 #if defined(TARGET_MTALPHA)
 typedef uint64_t MemAddr;       ///< Address into memory
+typedef uint16_t ContextId;		///< Context id
 typedef uint64_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
 typedef uint64_t Integer;       ///< Natural integer type
@@ -116,6 +117,7 @@ typedef Float64  Float;         ///< Natural floating point type
 #define MEMSIZE_MAX UINT64_MAX
 #elif defined(TARGET_MTSPARC) || defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL) || defined(TARGET_OR1K)
 typedef uint32_t MemAddr;       ///< Address into memory
+typedef uint16_t ContextId;		///< Context id
 typedef uint32_t MemSize;       ///< Size of something in memory
 typedef uint32_t Instruction;   ///< Instruction bits
 typedef uint32_t Integer;       ///< Natural integer type
@@ -378,21 +380,6 @@ struct MemoryRequest
                 & size & offset & sign_extend;
         }
 };
-
-enum TlbType
-{
-	DTLB,
-	ITLB
-};
-
-enum TlbPropertyMsgType
-{
-	PT_ADDRESS,
-	MANAGER_ADDRESS,
-	ENABLED
-};
-
-TlbPropertyMsgType getTlbPropertyMsgType(const std::string name);
 
 /// Different types of shared classes
 enum RemoteRegType
