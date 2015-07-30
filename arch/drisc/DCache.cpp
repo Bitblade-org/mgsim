@@ -281,6 +281,9 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
 
         COMMIT{ ++m_numLoadingRMisses; }
 
+        Queue_Read(line, reg);
+        return DELAYED;
+
     }
     else if (result == DELAYED)
     {
@@ -305,12 +308,12 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
             else
                 ++m_numResolvedConflicts;
         }
-    }
-    else
-    { UNREACHABLE }
 
-    Queue_Read(line, reg);
-    return DELAYED;
+        Queue_Read(line, reg);
+        return DELAYED;
+    }
+
+    UNREACHABLE
 }
 
 void DCache::Queue_Read(Line* line, RegAddr* reg){
