@@ -57,8 +57,9 @@ public:
             DEBUG_FPU      = 512, ///< Debug FPU activity
             DEBUG_PIPE     = 1024, ///< Debug pipeline activity
             DEBUG_MEMNET   = 2048, ///< Debug memory network activity
+			DEBUG_TLB      = 4096, ///< Debug TLB activity
         };
-        static const int DEBUG_CPU_MASK = DEBUG_SIM | DEBUG_PROG | DEBUG_DEADLOCK | DEBUG_FLOW | DEBUG_MEM | DEBUG_IO | DEBUG_REG;
+        static const int DEBUG_CPU_MASK = DEBUG_SIM | DEBUG_PROG | DEBUG_DEADLOCK | DEBUG_FLOW | DEBUG_MEM | DEBUG_IO | DEBUG_REG | DEBUG_TLB;
 
     private:
         CycleNo             m_lastsuspend;  ///< Avoid suspending twice on the same cycle.

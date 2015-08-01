@@ -146,6 +146,7 @@ namespace Simulator
 #define DebugIONetWrite(msg, ...) DebugDo_(IONET, ("b " msg), ##__VA_ARGS__)
 #define DebugFPUWrite(msg, ...)   DebugDo_(FPU,   ("F " msg), ##__VA_ARGS__)
 #define DebugPipeWrite(msg, ...)  DebugDo_(PIPE,  ("p " msg), ##__VA_ARGS__)
+#define DebugTLBWrite(msg, ...)   DebugDo_(TLB,   ("T " msg), ##__VA_ARGS__)
 
 #define DeadlockWrite(msg, ...)                                         \
     do { if (GetKernel()->GetDebugMode() & Kernel::DEBUG_DEADLOCK) DeadlockWrite_((msg), ##__VA_ARGS__); } while(false)
