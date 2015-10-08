@@ -938,7 +938,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
     }
 
     // Set program debugging per default
-    kernel.SetDebugMode(Kernel::DEBUG_PROG);
+    kernel.SetDebugMode(GetTopConfOpt("DebugMode", int, Kernel::DEBUG_PROG));
 
     // Find objdump command
 #if defined(TARGET_MTALPHA)

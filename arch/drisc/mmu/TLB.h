@@ -27,6 +27,31 @@ namespace mmu {
 
 using manager::MgtMsg;
 using manager::MgtMsgType;
+
+class TLBResult{
+	friend class TLB;
+private:
+	Line* m_line;
+	MMU*  m_mmu;
+	bool  m_destroy;
+
+public:
+	TLBResult(Line* line, MMU* mmu, bool destroy = false) : m_line(line), m_mmu(mmu), m_destroy(destroy) {}
+	TLBResult() : m_line(0), m_mmu(0), m_destroy(false) {}
+	~TLBResult(){ if(m_destroy){delete m_line;} }
+	TLBResult(const TLBResult&) = delete;
+	TLBResult& operator=(const TLBResult& other) {m_line = other.m_line; m_mmu = other.m_mmu; m_destroy = other.m_destroy; return *this;}
+
+	bool isPending(){assert(m_line); return !m_line->present;}
+	void* dcacheReference() {assert(m_line && !m_line->present); return m_line->d$lineRef;}
+	void* dcacheReference(void* ref);
+	bool read() {assert(m_line && m_line->present); return m_line->read;}
+	bool write() {assert(m_line && m_line->present); return m_line->write;}
+	Addr contextId() {assert(m_line && m_line->present); return m_line->processId.m_value;}
+	Addr vAddr();
+	Addr pAddr();
+};
+
 //MLDNOTE Not extending MMIOComponent. TLB is not a memory component itself. Table probably is.
 class TLB :	public Object, public IIOBusClient, public Inspect::Interface<Inspect::Info | Inspect::Write> {
 
@@ -65,12 +90,14 @@ public:
     bool OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size);
 	bool OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData& data);
 
-    Result lookup(RAddr const processId, RAddr const vAddr, RAddr &d$line, bool &r, bool &w, RAddr &pAddr, bool mayUnlock);
-    AddrWidth getMinOffsetSize(){return m_tables[0]->getOffsetWidth();}
+	Result lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResult &res);
+	AddrWidth getMinOffsetSize(){return m_tables[0]->getOffsetWidth();}
 
     Result onInvalidateMsg(MgtMsg &msg);
     Result onPropertyMsg(MgtMsg &msg);
     Result onStoreMsg(MgtMsg &msg);
+
+    bool isEnabled() {return m_enabled;}
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments) override;
@@ -79,6 +106,9 @@ public:
     const std::string& GetIODeviceName() const {return GetName();}
     void GetDeviceIdentity(IODeviceIdentification& id) const {id = IODeviceIdentification{1,10,1};} //MLDTODO Figure out what this does
 private:
+	Result lookup(RAddr const processId, RAddr const vAddr, bool mayUnlock, TLBResult &res);
+	Result loopback(Addr processId, Addr vAddr, TLBResult &res);
+
     Result handleMgtMsg(MgtMsg msg);
 
     void unlink(Line &line);
@@ -112,7 +142,7 @@ private:
     std::vector<Table*>	m_tables;
     bool				m_enabled;
 
-    Object& GetDRISCParent() const { return *GetParent()->GetParent(); }
+    DRISC*  GetDRISCParent() { return (DRISC*)GetParent()->GetParent(); }
    	MMU&	getMMU() const { return (MMU&)*GetParent(); }
 };
 

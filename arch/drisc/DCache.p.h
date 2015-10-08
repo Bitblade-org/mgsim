@@ -40,7 +40,12 @@ public:
       (RegAddr     waiting)           ///< First register waiting on this line.
       (LineState   state)             ///< The line state.
       (bool        processing)        ///< Has the line been added to m_returned yet?
-      (bool        create)))          ///< Is the line expected by the create process (bundle)?
+      (bool        create)            ///< Is the line expected by the create process (bundle)?
+	  (Line*       next noserialize)  ///< The next D$ line waiting for this line //MLDTODO noserialize ok?
+	  (size_t      tlbOffset)         ///< The offset of the request
+	  (MemAddr     pTag)			  ///< MLDTODO Remove after testing
+
+	  ))
     // {% endcall %}
 
 private:
@@ -50,24 +55,36 @@ private:
       (MemData   data)
       (MemAddr   address)
       (WClientID wid)
-      (bool      write)))
+      (bool      write)
+	))
+    // {% endcall %}
+
+    // {% call gen_struct() %}
+    ((name LookupResponse)
+     (state
+      (unsigned lineId)
+	  (bool 	present)
+    ))
     // {% endcall %}
 
     // {% call gen_struct() %}
     ((name ReadResponse)
-     (state (CID cid)))
+     (state (CID cid)
+    ))
     // {% endcall %}
 
     // {% call gen_struct() %}
     ((name WritebackRequest)
      (state
       (array data char MAX_MEMORY_OPERATION_SIZE)
-      (RegAddr waiting)))
+      (RegAddr waiting)
+	))
     // {% endcall %}
 
     // {% call gen_struct() %}
     ((name WriteResponse)
-     (state (WClientID wid)))
+     (state (WClientID wid)
+    ))
     // {% endcall %}
 
     // Information for multi-register writes
@@ -80,26 +97,28 @@ private:
       (unsigned     size   (init 0))           ///< Number of registers remaining to write
       (unsigned     offset (init 0))           ///< Current offset in the multi-register operand
       (LFID         fid    (init 0))           ///< FID of the thread's that's waiting on the register
-         ))
+    ))
     // {% endcall %}
 
     Result FindLine(MemAddr address, Line* &line, bool check_only);
+    Result ReverseFindLine(MemAddr pAddr, Line* &line);
 
-    IMemory*             m_memory;          ///< Memory
-    MCID                 m_mcid;            ///< Memory Client ID
-    std::vector<Line>    m_lines;           ///< The cache-lines.
-    std::vector<char>    m_data;            ///< The data in the cache lines.
-    bool*                m_valid;           ///< The valid bits.
-    size_t               m_assoc;           ///< Config: Cache associativity.
-    size_t               m_sets;            ///< Config: Number of sets in the cace.
-    size_t               m_lineSize;        ///< Config: Size of a cache line, in bytes.
-    IBankSelector*       m_selector;        ///< Mapping of cache line addresses to tags and set indices.
-    Buffer<ReadResponse>  m_read_responses; ///< Incoming buffer for read responses from memory bus.
-    Buffer<WriteResponse> m_write_responses;///< Incoming buffer for write acknowledgements from memory bus.
-    Buffer<WritebackRequest> m_writebacks;  ///< Incoming buffer for register writebacks after load.
-    Buffer<Request>      m_outgoing;        ///< Outgoing buffer to memory bus.
-    WritebackState       m_wbstate;         ///< Writeback state
-    mmu::MMU*			 m_mmu;				///< Memory Management Unit
+    IMemory*             m_memory;          	///< Memory
+    MCID                 m_mcid;            	///< Memory Client ID
+    std::vector<Line>    m_lines;           	///< The cache-lines.
+    std::vector<char>    m_data;            	///< The data in the cache lines.
+    bool*                m_valid;           	///< The valid bits.
+    size_t               m_assoc;           	///< Config: Cache associativity.
+    size_t               m_sets;            	///< Config: Number of sets in the cace.
+    size_t               m_lineSize;        	///< Config: Size of a cache line, in bytes.
+    IBankSelector*       m_selector;        	///< Mapping of cache line addresses to tags and set indices.
+    Buffer<LookupResponse> m_lookup_responses; 	///< Incoming buffer for lookup responses from TLB.
+    Buffer<ReadResponse>  m_read_responses; 	///< Incoming buffer for read responses from memory bus.
+    Buffer<WriteResponse> m_write_responses;	///< Incoming buffer for write acknowledgements from memory bus.
+    Buffer<WritebackRequest> m_writebacks;  	///< Incoming buffer for register writebacks after load.
+    Buffer<Request>      m_outgoing;        	///< Outgoing buffer to memory bus.
+    WritebackState       m_wbstate;         	///< Writeback state
+    mmu::MMU*			 m_mmu;					///< Memory Management Unit
 
 
     // Statistics
@@ -123,8 +142,11 @@ private:
     DefineSampleVariable(uint64_t, numSnoops);
 
 
-    void Queue_Read(Line* line, RegAddr* reg);
+    void PushRegister(Line* line, RegAddr* reg);
+    Line* getLineById(size_t id) { return &m_lines[id]; }
+    size_t getLineId(Line* line) { return (size_t)(line - &m_lines[0]) / sizeof(Line); }
 
+    Result DoLookupResponses();
     Result DoReadWritebacks();
     Result DoReadResponses();
     Result DoWriteResponses();
@@ -140,6 +162,7 @@ public:
     void ConnectMemory(IMemory* memory);
 
     // Processes
+    Process p_LookupResponses;
     Process p_ReadWritebacks;
     Process p_ReadResponses;
     Process p_WriteResponses;
@@ -151,11 +174,19 @@ public:
     Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg);
     Result Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
+    Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg);
+    Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid);
+
     size_t GetLineSize() const { return m_lineSize; }
+
+    // TLB callbacks
+    bool OnTLBLookupCompleted(void* dsLineRef, bool present);
 
     // Memory callbacks
     bool OnMemoryReadCompleted(MemAddr addr, const char* data) override;
     bool OnMemoryWriteCompleted(TID tid) override;
+    bool OnMemoryReadCompleted2(MemAddr addr, const char* data);
+    bool OnMemoryWriteCompleted2(TID tid);
     bool OnMemorySnooped(MemAddr addr, const char* data, const bool* mask) override;
     bool OnMemoryInvalidated(MemAddr addr) override;
 

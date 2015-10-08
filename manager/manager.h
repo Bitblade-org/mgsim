@@ -10,6 +10,12 @@
 #include "pagetable.h"
 #include "MgtMsg.h"
 
+sl_decl(manager_init,,sl_shparm(unsigned, channel));
+sl_decl(manager, , sl_shparm(unsigned, channel), sl_shparm(uint64_t, pt0));
+
+
+
+
 /*
  * Exit values:
  * 	-1			General error
@@ -21,8 +27,6 @@
 
 //MLDTODO Manager parametriseren
 
-
-#define TRANSMIT_ADDR(ioDevId) mg_devinfo.base_addrs[ioDevId]
 
 /*
  * Statically stores the pointer to the first PT
@@ -66,7 +70,7 @@ int disableDTlb(void);
 /*
  * Main function
  */
-int manager_loop(unsigned channelNr);
+int manager_main(unsigned channelNr);
 
 int handleMsg(MgtMsg_t* msg);
 int handleInvalidation(MgtMsg_t* req);

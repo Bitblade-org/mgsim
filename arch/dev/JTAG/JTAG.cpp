@@ -255,8 +255,12 @@ TestNet::TestNet(const std::string& name, Object& parent):
 		Object(name, parent)
 {}
 
-void TestNet::d$Push(Addr line){
-	std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ about progress for line " << line << std::endl;
+void TestNet::d$Push(Addr line, bool present){
+	if(present){
+		std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ about progress for line " << line << std::endl;
+	}else{
+		std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ that no PT entry could be found for line " << line << std::endl;
+	}
 }
 
 } /* namespace Simulator */

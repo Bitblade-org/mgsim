@@ -39,6 +39,7 @@ namespace Simulator
         DELAYED,
         SUCCESS
     };
+    std::string resultStr(Result result);
     std::ostream& operator<<(std::ostream& os, Result result);
 
 

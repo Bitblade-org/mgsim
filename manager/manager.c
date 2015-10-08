@@ -3,14 +3,40 @@
 //MLDTODO Remove all printf after testing
 //MLDTODO React correctly to TLS requests
 #include <svp/abort.h>
-int manager_loop(unsigned channelNr){
+
+
+sl_def(manager_init,,sl_shparm(unsigned, channel)){
+	volatile uint64_t* cPtr = &(mg_devinfo.channels[sl_getp(channel)]);
+
+	//Tell cpu.io_if.nmux that we want to receive notifications for this channel
+	*cPtr = 1;
+
+	// To stop compiler from whining
+	sl_setp(channel, sl_getp(channel));
+}
+sl_enddef;
+
+sl_def(manager, , sl_shparm(unsigned, channel), sl_shparm(uint64_t, pt0)) {
+    sl_index(i);
+
+	first_pt((pt_t*)sl_getp(pt0));
+    int res = manager_main(sl_getp(channel));
+    printf("Manager failed with error code %d", res);
+    svp_abort();
+
+	// To stop compiler from whining
+    sl_setp(channel, sl_getp(channel));
+    sl_setp(pt0, sl_getp(pt0));
+}
+sl_enddef;
+
+
+int manager_main(unsigned channelNr){
 	volatile uint64_t *channel = &(mg_devinfo.channels[channelNr]);
+	//Channel already initialised by manager_init.
+
 	MgtMsg_t msgBuffer;
 	int result;
-
-	printf("Channel %u resides @ %p\n", channelNr, channel);
-	//Tell cpu.io_if.nmux that we want to receive notifications for this channel
-	*channel = 1;
 
 	while(1){
 		printf("Manager ready to receive request\n");
@@ -18,12 +44,9 @@ int manager_loop(unsigned channelNr){
 		if(result == 0)	{ continue; }
 		if(result < 0)  { return result; } //A whoopsie occurred
 
-//		do{
-			printf("Manager handling request\n");
-			result = handleMsg(&msgBuffer);
-			if(result < 0)	{ return result; } //A whoopsie occurred
-//		}while(result == 0);
-		svp_abort();
+		printf("Manager handling request\n");
+		result = handleMsg(&msgBuffer);
+		if(result < 0)	{ return result; } //A whoopsie occurred
 	}
 
 }
@@ -80,7 +103,7 @@ int handleInvalidation(MgtMsg_t* req){
 }
 
 int handleMiss(MgtMsg_t* msg){
-	printf("\nHandling miss for context:%u, addr:%lu\n", msg->mReq.contextId, msg->mReq.vAddr);
+	printf("\nHandling miss for context:%u, addr:0x%lX (0x%lX)\n", msg->mReq.contextId, msg->mReq.vAddr, (msg->mReq.vAddr << VADDR_LSO));
 	printf("Using pagetable start ptr: %p\n", first_pt(NULL));
 
 
@@ -102,9 +125,10 @@ int handleMiss(MgtMsg_t* msg){
 	if(result < 0){ return result; }
 
 	uint16_t caller = msg->mReq.caller;
+	msg->type = REFILL;
+
 	if(result){
 		assert(((int)levels - TABLE_OFFSET) >= 0);
-		msg->type = REFILL;
 		msg->refill.table = levels - TABLE_OFFSET;
 		msg->refill.pAddr = entry->addr;
 		if(msg->mReq.tlbType == ITLB){
@@ -143,7 +167,7 @@ int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
 	*levels = 0;
 
 	while(len >= PT_INDEX_WIDTH){
-		printf("walkPageTable arrived at level %u with entries: (only present)\n", *levels);
+		printf("len %u--walkPageTable arrived at level %u with entries: (only present)\n", len, *levels);
 		printTable(t);
 		uint64_t offset = mask & (addr >> (len - PT_INDEX_WIDTH));
 

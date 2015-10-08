@@ -95,6 +95,7 @@ PROCESSOR_SRC = \
 	arch/drisc/Allocator.h \
 	arch/drisc/AncillaryRegisterFile.cpp \
 	arch/drisc/AncillaryRegisterFile.h \
+	arch/drisc/DCache_M.cpp \
 	arch/drisc/DCache.cpp \
 	arch/drisc/DCache.h \
 	arch/drisc/DebugChannel.h \

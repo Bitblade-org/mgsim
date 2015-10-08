@@ -1,8 +1,8 @@
 #ifndef MANAGER_MAIN_H_
 #define MANAGER_MAIN_H_
 
-#define PTS_PBASE ((void*)0x4200000) //2MiB aligned = 4KiB aligned
-#define PTS_VBASE ((void*)0x4200000) //2MiB aligned = 4KiB aligned
+#define PTS_PBASE ((void*)0x420000) //2MiB aligned = 4KiB aligned
+#define PTS_VBASE ((void*)0x420000) //2MiB aligned = 4KiB aligned
 #define OS_CONTEXT_ID 0
 #define MANAGER_CHANNEL 1
 
@@ -13,6 +13,22 @@
 #include "mgsim.h"
 #include "PTBuilder.h"
 #include "manager.h"
+#include "memreader.h"
+
+
+sl_decl(tlbEnable,,
+		sl_shparm(unsigned, channel),
+		sl_shparm(unsigned, managerIOAddr),
+		sl_shparm(unsigned, tlbIOAddr)
+		);
+
+sl_decl(wait,,
+		sl_shparm(short, end)
+		);
+
+sl_decl(getRemoteIOAddr,,
+		sl_shparm(unsigned, addr)
+		);
 
 /*
  * From IOInterface.cpp:

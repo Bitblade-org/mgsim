@@ -16,7 +16,9 @@ namespace mmu {
 
 //MLDTODO-DOC On reserve of +L-P entry: What to do if the pickDestination algo returns a locked entry? Nothing for now...
 bool TLB::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size){
-	std::cout << "Unexpected read request on " << GetName() << "from device " << from << ", Address " << address << ", size " << size << std::endl;
+	COMMIT{
+		std::cout << "Unexpected read request on " << GetName() << "from device " << from << ", Address " << address << ", size " << size << std::endl;
+	}
 
     IOData iodata;
     iodata.size = size;
@@ -31,7 +33,6 @@ bool TLB::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size){
         return false;
     }
     return true;
-	return true;
 }
 
 TLB::TLB(const std::string& name, Object& parent, IIOBus* iobus)
@@ -105,15 +106,22 @@ Result TLB::doReceive(){
 	m_fifo_in.Pop();
 	unsigned addr = item.addr.chan / 8;
 
-	assert(addr <= 1);
-	assert(item.addr.devid == m_mgtAddr.devid);
+	if(addr <= 1){
+		assert(item.addr.devid == m_mgtAddr.devid);
 
 		m_mgtMsgBuffer.data.part[addr] = item.payload;
 
 		if(addr == 0){
 			return handleMgtMsg(m_mgtMsgBuffer);
 		}
-
+	}else if(addr == 2){
+		MgtMsg singleMessage;
+		singleMessage.data.part[0] = item.payload;
+		assert(singleMessage.type == (uint64_t)MgtMsgType::SET);
+		return handleMgtMsg(singleMessage);
+	}else{
+		UNREACHABLE;
+	}
 	return Result::SUCCESS;
 }
 
@@ -159,24 +167,53 @@ bool TLB::OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData&
 // SUCCESS: Address in TLB
 // DELAYED: Address not in TLB, expecting refill
 // FAILED:  Stalled or Address not in TLB and unable to transmit refill request
-// domain_error: TLB is disabled
-Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bool& r, bool& w, RAddr& pAddr, bool mayUnlock){
-
-	if(!m_enabled || (vAddr >> 63).m_value){ //MLDTODO Generalise
-		r = w = 1;
-		pAddr = vAddr.m_value;
-		return Result::SUCCESS;
+Result TLB::lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResult &res){
+	if(
+			!m_enabled ||
+			(vAddr >> 63) ||
+			(vAddr >= 0x2000 && vAddr < 0x50000) ||
+			(vAddr >= 0x100000 && vAddr < 0x10FFFF)
+	){ //MLDTODO Generalise
+		return loopback(processId, vAddr, res);
 	}
 
-	processId.strictExpect();
+	DebugTLBWrite("Lookup request for %lu:0x%lX", processId, vAddr);
+	RAddr rProcessId = RAddr(processId, getMMU().procAW());
+	RAddr rVAddr = RAddr::truncateLsb(vAddr, getMMU().vAW(), m_tables[0]->getOffsetWidth());
+
+	return lookup(rProcessId, rVAddr, mayUnlock, res);
+}
+
+Result TLB::loopback(Addr processId, Addr vAddr, TLBResult &res){
+	res.m_line = new Line(16, 64, 64);
+	res.m_line->read = res.m_line->write = res.m_line->present = true;
+	res.m_line->processId = processId;
+	res.m_line->vAddr = vAddr;
+	res.m_line->pAddr = RAddr(vAddr, 64);
+	res.m_mmu = &getMMU();
+	res.m_destroy = true;
+
+	if(m_enabled){
+		DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLS address", processId, vAddr);
+	}else{
+		//DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLB disabled", processId, vAddr);
+	}
+
+	return SUCCESS;
+}
+
+Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res){
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
-	Line *line = doLookup(processId, vAddr, LineTag::PRESENT);
+	Line* line = doLookup(processId, vAddr, LineTag::PRESENT);
 	if(line == NULL){
 		Addr tableLineId;
-		Result res = m_tables[0]->storePending(processId, vAddr, d$lineId, tableLineId);
 
-		if(res == Result::FAILED){ return Result::FAILED; }
+		if(!m_tables[0]->storePending(processId, vAddr, tableLineId, line)){
+			std::cout << "Unable to store pending entry in TLB" << std::endl;
+			DeadlockWrite("Unable to store pending entry in TLB");
+			return Result::FAILED;
+		}
 
 		MgtMsg msg;
 		msg.type = (uint64_t)MgtMsgType::MISS;
@@ -187,9 +224,18 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bo
 		msg.mReq.caller = m_ioDevId;
 
 		if(!sendMgtMsg(msg)){
+			std::cout << "Unable to send msg to Manager" << std::endl;
+
+	        DeadlockWrite("Unable to send msg to Manager");
+
 			return Result::FAILED;
 		}
 
+		res.m_destroy=false;
+		res.m_line=line;
+		res.m_mmu=&getMMU();
+
+		DebugTLBWrite("Lookup request for %lu:0x%lX delayed, waiting for requested refill", processId.m_value, vAddr.m_value);
 		return Result::DELAYED;
 	}
 
@@ -197,9 +243,8 @@ Result TLB::lookup(RAddr const processId, RAddr const vAddr, RAddr& d$lineId, bo
 		line->locked = false;
 	}
 
-	r = line->read;
-	w = line->write;
-	pAddr = line->pAddr << (getMMU().pAW() - line->pAddr.m_width);
+	res = TLBResult(line, &getMMU(), false);
+	DebugTLBWrite("Lookup request for %lu:0x%lX success: 0x%lx, r=%d, w=%d", processId.m_value, vAddr.m_value, line->pAddr.m_value, line->read, line->write);
 
 	return Result::SUCCESS;
 }
@@ -266,12 +311,20 @@ Result TLB::onPropertyMsg(MgtMsg &msg){
 	assert(msg.type == (uint64_t)MgtMsgType::SET);
 
 	if(msg.set.property == (uint64_t)manager::SetType::SET_STATE_ON_TLB){
-		assert(msg.set.val0 <= 1);
-		COMMITCLI{	m_enabled = msg.set.val0; }
+		COMMITCLI{
+			if(msg.set.val1){
+				DebugTLBWrite("TLB enabled by IO Message");
+				m_enabled = true;
+			}else{
+				DebugTLBWrite("TLB disabled by IO Message");
+				m_enabled = false;
+			}
+		}
 	}else if(msg.set.property == (uint64_t)manager::SetType::SET_MGT_ADDR_ON_TLB){
 		COMMITCLI{
-			m_mgtAddr.devid = msg.set.val0;
-			m_mgtAddr.chan = msg.set.val1;
+			m_mgtAddr.devid = msg.set.val1;
+			m_mgtAddr.chan = msg.set.val2;
+			DebugTLBWrite("TLB manager address set to %u channel %u by IO Message", m_mgtAddr.devid, m_mgtAddr.chan);
 		}
 	}else{
 		UNREACHABLE
@@ -283,11 +336,26 @@ Result TLB::onPropertyMsg(MgtMsg &msg){
 Result TLB::onStoreMsg(MgtMsg &msg){
 	assert(msg.type == (uint64_t)MgtMsgType::REFILL);
 	assert(msg.refill.table < m_numTables);
+	DCache& cache = GetDRISCParent()->GetDCache();
 
 	Table *table = m_tables[msg.refill.table];
 	RAddr d$lineId;
 	RAddr pAddr = RAddr(msg.refill.pAddr, table->getPAddrWidth());
 	RAddr lineIndex = RAddr(msg.refill.lineIndex, m_tables[0]->getIndexWidth());
+
+	if(msg.dRefill.present == 0){
+		Result res;
+		RAddr vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
+		RAddr processId = RAddr(0, getMMU().procAW());
+
+		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
+		if(res != Result::SUCCESS){
+			DeadlockWrite_("Cannot find pending tlb entry"); //MLDTODO Include more info
+			return Result::FAILED;
+		}
+
+		cache.OnTLBLookupCompleted((void*)d$lineId.m_value, 0);
+	}
 
 	Result res;
 	if(msg.refill.table == 0){
@@ -300,6 +368,7 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 
 		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
 		if(res != Result::SUCCESS){
+			DeadlockWrite_("Cannot find pending tlb entry"); //MLDTODO Include more info
 			return Result::FAILED;
 		}
 
@@ -388,19 +457,16 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		vAddr >>= getMinOffsetSize();
 		bool mayUnlock = arg.getBool(3);
 
-		bool r;
-		bool w;
-		RAddr pAddr(0, getMMU().pAW() - getMinOffsetSize());
-		RAddr d$LineIndex(0, getMMU().netAW());
+		TLBResult data;
 
-		Result res = lookup(procId, vAddr, d$LineIndex, r, w, pAddr, mayUnlock);
+		Result res = lookup(procId, vAddr, mayUnlock, data);
 
 		out << "Simulated lookup with result " << res << std::endl;
 		if(res == Result::SUCCESS){
-			out << "   d$LineIndex: " << d$LineIndex << std::endl;
-			out << "   read: " << r << std::endl;
-			out << "   write: " << w << std::endl;
-			out << "   pAddr: " << pAddr << std::endl;
+			out << "   d$LineIndex: " << data.dcacheReference() << std::endl;
+			out << "   read: " << data.read() << std::endl;
+			out << "   write: " << data.write() << std::endl;
+			out << "   pAddr: " << data.pAddr() << std::endl;
 		}
 	}else if(arg.is(0, false, "sim-i", "sim-invalidate")){
 		arg.expect(5);
@@ -423,11 +489,11 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 
 		if (property == "ENABLED" || property == "E") {
 			msg.set.property = (uint64_t)manager::SetType::SET_STATE_ON_TLB;
-			msg.set.val0 = arg.getBool(2);
+			msg.set.val1 = arg.getBool(2);
 		}else if (property == "MANAGER_ADDRESS" || property == "MANAGER" || property == "MA") {
 			msg.set.property = (uint64_t)manager::SetType::SET_MGT_ADDR_ON_TLB;
-			msg.set.val0 = arg.getMAddr(2, getMMU().netAW());
-			msg.set.val1 = arg.getUnsigned(3);
+			msg.set.val1 = arg.getMAddr(2, getMMU().netAW());
+			msg.set.val2 = arg.getUnsigned(3);
 		}else{
 			UNREACHABLE
 		}
@@ -450,6 +516,29 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 	}else{
 		Cmd_Usage(out);
 	}
+}
+
+void* TLBResult::dcacheReference(void* ref) {
+	assert(m_line && !m_line->present);
+	void* old = m_line->d$lineRef;
+	m_line->d$lineRef = ref;
+	return old;
+}
+
+Addr TLBResult::vAddr() {
+	assert(m_line);
+	//MLDTODO Hack to allow for 64-bit addresses
+	int offset = m_mmu->vAW() - m_line->vAddr.m_width;
+	offset = offset < 0 ? 0 : offset;
+	return (m_line->vAddr << (offset)).m_value;
+}
+
+Addr TLBResult::pAddr() {
+	assert(m_line && m_line->present);
+	//MLDTODO Hack to allow for 64-bit addresses
+	int offset = m_mmu->pAW() - m_line->pAddr.m_width;
+	offset = offset < 0 ? 0 : offset;
+	return (m_line->pAddr << offset).m_value;
 }
 
 } /* namespace mmu */

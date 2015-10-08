@@ -13,7 +13,7 @@ m_vWidth(getMMU().vAW() - m_offsetWidth),
 m_pWidth(getMMU().pAW() - m_offsetWidth),
 m_numLines(GetConf("NumberOfLines", size_t)),
 m_evictionStrategy(getEvictionStrategy(GetConf("EvictionStrategy", std::string))),
-m_lines(m_numLines,	Line(getMMU().procAW(), m_vWidth, m_pWidth, getMMU().netAW())),
+m_lines(m_numLines,	Line(getMMU().procAW(), m_vWidth, m_pWidth)),
 m_head(NULL),
 m_tail(NULL),
 m_indexWidth(ilog2(m_numLines))
@@ -80,6 +80,7 @@ Line *Table::find(std::function<bool (Line&)> const &lambda)
 }
 
 Addr Table::getIndex(const Line &line) const{
+	//MLDTODO Use vector contiguity
 	for(unsigned int i=0; i<m_numLines; i++){
 		if(&(m_lines.at(i)) == &line){
 			return i;
@@ -98,7 +99,7 @@ Result Table::getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAdd
 		return Result::FAILED;
 	}
 
-	d$LineId = line.d$lineId;
+	d$LineId = line.d$lineRef;
 	processId = line.processId;
 	vAddr = line.vAddr;
 
@@ -158,7 +159,7 @@ Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr,
 		return Result::FAILED;
 	}
 
-	d$LineId = line.d$lineId;
+	d$LineId = line.d$lineRef;
 	// locked stays true
 	line.present = true;
 	line.read = read;
@@ -168,33 +169,30 @@ Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr,
 	return Result::SUCCESS;
 }
 
-Result Table::storePending(RAddr processId, RAddr vAddr, RAddr &d$LineId, Addr &tableLineId){
+bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* &line){
 	processId.strictExpect(getMMU().procAW());
 	vAddr.strictExpect(m_vWidth);
 
-	Line *dst = find(processId, vAddr, LineTag::PENDING);
+	line = find(processId, vAddr, LineTag::PENDING);
 
-	if(dst == NULL){
-		dst = &pickDestination();
-		if(dst->locked){
-			return Result::FAILED;
+	if(line == NULL){
+		line = &pickDestination();
+		if(line->locked){
+			return false;
 		}
 
-		freeLine(*dst);
+		freeLine(*line);
 
-		dst->present = false;
-		dst->locked = true;
-		dst->processId = processId;
-		dst->vAddr = vAddr;
+		line->present = false;
+		line->locked = true;
+		line->processId = processId;
+		line->vAddr = vAddr;
 	}
 
-	RAddr oldD$LineId = dst->d$lineId;
-	dst->d$lineId = d$LineId;
+	tableLineId = getIndex(*line);
 
-	d$LineId = oldD$LineId;
-	tableLineId = getIndex(*dst);
 
-	return Result::SUCCESS;
+	return true;
 }
 
 void Table::setPrioHigh(Line &line) {
@@ -283,7 +281,7 @@ void Table::freeLine(Line &line){
 	line.present = false;
 }
 
-Line::Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth):
+Line::Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth):
 	present(false),
 	locked(false),
 	accessed(false),
@@ -292,7 +290,7 @@ Line::Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth, Addr
 	processId(0,procWidth),
 	vAddr(0, vAddrWidth),
 	pAddr(0, pAddrWidth),
-	d$lineId(0, d$AddrWidth),
+	d$lineRef(0),
 	read(false),
 	write(false)
 {}
@@ -410,7 +408,7 @@ void Table::Cmd_Read(std::ostream& out,	const std::vector<std::string>& /* argum
 		if(line.is(LineTag::FREE)){
 			out << "FREE: -" << endl;
 		}else if(line.is(LineTag::PENDING)){
-			out << dec << "PENDING: D$-line: " << line.d$lineId << endl;
+			out << dec << "PENDING: D$-line: " << line.d$lineRef << endl;
 		}else if(line.is(LineTag::PRESENT)){
 			out << "PRESENT: PA=" << line.pAddr << " ";
 			out << "R=" << dec << setw(1) << line.read << " ";
@@ -469,7 +467,7 @@ void Table::Cmd_Write(std::ostream& out, const std::vector<std::string>& argumen
 		arg.namedSet("va", true, line->vAddr);
 		arg.namedSet("rd", true, line->read);
 		arg.namedSet("wr", true, line->write);
-		arg.namedSet("d$", true, line->d$lineId);
+		arg.namedSet("d$", true, line->d$lineRef);
 		arg.namedSet("a", true, line->accessed);
 
 		RAddr lineAddr = RAddr(0, m_numLines);

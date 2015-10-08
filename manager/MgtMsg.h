@@ -19,7 +19,7 @@ MGT_ENUM(MgtMsgType){
 	INVALIDATE 	= 2,
 	REFILL 		= 3,
 	INV			= 4,
-	SET			= 5
+	SET         = 5,
 };
 
 MGT_ENUM(TlbType){
@@ -98,8 +98,9 @@ struct TlbRefill {
 struct Set {
 	uint64_t type		: 3; //  3
 	uint64_t property	: 5; //  8
-	uint64_t val1		:56; // 64
-	uint64_t val0;			 //128
+	uint64_t val1		:32; // 40
+	uint64_t val2		:24; // 64
+	uint64_t val0;			 //128 - Not always present for SET messages
 };
 
 MGT_UNION(MgtMsg,

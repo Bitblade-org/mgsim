@@ -26,7 +26,7 @@ class TestNet: public Object{
 
 public:
 	TestNet(const std::string& name, Object& parent);
-	static void d$Push(Addr line);
+	static void d$Push(Addr line, bool present=true);
 };
 
 class MMUTester;

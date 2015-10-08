@@ -28,7 +28,6 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     m_sets           (GetConf("NumSets", size_t)),
     m_lineSize       (GetTopConf("CacheLineSize", size_t)),
     m_selector       (IBankSelector::makeSelector(*this, GetConf("BankSelector", string), m_sets)),
-    InitBuffer(m_lookup_responses, clock, "LookupResponsesBufferSize"),
     InitBuffer(m_read_responses, clock, "ReadResponsesBufferSize"),
     InitBuffer(m_write_responses, clock, "WriteResponsesBufferSize"),
     InitBuffer(m_writebacks, clock, "ReadWritebacksBufferSize"),
@@ -50,7 +49,6 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     InitSampleVariable(numStallingWMisses, SVC_CUMULATIVE),
     InitSampleVariable(numSnoops, SVC_CUMULATIVE),
 
-    InitProcess(p_LookupResponses, DoLookupResponses),
     InitProcess(p_ReadWritebacks, DoReadWritebacks),
     InitProcess(p_ReadResponses, DoReadResponses),
     InitProcess(p_WriteResponses, DoWriteResponses),
@@ -59,7 +57,6 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     p_service       (clock, GetName() + ".p_service")
 {
 
-	m_lookup_responses.Sensitive(p_LookupResponses);
     m_writebacks.Sensitive(p_ReadWritebacks);
     m_read_responses.Sensitive(p_ReadResponses);
     m_write_responses.Sensitive(p_WriteResponses);
@@ -285,7 +282,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
          * MLDTODO Push thread to REFILL-HEAD.
          * MLDTODO Suspend thread.
          */
-        DeadlockWrite("dTLB lookup for (%u, %#016llx) failed!", contextId, (unsigned long long)address);
+
     	return FAILED; //MLDTODO Temporary
     }
 
@@ -568,14 +565,6 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     return DELAYED;
 }
 
-bool DCache::OnTLBLookupCompleted(void* dsLineRef, bool present){
-	Line* line = (Line*)dsLineRef;
-	assert(line->state == LINE_LOADING);
-	assert(present);
-	return true; //MLDTODO STUB
-
-}
-
 bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
 {
     // Check if we have the line and if its loading.
@@ -715,26 +704,6 @@ bool DCache::OnMemoryInvalidated(MemAddr address)
 Object& DCache::GetMemoryPeer()
 {
     return *GetParent();
-}
-
-Result DCache::DoLookupResponses(){
-	assert(!m_lookup_responses.Empty());
-
-    if (!p_service.Invoke())
-    {
-        DeadlockWrite("Unable to acquire port for D-Cache access in lookup completion");
-        return FAILED;
-    }
-
-    auto& response = m_lookup_responses.Front();
-    Line& line = m_lines[response.lineId];
-    assert(line.state == LINE_LOADING);
-
-    DebugMemWrite("Processing lookup completion for Line ID %u", response.lineId);
-    assert(response.present);
-
-    //MLDTODO STUB
-    return SUCCESS;
 }
 
 Result DCache::DoReadResponses()

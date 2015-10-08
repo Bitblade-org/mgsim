@@ -70,6 +70,20 @@ bool Arguments::namedSet(std::string varName, bool consume, bool &var){
 	return true;
 }
 
+bool Arguments::namedSet(std::string varName, bool consume, void* &ptr){
+	if(m_namedValues.count(varName) == 0){
+		return false;
+	}
+
+	ptr = (void*)getULL(m_namedValues[varName], std::numeric_limits<Addr>::max());
+
+	if(consume){
+		m_namedValues.erase(varName);
+	}
+
+	return true;
+}
+
 bool Arguments::namedSet(std::string varName, bool consume, Addr &addr){
 	if(m_namedValues.count(varName) == 0){
 		return false;

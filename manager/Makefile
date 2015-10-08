@@ -6,13 +6,12 @@ INCLUDE=-I/home/nijntje/mgsim_install/share/mgsim/
 #-I/opt/svp/sl-s3.4.90-5937-c3.8.47-e209-mta-p4876-ptl-preV5-hlsim-irfan-h4932-trunk/share/sl-core/include/ -I/opt/svp/sl-s3.4.90-5937-c3.8.47-e209-mta-p4876-ptl-preV5-hlsim-irfan-h4932-trunk/share/sl-core/mtalpha-sim/include/
 SLCFLAGS=-b mta
 LDFLAGS=
-HEADERS=defines.h main.h manager.h MgtMsg.h pagetable.h PTBuilder.h
-SOURCES=main.c PTBuilder.c pagetable.c manager.c
-#SOURCES=manager.c
-#SOURCES=test.c
+HEADERS=defines.h main.h manager.h memreader.h MgtMsg.h pagetable.h PTBuilder.h 
+SOURCES=main.c manager.c memreader.c pagetable.c PTBuilder.c 
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=boot.bin
 PREFIX=/home/nijntje/mgexec/slr/assets
+CFLAGS=-O0
 
 all: boot.bin
     
@@ -25,7 +24,7 @@ boot.bin: $(OBJECTS) $(HEADERS)
 
 
 $(PREFIX)/boot.bin: boot.bin
-	cp ./boot.bin $(PREFIX)/boot.bin
+	cp --verbose ./boot.bin $(PREFIX)/boot.bin
 
 clean:
 	rm *.o

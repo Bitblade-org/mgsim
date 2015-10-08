@@ -1,36 +1,7 @@
 #include "main.h"
 
-sl_def(memreader, , ) {
-    sl_index(i);
-
-    unsigned pid = get_current_place();
-    unsigned core_id = get_core_id();
-    printf("\n");
-
-    printf("Memreader (thread %d) now running on core %d, place_id %x\n", (int)i, core_id, pid);
-    uint64_t* loc;
-    loc = (uint64_t*)0x100000; printf("Location %p contains %u\n", loc, *loc);
-    loc = (uint64_t*)0x200000; printf("Location %p contains %u\n", loc, *loc);
-    loc = (uint64_t*)0x300000; printf("Location %p contains %u\n", loc, *loc);
-    loc = (uint64_t*)0x400000; printf("Location %p contains %u\n", loc, *loc);
-    loc = (uint64_t*)0x500000; printf("Location %p contains %u\n", loc, *loc);
-}
-sl_enddef
-
-sl_def(manager, , sl_shparm(unsigned, c), sl_shparm(uint64_t, p)) {
-    sl_index(i);
-
-    unsigned pid = get_current_place();
-    unsigned core_id = get_core_id();
-    printf("Will run manager thread %d on core %d, place_id %x\n", (int)i, core_id, pid);
-
-	first_pt((pt_t*)sl_getp(p));
-    manager_loop(sl_getp(c));
-}
-sl_enddef
-
 int main(void) {
-	printf("Running OS on core %u\n", getIOAddr());
+	printf("Running OS on IO Addr %u\n", getIOAddr());
 
 	pt_t* next_table;
 	size_t free;
@@ -41,11 +12,102 @@ int main(void) {
 		svp_abort();
 	}
 
-	init_manager();
+	/*
+	 * ---===[ Starting manager ]===---
+	 */
 
-	init_memreader();
+    // Place id 1 means: Same core, but size 1
+    unsigned manager_pid = 1;
 
-	while(1){}
+    sl_create(,manager_pid,,,,,,manager_init,
+    		sl_sharg(unsigned, channel0, MANAGER_CHANNEL)
+			);
+    sl_sync();
+
+    sl_create(,manager_pid,,,,,,manager,
+    		sl_sharg(unsigned,,MANAGER_CHANNEL),
+			sl_sharg(uint64_t,,(uint64_t)PTS_PBASE)
+			);
+    sl_detach(); // No need for sync on this one. Any manager requests arriving
+    			 // before manager is started get buffered or rejected (full buffer).
+
+	for(int i=0; i<2000; i++){
+		asm("NOP");
+	} // Just so all initialisation printf's from manager have been printed
+
+
+	/*
+	 * ---===[ Reserve and initialise a nice cosy core ]===---
+	 */
+
+    sl_place_t p;
+    int r = sep_alloc(root_sep, &p, SAL_EXACT, 1);
+    if (r == -1){
+    	printf("SEP Unable to allocate core for memreader");
+    	svp_abort();
+    }
+
+
+    //Figure out it's IO Address
+    printf("Figuring out IO Address of victim core\n");
+    sl_create(,p,,,,,,getRemoteIOAddr,
+    		sl_sharg(unsigned, addr, 0) // Initialising to stop compiler from complaining
+			);
+    sl_sync();
+    unsigned p_io = sl_geta(addr);
+    printf("IO Address of victim core is %u\n", p_io);
+
+    //Do all we can to warn (Technically not needed in this specific case)
+    sl_create(,p,,,,,sl__exclusive, wait,
+    		sl_sharg(short, end, 0) // Initialising to stop compiler from complaining
+			);
+
+		//Switch on the dTLB _remotely_.
+		//(One DOES NOT want to do this locally if one wishes to remain sane)
+		sl_create(,1,,,,,,tlbEnable,
+				sl_sharg(unsigned,, MANAGER_CHANNEL),
+				sl_sharg(unsigned,, getIOAddr()), //p=1, so this runs on the same core as main
+				sl_sharg(unsigned,, p_io + 2) //if the core has io address 5, the iTLB will be 6 and the dTLB 7
+				);						//MLDTODO Raphael is going to claim I can't count on that
+		sl_sync();
+
+		//MLDTODO It's a longshot, but maybe there is a better way? Response?
+		for(int i=0; i<200; i++){
+			asm("NOP");
+		} // Give the remote TLB some time to mess up the core nice and good.
+
+		sl_seta(end, 1);
+	sl_sync();
+
+	printf("Done initialising victim core!\n");
+
+
+	/*
+	 * ---===[ Create some entries ]===---
+	 */
+	uint64_t index = calculate_pt_index(OS_CONTEXT_ID, 0x220000);
+	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x84000);
+	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x420000);
+	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x420000 << 9);
+	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+
+	uint64_t* mem = (uint64_t*)0x220000;
+	*mem = 0x12345;
+
+
+
+	/*
+	 * ---===[ Run memreader ]===---
+	 */
+
+	sl_create(,p,,,,,,memreader);
+	sl_sync();
 }
 
 
@@ -57,32 +119,50 @@ unsigned getIOAddr(void){
 	return io_config.core_dev_id;
 }
 
-//sl_def(manager, , sl_shparm(unsigned, c)) {
-//	manager_loop(sl_getp(c));
-//}
+sl_def(getRemoteIOAddr,,
+		sl_shparm(unsigned, addr)
+		)
+{
+	(void)sl_getp(addr); // To stop compiler from whining
+	sl_setp(addr, getIOAddr());
+}sl_enddef;
 
-void init_manager(){
-    unsigned pid = get_current_place();
+sl_def(tlbEnable,,
+		sl_shparm(unsigned, channel2), // Numbered to stop compiler from whining
+		sl_shparm(unsigned, managerIOAddr),
+		sl_shparm(unsigned, tlbIOAddr)
+		)
+{
+    uint64_t* tlbIO = (uint64_t*)TRANSMIT_ADDR(sl_getp(tlbIOAddr));
+    MgtMsg_t msg;
+    msg.type = SET;
 
-    sl_create(, pid, 0, 1, 1,  ,,manager, sl_sharg(unsigned, c, MANAGER_CHANNEL), sl_sharg(uint64_t, p, (uint64_t)PTS_PBASE));
-    sl_detach(); // 1 thread at place p
+    msg.set.property = SET_MGT_ADDR_ON_TLB;
+    msg.set.val1 = sl_getp(managerIOAddr);
+    msg.set.val2 = sl_getp(channel2);
+    tlbIO[2] = msg.data.part[0];
 
-    //        ,pl,st,en,li,bl,,fe,ar
-    //sl_create(, get_current_place(), 0, 1, 1, , , manager, sl_sharg(unsigned, c, MANAGER_CHANNEL) );
-    //sl_detach(); // 1 thread at place p
-}
+	printf("Sync...\n"); //WHY!?!
 
-void init_memreader(){
-	for(int i=0; i<2000; i++){
-		asm("NOP");
+    msg.set.property = SET_STATE_ON_TLB;
+    msg.set.val1 = 1;
+	tlbIO[2] = msg.data.part[0];
+
+	// Our players be with those threads who remain on the core during the
+	// imminent all-fubarring apocalypse.
+
+	// To stop compiler from whining
+	sl_setp(channel2, sl_getp(channel2));
+	sl_setp(managerIOAddr, sl_getp(managerIOAddr));
+	sl_setp(tlbIOAddr, sl_getp(tlbIOAddr));
+}sl_enddef;
+
+sl_def(wait,,
+		sl_shparm(short, end)
+		)
+{
+	while(!sl_getp(end)){
+		//Do nothing
 	}
-
-    sl_place_t p;
-    int r = sep_alloc(root_sep, &p, SAL_EXACT, 1);
-    if (r == -1){
-    	printf("SEP Unable to allocate core for memreader");
-    }
-
-    sl_create(, p, 0, 1, 1,  ,,memreader, );
-    sl_detach(); // 1 thread at place p
-}
+	sl_setp(end, 2); // To stop compiler from whining
+}sl_enddef;

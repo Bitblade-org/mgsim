@@ -13,6 +13,7 @@
 int init_pt_set(pt_t* pt0, unsigned context_id, void *v_base, pt_t** next_table, size_t* free);
 pt_t* construct_pt(pt_t** next_table);
 uint64_t calculate_pt_index(uint64_t context_id, uint64_t vAddr);
-int write_entry(pt_t* pt0, uint64_t pts_index, unsigned lvl_offset, pt_t** next_table, size_t *free);
+int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned lvl_offset, pt_t** next_table, size_t *free);
+uint64_t get_index_section(uint64_t index, unsigned section);
 
 #endif /* MANAGER_PTBUILDER_H_ */

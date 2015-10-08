@@ -58,5 +58,19 @@ namespace Simulator
     	return os;
     }
 
+    std::string resultStr(Result result){
+    	std::string str;
+    	switch (result) {
+    		case Result::SUCCESS: str = "SUCCESS"; break;
+    		case Result::DELAYED: str = "DELAYED"; break;
+    		case Result::FAILED: str = "FAILED"; break;
+    		default: UNREACHABLE
+    	}
+
+    	return str;
+
+    }
+
+
 
 }

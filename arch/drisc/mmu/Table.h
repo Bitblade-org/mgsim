@@ -26,8 +26,6 @@ namespace mmu {
 //
 enum class EvictionStrategy {PSEUDO_RANDOM=0, ACCESSED=1, LRU=2};
 
-struct Line;
-
 enum class LineTag : unsigned char {
 	FREE		=0x1,
 	PENDING		=0x2,
@@ -39,7 +37,7 @@ enum class LineTag : unsigned char {
 };
 
 struct Line{
-	Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth, AddrWidth d$AddrWidth);
+	Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth);
 	bool is(const LineTag cmp);
 	bool is(const RAddr *processId, const RAddr *vAddr, const LineTag cmp);
 	bool	present;
@@ -53,7 +51,7 @@ struct Line{
 	RAddr	vAddr;
 	RAddr	pAddr;
 
-	RAddr	d$lineId;
+	void*   d$lineRef;
 
 	bool	read;
 	bool	write;
@@ -88,7 +86,7 @@ Line *lookup(RAddr processId, RAddr vAddr, LineTag type);
 
     Result getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId);
     Result releasePending(RAddr tableLineId);
-    Result storePending(RAddr processId, RAddr vAddr, RAddr &d$LineId, Addr &tableLineId);
+    bool storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* &line);
     Result storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId);
     Result storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write);
 

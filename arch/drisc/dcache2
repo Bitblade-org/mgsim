@@ -1,0 +1,66 @@
+READ
+
+Test cache line boundaries
+Test max size
+Acquire D$ port
+
+line := FindLine
+    Line with same tag exists? Return (SUCCESS)
+    Empty line exists? Return (DELAYED)
+    Evict line and return (DELAYED)
+    Cannot evict? Return (FAILED)
+
+FindLine FAILED?
+    m_numHardConflicts++
+    Return FAILED
+
+Aquire TLB port (placeholder)
+Do TLB lookup
+
+TLBlookup FAILED?
+    Return FAILED.
+
+FindLine DELAYED && TLB SUCCESS
+    Send RQ over Memory Network
+    Set line->pTag
+    = line->state LINE_EMPTY? m_numEmptyRMisses++
+    = line->state !LINE_EMPTY? m_numResolvedConflicts++
+    = m_numDelayedReads++
+    = line->state := LINE_LOADING;    
+    = push register
+    = return DELAYED
+    
+FindLine DELAYED && TLB DELAYED
+    Provide dcacheReference to TLB, store old ref to D$-line when applicable.
+    Store offset in D$ line
+    = line->state LINE_EMPTY? m_numEmptyRMisses++
+    = line->state !LINE_EMPTY? m_numResolvedConflicts++
+    = m_numDelayedReads++
+    = line->state := LINE_LOADING;
+    = push register
+    = return DELAYED
+    
+
+
+- Findline SUCCESS?
+---- All requested bytes valid? 
+------- TLBlookup SUCCESS?
+----------- m_numRHits++
+----------- return data and (SUCCESS)
+------- TLBlookup DELAYED?
+----------- return FAILED
+---- Not all requested bytes valid?
+------- line->state != LINE_LOADING
+----------- assert(line->state must be invalid)
+----------- m_numInvalidRMisses++
+----------- return FAILED
+------- line-state == LINE_LOADING
+----------- TLBlookup DELAYED?
+--------------- Provide dcacheReference to TLB, store old ref to D$-line when applicable.
+--------------- Store offset in D$ line
+----------- m_numLoadingRMisses++
+----------- m_numDelayedReads++
+----------- Push register
+----------- Return DELAYED
+
+

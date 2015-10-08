@@ -25,6 +25,8 @@ public:
 	bool namedSet(std::string varName, bool consume, bool &var);
 	bool namedSet(std::string varName, bool consume, Addr &addr);
 	bool namedSet(std::string varName, bool consume, RAddr &addr);
+	bool namedSet(std::string varName, bool consume, void* &ptr);
+
 
 	void set(unsigned int index, bool &var);
 	void set(unsigned int index, Addr &addr);

@@ -8,6 +8,8 @@
 #ifndef MANAGER_DEFINES_H_
 #define MANAGER_DEFINES_H_
 
+#define TRANSMIT_ADDR(ioDevId) mg_devinfo.base_addrs[ioDevId]
+
 //#define PT_INDEX_WIDTH 9
 //#define PT_LSB_OFFSET 12
 //#define CONTEXTID_WIDTH 18 //Rounded up to a multiple of PT_OFFSET_WIDTH
@@ -35,12 +37,13 @@
 #define VADDR_WIDTH 48
 #define VADDR_LSO 12 // Least significant offset
 #define PT_INDEX_WIDTH 9
-#define PTS_NR_LVL 7
+//#define PTS_NR_LVL 6
 #define INITIAL_RESERVE_LVL_OFFSET 1
 
 //Calculated:
-#define PTS_INDEX_WIDTH PT_INDEX_WIDTH * (PTS_NR_LVL - 1)
-#define PT_INDEX_MASK ~(UINT64_MAX << PT_INDEX_WIDTH)
+//#define PTS_INDEX_WIDTH PT_INDEX_WIDTH * PTS_NR_LVL
+#define PTS_INDEX_WIDTH (VADDR_WIDTH + CONTEXTID_WIDTH - VADDR_LSO)
+#define PT_INDEX_MASK (~(UINT64_MAX << PT_INDEX_WIDTH))
 
 //VADDR_SIGNIFICANT_WIDTH + PROCID_WIDTH = 54 //Must be a multiple of PT_OFFSET_WIDTH
 
