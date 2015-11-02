@@ -39,12 +39,10 @@ int manager_main(unsigned channelNr){
 	int result;
 
 	while(1){
-		printf("Manager ready to receive request\n");
 		result = receive_net_msg(&msgBuffer, channel);
 		if(result == 0)	{ continue; }
 		if(result < 0)  { return result; } //A whoopsie occurred
 
-		printf("Manager handling request\n");
 		result = handleMsg(&msgBuffer);
 		if(result < 0)	{ return result; } //A whoopsie occurred
 	}
@@ -90,7 +88,7 @@ int handleMsg(MgtMsg_t* msg){
 }
 
 int handleSetPT(MgtMsg_t* msg){
-	printf("Setting PT pointer from %p to %p\n", get_pointer(NULL), (void*)msg->data.part[2]);
+//	printf("Setting PT pointer from %p to %p\n", get_pointer(NULL), (void*)msg->data.part[2]);
 	get_pointer((pte_t*)msg->set.val0);
 	return 1;
 }
@@ -103,8 +101,8 @@ int handleInvalidation(MgtMsg_t* req){
 }
 
 int handleMiss(MgtMsg_t* msg){
-	printf("\nHandling miss for context:%u, addr:0x%lX (0x%lX)\n", msg->mReq.contextId, msg->mReq.vAddr, (msg->mReq.vAddr << VADDR_LSO));
-	printf("Using pagetable start ptr: %p\n", first_pt(NULL));
+//	printf("\nHandling miss for context:%u, addr:0x%lX (0x%lX), lineref:%d\n", msg->mReq.contextId, msg->mReq.vAddr, (msg->mReq.vAddr << VADDR_LSO), msg->mReq.lineIndex);
+//	printf("Using pagetable start ptr: %p\n", first_pt(NULL));
 
 
 //  000000000 000000000 111111111 111111111 000000000 000000000 ADDR
@@ -120,7 +118,7 @@ int handleMiss(MgtMsg_t* msg){
 	pte_t* entry;
 	unsigned levels;
 	int result = walkPageTable(addr, (VADDR_WIDTH - VADDR_LSO) + CONTEXTID_WIDTH, &entry, &levels);
-	printf("Walk result: (%d) Levels: %d, Address:%p\n", result, levels, get_pointer(entry));
+//	printf("Walk result: (%d) Levels: %d, Address:%p\n", result, levels, get_pointer(entry));
 
 	if(result < 0){ return result; }
 
@@ -151,27 +149,17 @@ int handleMiss(MgtMsg_t* msg){
  * use getPointer(entry) to get the full address from the entry.
  */
 int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
-	printf("walkPageTable... Input address[%zd]: ", len);
-	for(int i=len-1; i>=0; i--){
-		int val = (addr >> i) & 1;
-		if((i+1)%PT_INDEX_WIDTH == 0){
-			printf(" ");
-		}
-		printf("%d", val);
-	}
-	printf("\n");
-
-	static uint64_t mask = ~(UINT64_MAX << PT_INDEX_WIDTH);
+//	print_pt_index(addr);
 
 	pt_t* t = first_pt(NULL);
 	*levels = 0;
 
 	while(len >= PT_INDEX_WIDTH){
-		printf("len %u--walkPageTable arrived at level %u with entries: (only present)\n", len, *levels);
-		printTable(t);
-		uint64_t offset = mask & (addr >> (len - PT_INDEX_WIDTH));
+//		printf("len %u--walkPageTable arrived at level %u with entries: (only present)\n", len, *levels);
+//		printTable(t);
+		uint64_t offset = PT_INDEX_MASK & (addr >> (len - PT_INDEX_WIDTH));
 
-		printf("Entry ID: %lu\n", offset);
+//		printf("Entry ID: %lu\n", offset);
 
 		*entry = &(t->entries[offset]);
 		len -= PT_INDEX_WIDTH;

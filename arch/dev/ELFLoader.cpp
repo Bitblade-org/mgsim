@@ -160,7 +160,7 @@ LoadProgram(const std::string& msg_prefix, vector<ActiveROM::LoadableRange>& ran
         }
     }
     // Verify(hasLoadable, "file has no loadable segments");
-    base = base & -PAGE_SIZE;
+    base = base & -PAGE_SIZE;  //MLDTODO PAGE_SIZE!?
 
     // Then copy the LOAD segments into their right locations
     for (Elf_Half i = 0; i < ehdr.e_phnum; ++i)

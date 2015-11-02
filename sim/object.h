@@ -134,7 +134,9 @@ namespace Simulator
 
 // Define these "methods" as macros to allow for optimizations
 #define DebugDo_(CAT, msg, ...) \
-    do { COMMIT if (GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false)
+		do { COMMIT if ((GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT)) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false) //MLDTODO HAAAACK
+
+    //do { COMMIT if ((GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT) && (GetName().at(3) >= ('0' + 4))) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false) //MLDTODO HAAAACK
 
 #define DebugSimWrite(msg, ...)   DebugDo_(SIM,   ("s " msg), ##__VA_ARGS__)
 #define DebugProgWrite(msg, ...)  DebugDo_(PROG,  ("- " msg), ##__VA_ARGS__)

@@ -89,84 +89,78 @@ Addr Table::getIndex(const Line &line) const{
 	throw exceptf<std::invalid_argument>("The line does not exist!");
 }
 
-Result Table::getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId){
+bool Table::getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId){
 	tableLineId.strictExpect(m_indexWidth);
 
 	Line &line = m_lines.at(tableLineId.m_value);
 
-	// Should be impossible anyway! Might as well assert!
 	if(!line.is(LineTag::PENDING)){
-		return Result::FAILED;
+		return false;
 	}
 
 	d$LineId = line.d$lineRef;
 	processId = line.processId;
 	vAddr = line.vAddr;
 
-	return Result::SUCCESS;
+	return true;
 }
 
-//MLDTODO Does this function have to return a Result obj?
-Result Table::releasePending(RAddr tableLineId){
+void Table::releasePending(RAddr tableLineId){
 	tableLineId.strictExpect(m_indexWidth);
 
 	Line &line = m_lines.at(tableLineId.m_value);
 
-	// Should be impossible anyway! Might as well assert!
-	if(!line.is(LineTag::PENDING)){
-		return Result::FAILED;
+	assert(line.is(LineTag::PENDING));
+
+	COMMIT{
+		line.locked = false;
 	}
-
-	// present stays false
-	line.locked = false;
-
-	return Result::SUCCESS;
 }
 
-Result Table::storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write){
+Line* Table::storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write){
 	vAddr.strictExpect(m_vWidth);
 	pAddr.strictExpect(m_pWidth);
 	processId.strictExpect(getMMU().procAW());
 
 	Line &dst = pickDestination();
 	if(dst.locked){
-		return Result::FAILED;
+		DeadlockWrite("Chosen destination TLB line is locked");
+		return NULL;
 	}
 
 	freeLine(dst);
 
-	dst.present = true;
-	dst.locked = true;
-	dst.processId = processId;
-	dst.vAddr = vAddr;
-	dst.pAddr = pAddr;
-	dst.read = read;
-	dst.write = write;
+	COMMIT{
+		dst.present = true;
+		dst.locked = true;
+		dst.processId = processId;
+		dst.vAddr = vAddr;
+		dst.pAddr = pAddr;
+		dst.read = read;
+		dst.write = write;
+	}
 
-	return Result::SUCCESS;
+	return &dst;
 }
 
-
-Result Table::storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId)
+Line* Table::fillPending(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId)
 {
 	pAddr.strictExpect(m_pWidth);
 	tableLineId.strictExpect(m_indexWidth);
 
 	Line &line = m_lines[tableLineId.m_value];
+	assert(line.is(LineTag::PENDING));
 
-	//MLDTODO Should this be impossible? Should be impossible anyway! Might as well assert!
-	if(!line.is(LineTag::PENDING)){
-		return Result::FAILED;
+	COMMIT{
+		d$LineId = line.d$lineRef;
+		// locked stays true
+		line.present = true;
+		line.read = read;
+		line.write = write;
+		line.pAddr = pAddr;
 	}
 
-	d$LineId = line.d$lineRef;
-	// locked stays true
-	line.present = true;
-	line.read = read;
-	line.write = write;
-	line.pAddr = pAddr;
-
-	return Result::SUCCESS;
+	return &line;
 }
 
 bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* &line){
@@ -278,7 +272,9 @@ void Table::freeLine(Line &line){
 		throw exceptf<std::domain_error>("Attempt to invalidate locked TLB line");
 	}
 
-	line.present = false;
+	COMMIT{
+		line.present = false;
+	}
 }
 
 Line::Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth):
@@ -467,7 +463,7 @@ void Table::Cmd_Write(std::ostream& out, const std::vector<std::string>& argumen
 		arg.namedSet("va", true, line->vAddr);
 		arg.namedSet("rd", true, line->read);
 		arg.namedSet("wr", true, line->write);
-		arg.namedSet("d$", true, line->d$lineRef);
+		arg.namedSet("d$", true, (Addr&)line->d$lineRef);
 		arg.namedSet("a", true, line->accessed);
 
 		RAddr lineAddr = RAddr(0, m_numLines);

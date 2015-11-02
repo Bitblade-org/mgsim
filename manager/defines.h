@@ -8,6 +8,8 @@
 #ifndef MANAGER_DEFINES_H_
 #define MANAGER_DEFINES_H_
 
+#include <stdint.h>
+
 #define TRANSMIT_ADDR(ioDevId) mg_devinfo.base_addrs[ioDevId]
 
 //#define PT_INDEX_WIDTH 9

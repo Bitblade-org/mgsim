@@ -10,11 +10,29 @@
 #include <cstdio>
 using namespace std;
 
+void bp(){
+
+}
+
+//MLDTODO-DOC MMIO
+//MLDTODO Linker plaatst secties van boot.bin op onhandige locaties. Op te lossen door Virt.mem voor boot.bin?
+
+
 namespace Simulator
 {
 
 namespace drisc
 {
+
+/*MLDTODO Limitations:
+ * 		  - Only works for a direct mapped cache. (1-way set associative)
+ * 		  - Only works for DIRECT bank selection.
+ * 		  - Only works for memory systems that respond to the requesting $ only.
+ * 		  Check for limitations
+ * 		  MLDTODO-DOC
+*/
+
+//MLDTODO-DOC: ContextId is at least 16 bits. But the number of threads running within a single TLB's domain is not going to fill that. A simple lookup table could save an enourmous amount of storage space!
 
 DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
 :   Object(name, parent),
@@ -130,31 +148,41 @@ DCache::~DCache()
 //MLDTODO Create reverse lookup directory
 Result DCache::ReverseFindLine(MemAddr pAddr, Line* &line)
 {
+	if(pAddr == 0x480000ul){
+		bp();
+	}
 	//MLDTOOD Flush cache on tlb state change
-	return FindLine(pAddr, line, true);
-    size_t offset = (size_t)(pAddr % m_lineSize);
-	MemAddr pTag = pAddr - offset;
+	return FindLine(pAddr, 0, line, true, true);
 
-    // Find the line
-    for (size_t i = 0; i < m_assoc * m_sets; ++i)
-    {
-        line = &m_lines[i];
 
-        if (line->pTag == pTag && line->state != LINE_EMPTY)
-        {
-			return SUCCESS;
-        }
-    }
+//    size_t offset = (size_t)(pAddr % m_lineSize);
+//	MemAddr pTag = pAddr - offset;
+//
+//    // Find the line
+//    for (size_t i = 0; i < m_assoc * m_sets; ++i)
+//    {
+//        line = &m_lines[i];
+//
+//        if (line->pTag == pTag && line->state != LINE_EMPTY)
+//        {
+//			return SUCCESS;
+//        }
+//    }
+//
+//    return FAILED;
 
-    return FAILED;
 }
 
-Result DCache::FindLine(MemAddr address, Line* &line, bool check_only)
+Result DCache::FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags)
 {
+	//MLDTODO-DOC Als FindLine altijd hetzelfde setIndex geeft voor zowel pAddr als vAddr, is geen reverse lookup nodig!
+	//MLDTODO Meerdere "selectors" beschikbaar. Gebruik "DIRECT"
 	//MLDTODO Take contextId into account
     MemAddr tag;
     size_t setindex;
     m_selector->Map(address / m_lineSize, tag, setindex);
+    DebugMemWrite("Findline 0x%X: tag=0x%X, index=%d", address, tag, setindex);
+
     const size_t  set  = setindex * m_assoc;
 
     // Find the line
@@ -170,7 +198,7 @@ Result DCache::FindLine(MemAddr address, Line* &line, bool check_only)
             // Empty, unused line, remember this one
             empty = line;
         }
-        else if (line->tag == tag)
+        else if (ignore_tags || (line->tag == tag && line->contextTag == contextId)) //MLDTODO Will do for now. Correct?
         {
             // The wanted line was in the cache
             return SUCCESS;
@@ -202,6 +230,7 @@ Result DCache::FindLine(MemAddr address, Line* &line, bool check_only)
         {
             line->processing = false;
             line->tag        = tag;
+            line->contextTag = contextId;
             line->waiting    = INVALID_REG;
             std::fill(line->valid, line->valid + m_lineSize, false);
         }
@@ -243,7 +272,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     }
 
     Line*  line;
-    Result result = FindLine(address - offset, line, false);
+    Result result = FindLine(address, contextId, line, false, false);
     // SUCCESS - A line with the address was found
     // DELAYED - The line with the address was not found, but a line has been allocated
     // FAILED  - No usable line was found at all and could not be allocated
@@ -251,6 +280,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
 
     if (result == FAILED)
     {
+    	DebugMemWrite("CASE L3 & CASE L7 (1st)");
         // Cache-miss and no free line
 
     	// MLDNOTE LOAD, MISS, WAITING, != tag
@@ -280,6 +310,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
     if(tlbResult == FAILED){
+    	DebugMemWrite("CASE F");
         //MLDNOTE D-TLB FAILED
         /* MLDTODO CASE F
          * MLDTODO Push thread to REFILL-HEAD.
@@ -308,6 +339,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     	if (i == size)
     	{
     		if(tlbResult == SUCCESS){
+    			DebugMemWrite("CASE L1");
     			//MLDTODO Validate access bits
 
     			//MLDNOTE LOAD, HIT
@@ -325,6 +357,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     			return SUCCESS;
     		}
 
+    		DebugMemWrite("CASE L5");
     		/* MLDTODO CASE L5
     		 * MLDTODO Provide 'magic' D$-line-ref to DTLB.
     		 * MLDTODO Push thread to M-REFILL-HEAD.
@@ -337,6 +370,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     	// Data is not entirely in the cache; it should be loading from memory
     	if (line->state != LINE_LOADING)
     	{
+    		DebugMemWrite("CASE L3 & CASE L7 (2nd)");
     		/* OK CASE L3 & CASE L7 (2nd)
     		 * MLDOPT Push thread to D$-EVENT-HEAD.
     		 * MLDOPT Suspend thread.
@@ -351,6 +385,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
 
 
     	if(tlbResult == SUCCESS){
+    		DebugMemWrite("CASE L2");
         	//MLDNOTE (first) LOAD, MISS, WAITING, == tag
         	/* OK CASE L2
         	 * OK Add register to head of linked list.
@@ -359,6 +394,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     	    size_t pOffset = (size_t)(tlbData.pAddr() % m_lineSize);
     		assert(tlbData.pAddr() - pOffset == line->pTag);
     	}else{
+    		DebugMemWrite("CASE L6");
     		/* OK CASE L6
     		 * OK Add register to head of linked list.
     		 * OK Provide D$-line-ref to TLB.
@@ -366,8 +402,8 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     		 * OK Store D$-ref in D$-line
     		 * OK return DELAYED
     		 */
-    		line->next = (Line*)tlbData.dcacheReference(line);
-    		line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetSize();
+    		line->next = tlbData.dcacheReference(GET_LINE_ID(line));
+    		line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetWidth();
     	}
 
 
@@ -388,6 +424,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     	// A new line has been allocated; send the request to memory
 
     	if(tlbResult == SUCCESS){
+    		DebugMemWrite("CASE L4");
     		/* OK CASE L4
     		 * OK Set line invalid.
     		 * OK Add register to head of linked list.
@@ -412,6 +449,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     		COMMIT{line->pTag = tlbData.pAddr() - pOffset;}
 
     	}else{
+    		DebugMemWrite("CASE L8");
         	/* CASE L8
         	 * OK Set line invalid.
         	 * OK Add register to head of linked list.
@@ -420,8 +458,11 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
         	 * OK Store D$-ref in D$-line
         	 * OK return DELAYED
         	 */
-        	line->next = (Line*)tlbData.dcacheReference(line);
-        	line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetSize();
+    		COMMIT{
+				line->next = tlbData.dcacheReference(GET_LINE_ID(line));
+				//MLDTODO I don't think this usage of % is correct...
+				line->tlbOffset = address % (1 << (m_mmu->getDTlb().getMinOffsetWidth() - 1));
+    		}
     	}
 
     	COMMIT {
@@ -479,7 +520,7 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
 #endif
 
     // Check that we're writing writable memory
-    auto& cpu = GetDRISC();
+    //auto& cpu = GetDRISC();
 //    if (!cpu.CheckPermissions(address, size, IMemory::PERM_WRITE))
 //    {
 //        throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory",
@@ -496,7 +537,7 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     //MLDTODO Perform TLB Request
 
     Line* line = NULL;
-    Result result = FindLine(address, line, true);
+    Result result = FindLine(address, contextId, line, true, false);
     if (result == SUCCESS)
     {
         assert(line->state != LINE_EMPTY);
@@ -568,12 +609,26 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     return DELAYED;
 }
 
-bool DCache::OnTLBLookupCompleted(void* dsLineRef, bool present){
-	Line* line = (Line*)dsLineRef;
-	assert(line->state == LINE_LOADING);
-	assert(present);
-	return true; //MLDTODO STUB
+bool DCache::OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool present){ //MLDTODO Modify cid type
+	Line& line = m_lines[cid]; //MLDTODO If the mapping from vAddr/ContextId to cid is deterministic, no CID is needed.
+	assert(line.state == LINE_LOADING); //MLDTODO Handle
+	assert(present); //MLDTODO Handle
 
+    // Push the cache-line to the back of the queue
+    LookupResponse response;
+    response.cid   = cid;
+    response.tlbLineRef = tlbLineRef;
+    response.present = present;
+
+    DebugMemWrite("Received lookup completion for CID %u", (unsigned)response.cid);
+
+    if (!m_lookup_responses.Push(response))
+    {
+    	std::cout << "Lookup response NOT pushed to buffer!" << std::endl;
+        DeadlockWrite("Unable to push lookup completion to buffer");
+        return false;
+    }
+    return true;
 }
 
 bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
@@ -582,8 +637,10 @@ bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
     // This method gets called whenever a memory read completion is put on the
     // bus from memory, so we have to check if we actually need the data.
     Line* line;
-    if (ReverseFindLine(addr, line) == SUCCESS && line->state != LINE_FULL && !line->processing)
+    if (!(ReverseFindLine(addr, line) == SUCCESS && line->state != LINE_FULL && !line->processing))
     {
+    	DebugMemWrite("Cannot find a loading/invalid line with address 0x%lX", addr); //MLDTODO Remove after debugging
+    }else{
         assert(line->state == LINE_LOADING || line->state == LINE_INVALID);
 
         // Registers are waiting on this data
@@ -617,6 +674,7 @@ bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
             line->processing = true;
         }
 
+        //MLDTODO Waarom staat dit niet in een commit block en wat betekend dat voor ontlbresp...
         // Push the cache-line to the back of the queue
         ReadResponse response;
         response.cid   = line - &m_lines[0];
@@ -727,13 +785,57 @@ Result DCache::DoLookupResponses(){
     }
 
     auto& response = m_lookup_responses.Front();
-    Line& line = m_lines[response.lineId];
+
+    if(response.cid == INVALID_CID){
+    	//'Magic' CID, case S? or L5
+    	UNREACHABLE //MLDTODO Handle
+    }
+
+    //Valid CID, this must be the callback for cases L6 or L8!
+    assert(response.present); //MLDTODO Handle
+
+    //We need to restart the memory req.
+    Line& line = m_lines[response.cid];
     assert(line.state == LINE_LOADING);
 
-    DebugMemWrite("Processing lookup completion for Line ID %u", response.lineId);
-    assert(response.present);
+    DebugMemWrite("Processing lookup completion for Line ID %u", response.cid);
 
-    //MLDTODO STUB
+    mmu::TLBResult tlbData;
+	m_mmu->getDTlb().getLine(response.tlbLineRef, tlbData);
+
+    //// DO REQUEST
+
+    size_t pOffset = (size_t)(tlbData.pAddr() % m_lineSize);
+
+    DebugTLBWrite("TLBLookupComplete: address: 0x%lX", tlbData.pAddr());
+    Request request;
+    request.write     = false;
+    request.address   = tlbData.pAddr() - pOffset; //MLDTODO pAddr
+
+	if (!m_outgoing.Push(request))
+	{
+		++m_numStallingRMisses; //MLDTODO Fix statistics
+		DeadlockWrite("Unable to push request to outgoing buffer");
+		return FAILED;
+	}
+	COMMIT{line.pTag = tlbData.pAddr() - pOffset;}
+	COMMIT {
+		if (line.state == LINE_EMPTY){
+			++m_numEmptyRMisses; //MLDTODO Fix statistics
+		}else{
+			++m_numResolvedConflicts; //MLDTODO Fix statistics
+		}
+
+		line.state = LINE_LOADING; //MLDTODO Fix statistics
+		//PushRegister(line, reg); //MLDTODO Fix register linked list
+
+		++m_numDelayedReads; //MLDTODO Fix statistics
+	}
+
+    ////END DO REQUEST
+
+    m_lookup_responses.Pop();
+
     return SUCCESS;
 }
 

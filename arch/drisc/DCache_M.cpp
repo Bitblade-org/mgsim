@@ -61,6 +61,9 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
 	}
 
 	Result result = Write2(contextId, address, data, size, fid, tid);
+	if(address == 0x801fffffffffff80){
+		std::cout << "Write naar probleemadres! Data:0x" << std::hex << address << ", component:" << GetName() << std::endl;
+	}
 
 	COMMIT{
 		if(cpuId > 3){

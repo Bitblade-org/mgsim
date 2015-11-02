@@ -20,6 +20,7 @@
 
 #include "Table.h"
 
+#define INVALID_TLB_LINE_INDEX UINT_MAX
 
 namespace Simulator {
 namespace drisc {
@@ -27,6 +28,10 @@ namespace mmu {
 
 using manager::MgtMsg;
 using manager::MgtMsgType;
+
+struct TlbLineRef{
+	Line* m_line;
+};
 
 class TLBResult{
 	friend class TLB;
@@ -43,8 +48,8 @@ public:
 	TLBResult& operator=(const TLBResult& other) {m_line = other.m_line; m_mmu = other.m_mmu; m_destroy = other.m_destroy; return *this;}
 
 	bool isPending(){assert(m_line); return !m_line->present;}
-	void* dcacheReference() {assert(m_line && !m_line->present); return m_line->d$lineRef;}
-	void* dcacheReference(void* ref);
+	unsigned dcacheReference() {assert(m_line && !m_line->present); return m_line->d$lineRef;}
+	unsigned dcacheReference(unsigned ref);
 	bool read() {assert(m_line && m_line->present); return m_line->read;}
 	bool write() {assert(m_line && m_line->present); return m_line->write;}
 	Addr contextId() {assert(m_line && m_line->present); return m_line->processId.m_value;}
@@ -90,8 +95,10 @@ public:
     bool OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size);
 	bool OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData& data);
 
+	void getLine(TlbLineRef lineRef, TLBResult &res);
+
 	Result lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResult &res);
-	AddrWidth getMinOffsetSize(){return m_tables[0]->getOffsetWidth();}
+	AddrWidth getMinOffsetWidth(){return m_tables[0]->getOffsetWidth();}
 
     Result onInvalidateMsg(MgtMsg &msg);
     Result onPropertyMsg(MgtMsg &msg);

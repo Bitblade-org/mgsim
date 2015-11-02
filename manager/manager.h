@@ -9,6 +9,7 @@
 #include "defines.h"
 #include "pagetable.h"
 #include "MgtMsg.h"
+#include "pt_index.h"
 
 sl_decl(manager_init,,sl_shparm(unsigned, channel));
 sl_decl(manager, , sl_shparm(unsigned, channel), sl_shparm(uint64_t, pt0));

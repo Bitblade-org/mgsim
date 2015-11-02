@@ -1,5 +1,7 @@
 #include "main.h"
 
+//MLDTODO "slc -b mta - -I/home/nijntje/mgsim_install/share/mgsim/ main.o manager.o memreader.o pagetable.o PTBuilder.o pt_index.o -o boot.bin" does not return or only after a very long time. Note the extra "-"
+
 int main(void) {
 	printf("Running OS on IO Addr %u\n", getIOAddr());
 
@@ -85,20 +87,24 @@ int main(void) {
 	/*
 	 * ---===[ Create some entries ]===---
 	 */
-	uint64_t index = calculate_pt_index(OS_CONTEXT_ID, 0x220000);
-	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+	uint64_t index;
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x440000ul);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
 
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x84000);
-	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x500000ul);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
 
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x420000);
-	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x510000ul);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
 
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x420000 << 9);
-	write_entry(PTS_PBASE, index, (void*)0x430000, 0, &next_table, &free);
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x520000ul);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
 
-	uint64_t* mem = (uint64_t*)0x220000;
-	*mem = 0x12345;
+	index = calculate_pt_index(OS_CONTEXT_ID, 0x530000ul);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
+
+	uint64_t* mem = (uint64_t*)0x500000ul;
+	*mem = 0x12345ul;
 
 
 
@@ -108,6 +114,10 @@ int main(void) {
 
 	sl_create(,p,,,,,,memreader);
 	sl_sync();
+
+	while(1){
+		asm("NOP");
+	}
 }
 
 

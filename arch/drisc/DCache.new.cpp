@@ -128,7 +128,6 @@ DCache::~DCache()
 Result DCache::ReverseFindLine(MemAddr pAddr, Line* &line)
 {
 	//MLDTOOD Flush cache on tlb state change
-	return FindLine(pAddr, line, true);
     size_t offset = (size_t)(pAddr % m_lineSize);
 	MemAddr pTag = pAddr - offset;
 
@@ -364,7 +363,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     		 * OK return DELAYED
     		 */
     		line->next = (Line*)tlbData.dcacheReference(line);
-    		line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetSize();
+    		line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetWidth();
     	}
 
 
@@ -418,7 +417,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
         	 * OK return DELAYED
         	 */
         	line->next = (Line*)tlbData.dcacheReference(line);
-        	line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetSize();
+        	line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetWidth();
     	}
 
     	COMMIT {

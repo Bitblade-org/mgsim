@@ -10,6 +10,8 @@
 #include <arch/simtypes.h>
 #include "arch/drisc/mmu/MMU.h"
 
+#define GET_LINE_ID(linePointer) (unsigned int)((Line*)linePointer - &m_lines[0])
+
 namespace Simulator
 {
 namespace drisc
@@ -34,6 +36,7 @@ public:
     ((name Line)
      (state
       (MemAddr     tag)               ///< The address tag.
+	  (ContextId   contextTag)		  ///< The contextId part of the tag //MLDTODO Implement in D$!
       (char*       data noserialize)  ///< The data in this line.
       (bool*       valid noserialize) ///< A bitmap of valid bytes in this line.
       (CycleNo     access)            ///< Last access time of this line (for LRU).
@@ -41,7 +44,7 @@ public:
       (LineState   state)             ///< The line state.
       (bool        processing)        ///< Has the line been added to m_returned yet?
       (bool        create)            ///< Is the line expected by the create process (bundle)?
-	  (Line*       next noserialize)  ///< The next D$ line waiting for this line //MLDTODO noserialize ok?
+	  (unsigned    next)  			  ///< The next D$ line waiting for this line
 	  (size_t      tlbOffset)         ///< The offset of the request
 	  (MemAddr     pTag)			  ///< MLDTODO Remove after testing
 
@@ -62,8 +65,9 @@ private:
     // {% call gen_struct() %}
     ((name LookupResponse)
      (state
-      (unsigned lineId)
-	  (bool 	present)
+      (CID 	cid)
+	  (mmu::TlbLineRef tlbLineRef noserialize)
+	  (bool present)
     ))
     // {% endcall %}
 
@@ -100,7 +104,7 @@ private:
     ))
     // {% endcall %}
 
-    Result FindLine(MemAddr address, Line* &line, bool check_only);
+	Result FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags);
     Result ReverseFindLine(MemAddr pAddr, Line* &line);
 
     IMemory*             m_memory;          	///< Memory
@@ -180,7 +184,7 @@ public:
     size_t GetLineSize() const { return m_lineSize; }
 
     // TLB callbacks
-    bool OnTLBLookupCompleted(void* dsLineRef, bool present);
+    bool OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool present);
 
     // Memory callbacks
     bool OnMemoryReadCompleted(MemAddr addr, const char* data) override;

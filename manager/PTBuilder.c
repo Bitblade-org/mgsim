@@ -24,7 +24,7 @@ int init_pt_set(pt_t* pt0, unsigned context_id, void *v_base, pt_t** next_table,
 
 	//Reserve a 2MiB page at physical location p_base, mapped pt_index
 	//Create new tables where needed, starting at next_table. (a 2MiB page has a 19-bit offset)
-	return write_entry(pt0, pts_index, pt0, 1, next_table, free);
+	return write_entry(pt0, pts_index, pt0, 0, next_table, free);
 }
 
 // If free==0, no new tables will be constructed.
@@ -33,6 +33,7 @@ int init_pt_set(pt_t* pt0, unsigned context_id, void *v_base, pt_t** next_table,
 // page_size=0 --> 4KiB
 // page_size=1 --> 2MiB
 // page_size=2 --> 1GiB
+//MLDTODO Rewrite with section nomenclature
 int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned page_size, pt_t** next_table, size_t *free){
 	pt_t*  table = pt0;
 	pte_t* entry;
@@ -40,8 +41,7 @@ int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned page_size, pt
 	int min = page_size;
 	int max = PTS_INDEX_WIDTH / PT_INDEX_WIDTH;
 
-	for(int i = max; i >= min; i--){
-		printf("for -- i=%d, max=%u, min=%u\n", i, max, min);
+	for(int i=max-1; i>=min; i--){
 		uint64_t pt_index = get_index_section(pts_index, i);
 		entry = &(table->entries[pt_index]);
 		if(i == min){
@@ -68,39 +68,8 @@ int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned page_size, pt
 	return 1;
 }
 
-uint64_t calculate_pt_index(uint64_t context_id, uint64_t complete_vAddr){
-	size_t context_width = CONTEXTID_WIDTH;
-	size_t vaddr_width = VADDR_WIDTH;
-	size_t vaddr_lso = VADDR_LSO;
-	uint64_t index = 0;
-
-	//The LSB falling inside the LSO (Least Significant Offset) are ignored for creation
-	//of the index since all entries in the PT will have at least this offset.
-	vaddr_width -= vaddr_lso;
-	complete_vAddr >>= vaddr_lso;
-
-	//The LSB part of the index contains the virtual address (bits 0 - vaddr_width)
-	index = complete_vAddr;
-
-	//The MSB part of the index contains the context id
-	context_id <<= vaddr_width;
-	index |= context_id;
-
-	return index;
-}
-
-uint64_t get_index_section(uint64_t index, unsigned section){
-//							5		4			3		2			1		0
-// Input address[54]:  000000000 000000000 000000000 000000000 000000010 000100000
-
-	index >>= PT_INDEX_WIDTH * section;
-	index &= PT_INDEX_MASK;
-	return index;
-}
-
 pt_t* construct_pt(pt_t** next_table){
 	pt_t* loc = *next_table;
-	printf("Constructing new PT at %p\n", *next_table);
 	memset(*next_table, 0, sizeof(pt_t));
 	*next_table += 1;
 	return loc;

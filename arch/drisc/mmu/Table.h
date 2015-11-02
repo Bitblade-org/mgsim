@@ -51,7 +51,7 @@ struct Line{
 	RAddr	vAddr;
 	RAddr	pAddr;
 
-	void*   d$lineRef;
+	unsigned d$lineRef;
 
 	bool	read;
 	bool	write;
@@ -84,11 +84,11 @@ public:
 
 Line *lookup(RAddr processId, RAddr vAddr, LineTag type);
 
-    Result getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId);
-    Result releasePending(RAddr tableLineId);
+    bool getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId);
+    void releasePending(RAddr tableLineId);
     bool storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* &line);
-    Result storeNormal(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId);
-    Result storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write);
+    Line* fillPending(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId);
+    Line* storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write);
 
 
     //MLDTODO What to do when a locked entry matches an invalidation?

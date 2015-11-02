@@ -14,6 +14,7 @@
 #include "PTBuilder.h"
 #include "manager.h"
 #include "memreader.h"
+#include "pt_index.h"
 
 
 sl_decl(tlbEnable,,

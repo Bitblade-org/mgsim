@@ -257,7 +257,7 @@ TestNet::TestNet(const std::string& name, Object& parent):
 
 void TestNet::d$Push(Addr line, bool present){
 	if(present){
-		std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ about progress for line " << line << std::endl;
+		std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ about progress for line at address " << std::showbase << std::hex << line << std::endl;
 	}else{
 		std::cout << std::setw(JTAG::s_indent * 4) << " " << "TLB wants to inform D$ that no PT entry could be found for line " << line << std::endl;
 	}

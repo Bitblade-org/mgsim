@@ -191,6 +191,7 @@ void DRISC::Initialize()
     // Unfortunately the D-Cache needs priority here because otherwise all cache-lines can
     // remain filled and we get deadlock because the pipeline keeps wanting to do a read.
     m_dcache.p_service.AddProcess(m_dcache.p_ReadResponses);     // Memory read returns
+    m_dcache.p_service.AddProcess(m_dcache.p_LookupResponses);		// TLB Lookup returns
     m_dcache.p_service.AddProcess(m_pipeline.p_Pipeline);         // Memory read/write
     m_dcache.p_service.AddProcess(m_allocator.p_BundleCreate);    // Indirect create read
 
