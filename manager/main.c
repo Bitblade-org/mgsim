@@ -158,7 +158,7 @@ sl_def(tlbEnable,,
     msg.set.val1 = 1;
 	tlbIO[2] = msg.data.part[0];
 
-	// Our players be with those threads who remain on the core during the
+	// Our prayers be with those threads who remain on the core during the
 	// imminent all-fubarring apocalypse.
 
 	// To stop compiler from whining

@@ -25,22 +25,22 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
 
 	COMMIT{
 		//if((address >> 63) == 0 ){//|| cpuId > 3){ //Ignore TLS
-			if(cpuId > 3){
+			//if(cpuId > 3){
 				DebugTLBWrite("Read: address: 0x%lX, size:%lu", address, size);
-			}
+			//}
 		//}
 	}
 
 	Result result = Read2(contextId, address, data, size, reg);
 
 	COMMIT{
-		if(cpuId > 3){
+		//if(cpuId > 3){
 			if(result == SUCCESS){
 				DebugTLBWrite("Read: address: 0x%lX, size:%lu, result: %s, data: 0x%lX", address, size, resultStr(result).c_str(), *((uint64_t*)data));
 			}else{
 				DebugTLBWrite("Read: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
 			}
-		}
+		//}
 	}
 	return result;
 }
@@ -54,27 +54,34 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
 
 	COMMIT{
 		//if((address >> 63) == 0 ){//|| cpuId > 3){ //Ignore TLS
-			if(cpuId > 3){
+			//if(cpuId > 3){
 				DebugTLBWrite("Write: address: 0x%lX, size:%lu, data: 0x%lX", address, size, *((uint64_t*)data));
-			}
+			//}
 		//}
 	}
 
 	Result result = Write2(contextId, address, data, size, fid, tid);
-	if(address == 0x801fffffffffff80){
-		std::cout << "Write naar probleemadres! Data:0x" << std::hex << address << ", component:" << GetName() << std::endl;
-	}
+//	COMMIT{
+//		if((address | 0xff) == 0x801fffffffffffff){
+//			std::cout << std::dec << GetKernel()->GetCycleNo() << ": write naar 0x" << std::hex << address << "! Data:0x" << std::hex << *((uint64_t*)data) << ", component:" << GetName() << std::dec << std::endl;
+//		}
+//	}
 
 	COMMIT{
-		if(cpuId > 3){
+		//if(cpuId > 3){
 			DebugTLBWrite("Write: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
-		}
+		//}
 	}
 	return result;
 }
 
 bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 {
+//	COMMIT{
+//		if((addr | 0xff) == 0x801fffffffffffff){
+//			std::cout << std::dec << GetKernel()->GetCycleNo() << ": read completion van 0x" << std::hex << addr << "! Data:0x" << std::hex << *((uint64_t*)data) << ", component:" << GetName() << std::dec << std::endl;
+//		}
+//	}
 	//MLDTODO Remove after testing
 	size_t pos = GetName().find('.');
 	unsigned cpuId = std::stoul(GetName().substr(3, pos-3));
@@ -82,9 +89,9 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 	bool result = OnMemoryReadCompleted2(addr, data);
 
 	COMMIT{
-		if(cpuId > 3){
+		//if(cpuId > 3){
 			DebugTLBWrite("OnMemoryReadCompleted: address: 0x%lX, data: 0x%lX, result:%d", addr, *((uint64_t*)data), result);
-		}
+		//}
 	}
 
 	return result;
@@ -92,7 +99,6 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 
 bool DCache::OnMemoryWriteCompleted(WClientID wid)
 {
-
 	//MLDTODO Remove after testing
 	size_t pos = GetName().find('.');
 	unsigned cpuId = std::stoul(GetName().substr(3, pos-3));
@@ -100,9 +106,9 @@ bool DCache::OnMemoryWriteCompleted(WClientID wid)
 	bool result = OnMemoryWriteCompleted2(wid);
 
 	COMMIT{
-		if(cpuId > 3){
+		//if(cpuId > 3){
 			DebugTLBWrite("OnMemoryWriteCompleted: wid:%u, result:%d", wid, result);
-		}
+		//}
 	}
 	return result;
 }

@@ -10,9 +10,6 @@
 #include <cstdio>
 using namespace std;
 
-void bp(){
-
-}
 
 //MLDTODO-DOC MMIO
 //MLDTODO Linker plaatst secties van boot.bin op onhandige locaties. Op te lossen door Virt.mem voor boot.bin?
@@ -144,105 +141,205 @@ DCache::~DCache()
     delete m_valid;
     delete m_selector;
 }
+//
+////MLDTODO Create reverse lookup directory
+//Result DCache::ReverseFindLine(MemAddr pAddr, Line* &line)
+//{
+//	if(pAddr == 0x480000ul){
+//		bp();
+//	}
+//	//MLDTOOD Flush cache on tlb state change
+//	return FindLine(pAddr, 0, line, true, true);
+//
+//
+////    size_t offset = (size_t)(pAddr % m_lineSize);
+////	MemAddr pTag = pAddr - offset;
+////
+////    // Find the line
+////    for (size_t i = 0; i < m_assoc * m_sets; ++i)
+////    {
+////        line = &m_lines[i];
+////
+////        if (line->pTag == pTag && line->state != LINE_EMPTY)
+////        {
+////			return SUCCESS;
+////        }
+////    }
+////
+////    return FAILED;
+//
+//}
 
-//MLDTODO Create reverse lookup directory
-Result DCache::ReverseFindLine(MemAddr pAddr, Line* &line)
-{
-	if(pAddr == 0x480000ul){
-		bp();
+/*
+ * MLDTODO Ombouwen naar VIPT+PID
+ * Index op basis van (V+P)addr
+ * CID tag
+ * Paddr tag
+ *
+ * Read: Pipeline ---|---D$ vAddr lookup--CID tag comp----|--tlb pAddr compare----perm compare--->
+ *                   |---TLB lookup-----------------------|
+ *
+ *
+ * 48 bit vAddr:
+ * 64 byte cache lines (6 bits addressing)
+ * 4 Kbyte page offset (12 bits addressing)
+ * Dus:
+ * 		[52:12]				[11:6]				[5:0]
+ * 		address				d$ index			d$ offset
+ */
+
+/*
+ * Splits the address in the following values:
+ * 	cacheOffset: The part of the address that falls within the cache line
+ * 	cacheIndex:  The part of the address which does not fall within the cache line and
+ * 				 does fall within the smallest page. Only these bits can be used for indexing
+ * 	vTag:		 The part of the address that does not fall within the smallest page.
+ *
+ * 	For example:
+ * 	Linesize:		64 Bytes
+ * 	Smallest page:	4  KiB
+ * 		[52:12]				[11:6]				[5:0]
+ * 		 vTag		|      d$ max index	|     d$ offset
+ * 		 vTag       |               page offset
+ */
+void DCache::splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag){
+	//MLDTODO Merge with map function (selector)?
+	//MLDTODO m_linesize must be 2^x
+	size_t indexBits = ilog2(this->m_lineSize);
+
+	cacheOffset = addr & (this->m_lineSize - 1);
+	cacheIndex = addr - cacheOffset;
+	cacheIndex &= (1 << this->m_mmu->getDTlb().getMinOffsetWidth()) - 1;
+
+	if(vTag != NULL){
+		*vTag = addr - cacheOffset - cacheIndex;
 	}
-	//MLDTOOD Flush cache on tlb state change
-	return FindLine(pAddr, 0, line, true, true);
+}
 
+DCache::Line& DCache::fetchLine(MemAddr address){
+	assert(m_assoc == 1); // Associativity must be 1
 
-//    size_t offset = (size_t)(pAddr % m_lineSize);
-//	MemAddr pTag = pAddr - offset;
+	size_t offsetBits, indexBits;
+	splitAddress(address, offsetBits, indexBits, NULL);
+
+	//MLDTODO-DOC Als fetchLine altijd hetzelfde setIndex geeft voor zowel pAddr als vAddr, is geen reverse lookup nodig!
+	//MLDTODO Meerdere "selectors" beschikbaar. Omdat ik enkel de indexBits geef kunnen ze allen gebruikt worden, maar is dat nuttig?
+    MemAddr vTag;
+    size_t setindex;
+    m_selector->Map(indexBits / this->m_lineSize, vTag, setindex);
+    DebugMemWrite("Fetchline 0x%X: vTag=0x%X, index=%d", address, vTag, setindex);
+
+    return m_lines[setindex];
+}
+
+bool DCache::comparePTag(Line &line, MemAddr pTag){
+	return line.pTag == pTag;
+}
+
+bool DCache::compareCTag(Line &line, CID cid){
+	return line.contextTag == cid;
+}
+
+bool DCache::freeLine(Line &line){
+	// Invalid lines may not be touched or considered
+	if (line.state != LINE_EMPTY && line.state != LINE_FULL)
+	{
+        DeadlockWrite("Cache-line %d cannot be freed", GET_LINE_ID(&line));
+		return false;
+	}
+
+	// Reset the line
+	COMMIT
+	{
+		line.processing = false;
+		line.waiting    = INVALID_REG;
+		std::fill(line.valid, line.valid + m_lineSize, false);
+	}
+
+    return true;
+}
+
+bool DCache::getEmptyLine(MemAddr address, Line* &line){
+	*line = fetchLine(address);
+	return freeLine(*line);
+}
+
+//Result DCache::FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags)
+//{
+//	size_t offsetBits, indexBits;
+//	splitAddress(address, offsetBits, indexBits, NULL);
+//
+//	//MLDTODO-DOC Als FindLine altijd hetzelfde setIndex geeft voor zowel pAddr als vAddr, is geen reverse lookup nodig!
+//	//MLDTODO Meerdere "selectors" beschikbaar. Gebruik "DIRECT"
+//	//MLDTODO Take contextId into account
+//    MemAddr tag;
+//    size_t setindex;
+//    m_selector->Map(indexBits, tag, setindex);
+//    DebugMemWrite("Findline 0x%X: tag=0x%X, index=%d", address, tag, setindex);
+//
+//    const size_t  set  = setindex * m_assoc;
 //
 //    // Find the line
-//    for (size_t i = 0; i < m_assoc * m_sets; ++i)
+//    Line* empty   = NULL;
+//    Line* replace = NULL;
+//    for (size_t i = 0; i < m_assoc; ++i)
 //    {
-//        line = &m_lines[i];
+//        line = &m_lines[set + i];
 //
-//        if (line->pTag == pTag && line->state != LINE_EMPTY)
+//        // Invalid lines may not be touched or considered
+//        if (line->state == LINE_EMPTY)
 //        {
-//			return SUCCESS;
+//            // Empty, unused line, remember this one
+//            empty = line;
+//        }
+//        else if (ignore_tags || (line->tag == tag && line->contextTag == contextId)) //MLDTODO Will do for now. Correct?
+//        {
+//            // The wanted line was in the cache
+//            return SUCCESS;
+//        }
+//        else if (line->state == LINE_FULL && (replace == NULL || line->access < replace->access))
+//        {
+//            // The line is available to be replaced and has a lower LRU rating,
+//            // remember it for replacing
+//            replace = line;
 //        }
 //    }
 //
-//    return FAILED;
-
-}
-
-Result DCache::FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags)
-{
-	//MLDTODO-DOC Als FindLine altijd hetzelfde setIndex geeft voor zowel pAddr als vAddr, is geen reverse lookup nodig!
-	//MLDTODO Meerdere "selectors" beschikbaar. Gebruik "DIRECT"
-	//MLDTODO Take contextId into account
-    MemAddr tag;
-    size_t setindex;
-    m_selector->Map(address / m_lineSize, tag, setindex);
-    DebugMemWrite("Findline 0x%X: tag=0x%X, index=%d", address, tag, setindex);
-
-    const size_t  set  = setindex * m_assoc;
-
-    // Find the line
-    Line* empty   = NULL;
-    Line* replace = NULL;
-    for (size_t i = 0; i < m_assoc; ++i)
-    {
-        line = &m_lines[set + i];
-
-        // Invalid lines may not be touched or considered
-        if (line->state == LINE_EMPTY)
-        {
-            // Empty, unused line, remember this one
-            empty = line;
-        }
-        else if (ignore_tags || (line->tag == tag && line->contextTag == contextId)) //MLDTODO Will do for now. Correct?
-        {
-            // The wanted line was in the cache
-            return SUCCESS;
-        }
-        else if (line->state == LINE_FULL && (replace == NULL || line->access < replace->access))
-        {
-            // The line is available to be replaced and has a lower LRU rating,
-            // remember it for replacing
-            replace = line;
-        }
-    }
-
-    // The line could not be found, allocate the empty line or replace an existing line
-    line = (empty != NULL) ? empty : replace;
-    if (line == NULL)
-    {
-        // No available line
-        if (!check_only)
-        {
-            DeadlockWrite("Unable to allocate a free cache-line in set %u", (unsigned)(set / m_assoc) );
-        }
-        return FAILED;
-    }
-
-    if (!check_only)
-    {
-        // Reset the line
-        COMMIT
-        {
-            line->processing = false;
-            line->tag        = tag;
-            line->contextTag = contextId;
-            line->waiting    = INVALID_REG;
-            std::fill(line->valid, line->valid + m_lineSize, false);
-        }
-    }
-
-    return DELAYED;
-}
+//    // The line could not be found, allocate the empty line or replace an existing line
+//    line = (empty != NULL) ? empty : replace;
+//    if (line == NULL)
+//    {
+//        // No available line
+//        if (!check_only)
+//        {
+//            DeadlockWrite("Unable to allocate a free cache-line in set %u", (unsigned)(set / m_assoc) );
+//        }
+//        return FAILED;
+//    }
+//
+//    if (!check_only)
+//    {
+//        // Reset the line
+//        COMMIT
+//        {
+//            line->processing = false;
+//            line->tag        = tag;
+//            line->contextTag = contextId;
+//            line->waiting    = INVALID_REG;
+//            std::fill(line->valid, line->valid + m_lineSize, false);
+//        }
+//    }
+//
+//    return DELAYED;
+//}
 
 Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg)
-{
-    size_t offset = (size_t)(address % m_lineSize);
-    if (offset + size > m_lineSize)
+{//CASE L1/L2/L3/L4/L5/L6/L7/L8/P/F
+	size_t offsetBits, indexBits, vTag;
+	splitAddress(address, offsetBits, indexBits, &vTag);
+
+	//std::cout << "OB:" << offsetBits << ", SZ:" << size << ", LS:" << m_lineSize << std::endl;
+	if (offsetBits + (size * 8) > (m_lineSize * 8))
     {
         throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Address range crosses over cache line boundary",
                                                 (unsigned long long)address, (size_t)size);
@@ -256,42 +353,11 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
     }
 #endif
 
-// 	  Check that we're reading readable memory
-//    if (!cpu.CheckPermissions(address, size, IMemory::PERM_READ))
-//    {
-//        throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory",
-//                                         (unsigned long long)address, (size_t)size);
-//    }
-
     if (!p_service.Invoke())
     {
         DeadlockWrite("Unable to acquire port for D-Cache read access (%#016llx, %zd)",
                       (unsigned long long)address, (size_t)size);
 
-        return FAILED;
-    }
-
-    Line*  line;
-    Result result = FindLine(address, contextId, line, false, false);
-    // SUCCESS - A line with the address was found
-    // DELAYED - The line with the address was not found, but a line has been allocated
-    // FAILED  - No usable line was found at all and could not be allocated
-
-
-    if (result == FAILED)
-    {
-    	DebugMemWrite("CASE L3 & CASE L7 (1st)");
-        // Cache-miss and no free line
-
-    	// MLDNOTE LOAD, MISS, WAITING, != tag
-        /* OK CASE L3 & CASE L7 (1st)
-         * MLDOPT Push thread to D$-EVENT-HEAD.
-         * MLDOPT Suspend thread.
-         * OK return FAILED
-         */
-
-    	++m_numHardConflicts;
-        // DeadlockWrite() is done in FindLine
         return FAILED;
     }
 
@@ -302,185 +368,144 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
         return FAILED;
     }
 
-    // Update last line access
-    COMMIT{ line->access = GetDRISC().GetCycleNo(); }
-
+    Line& line = fetchLine(address);
     mmu::TLBResult tlbData;
-
     Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
-    if(tlbResult == FAILED){
+    if(tlbResult == FAILED)
+    {//Case F
     	DebugMemWrite("CASE F");
-        //MLDNOTE D-TLB FAILED
-        /* MLDTODO CASE F
-         * MLDTODO Push thread to REFILL-HEAD.
-         * MLDTODO Suspend thread.
-         */
         DeadlockWrite("dTLB lookup for (%u, %#016llx) failed!", contextId, (unsigned long long)address);
     	return FAILED; //MLDTODO Temporary
     }
-
-
-
-    if(result == SUCCESS)
-    {
-    	// Check if the data that we want is valid in the line.
-    	// This happens when the line is FULL, or LOADING and has been
-    	// snooped to (written to from another core) in the mean time.
-    	size_t i;
-    	for (i = 0; i < size; ++i)
-    	{
-    		if (!line->valid[offset + i])
-    		{
-    			break;
-    		}
+    else if(tlbResult == DELAYED)
+    {// Case L5/L6/L7/L8
+    	if(!freeLine(line))
+    	{//Case L5/L6/L7
+        	DebugMemWrite("Case L5, L6 or L7");
+    		//MLDTODO statistics
+        	return FAILED;
     	}
-
-    	if (i == size)
-    	{
-    		if(tlbResult == SUCCESS){
-    			DebugMemWrite("CASE L1");
-    			//MLDTODO Validate access bits
-
-    			//MLDNOTE LOAD, HIT
-    			/* OK CASE L1
-    			 * OK Load from D$
-    			 * OK return SUCCESS
-    			 */
-
-    			COMMIT
-				{
-    				// Data is entirely in the cache, copy it
-    				memcpy(data, line->data + offset, (size_t)size);
-    				++m_numRHits;
-				}
-    			return SUCCESS;
-    		}
-
-    		DebugMemWrite("CASE L5");
-    		/* MLDTODO CASE L5
-    		 * MLDTODO Provide 'magic' D$-line-ref to DTLB.
-    		 * MLDTODO Push thread to M-REFILL-HEAD.
-    		 * MLDTODO Suspend thread.
-    		 */
-    		return FAILED; //MLDTODO Temporary
-
-    	}
-
-    	// Data is not entirely in the cache; it should be loading from memory
-    	if (line->state != LINE_LOADING)
-    	{
-    		DebugMemWrite("CASE L3 & CASE L7 (2nd)");
-    		/* OK CASE L3 & CASE L7 (2nd)
-    		 * MLDOPT Push thread to D$-EVENT-HEAD.
-    		 * MLDOPT Suspend thread.
-    		 * OK return FAILED
-    		 */
-    		assert(line->state == LINE_INVALID);
-    		++m_numInvalidRMisses;
-    		return FAILED;
-
-    		//MLDTODO What does invalid mean? Continuation guarantee? OPT?
-    	}
-
-
-    	if(tlbResult == SUCCESS){
-    		DebugMemWrite("CASE L2");
-        	//MLDNOTE (first) LOAD, MISS, WAITING, == tag
-        	/* OK CASE L2
-        	 * OK Add register to head of linked list.
-        	 * OK return DELAYED
-        	 */
-    	    size_t pOffset = (size_t)(tlbData.pAddr() % m_lineSize);
-    		assert(tlbData.pAddr() - pOffset == line->pTag);
-    	}else{
-    		DebugMemWrite("CASE L6");
-    		/* OK CASE L6
-    		 * OK Add register to head of linked list.
-    		 * OK Provide D$-line-ref to TLB.
-    		 * OK Store offset in D$-line
-    		 * OK Store D$-ref in D$-line
-    		 * OK return DELAYED
-    		 */
-    		line->next = tlbData.dcacheReference(GET_LINE_ID(line));
-    		line->tlbOffset = address % m_mmu->getDTlb().getMinOffsetWidth();
-    	}
-
-
-
-    	COMMIT{
-    		++m_numLoadingRMisses;
-    		++m_numDelayedReads;
-
-    		PushRegister(line, reg);
-    	}
-
-    	return DELAYED;
-    }
-    else if(result == DELAYED)
-    {
-    	//MLDNOTE LOAD, MISS, AVAIL
-
-    	// A new line has been allocated; send the request to memory
-
-    	if(tlbResult == SUCCESS){
-    		DebugMemWrite("CASE L4");
-    		/* OK CASE L4
-    		 * OK Set line invalid.
-    		 * OK Add register to head of linked list.
-    		 * OK Send request to mem.
-    		 * OK return DELAYED
-    		 */
-    	    size_t pOffset = (size_t)(tlbData.pAddr() % m_lineSize);
-
-    		Request request;
-    		request.write     = false;
-    		request.address   = tlbData.pAddr() - pOffset; //MLDTODO pAddr
-
-    		//MLDTODO Expensive assert, remove after testing
-    		assert(m_mmu->getDTlb().isEnabled() || ((tlbData.pAddr() - pOffset) == (address - offset)));
-
-    		if (!m_outgoing.Push(request))
-    		{
-    			++m_numStallingRMisses;
-    			DeadlockWrite("Unable to push request to outgoing buffer");
-    			return FAILED;
-    		}
-    		COMMIT{line->pTag = tlbData.pAddr() - pOffset;}
-
-    	}else{
+    	else
+    	{//Case L8
     		DebugMemWrite("CASE L8");
-        	/* CASE L8
-        	 * OK Set line invalid.
-        	 * OK Add register to head of linked list.
-        	 * OK Provide D$-line-ref to TLB.
-        	 * OK Store offset in D$-line
-        	 * OK Store D$-ref in D$-line
-        	 * OK return DELAYED
-        	 */
     		COMMIT{
-				line->next = tlbData.dcacheReference(GET_LINE_ID(line));
-				//MLDTODO I don't think this usage of % is correct...
-				line->tlbOffset = address % (1 << (m_mmu->getDTlb().getMinOffsetWidth() - 1));
+    			line.next = tlbData.dcacheReference(GET_LINE_ID(&line));
+    			line.tlbOffset = offsetBits + indexBits;
     		}
+        	COMMIT {
+        		//MLDTODO Statistics
+        		if (line.state == LINE_EMPTY){
+        			++m_numEmptyRMisses;
+        		}else{
+        			++m_numResolvedConflicts;
+        		}
+
+        		line.state = LINE_LOADING;
+        		PushRegister(&line, reg);
+
+        		++m_numDelayedReads;
+        	}
+
+        	return DELAYED;
     	}
-
-    	COMMIT {
-    		if (line->state == LINE_EMPTY){
-    			++m_numEmptyRMisses;
-    		}else{
-    			++m_numResolvedConflicts;
-    		}
-
-    		line->state = LINE_LOADING;
-    		PushRegister(line, reg);
-
-    		++m_numDelayedReads;
-    	}
-
-    	return DELAYED;
     }
+    else if(tlbResult == SUCCESS)
+    {//Case L1/L2/L3/L4/P
+    	if(!tlbData.read())
+    	{//Case P
+			throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory",
+											 (unsigned long long)address, (size_t)size);
+    	}
 
+        //Compare tags
+        if(compareCTag(line, contextId) && comparePTag(line, tlbData.pAddr()))
+        {//Case L1/L2
+
+            // Update last line access
+            COMMIT{ line.access = GetDRISC().GetCycleNo(); } //MLDTODO Where to place this?
+        	// Check if the data that we want is valid in the line.
+        	// This happens when the line is FULL, or LOADING and has been
+        	// snooped to (written to from another core) in the mean time.
+        	size_t i;
+        	for (i = 0; i < size; ++i)
+        	{
+        		if (!line.valid[offsetBits + i])
+        		{
+        			break;
+        		}
+        	}
+
+        	if (i == size)
+        	{//Case L1
+				DebugMemWrite("CASE L1");
+
+				COMMIT
+				{
+					// Data is entirely in the cache, copy it
+					memcpy(data, line.data + offsetBits, (size_t)size);
+					++m_numRHits; //MLDTODO Statistics
+				}
+				return SUCCESS;
+        	}
+        	else
+        	{// Case L2
+           		DebugMemWrite("CASE L2");
+            	COMMIT{
+           			//MLDTODO statistics
+            		++m_numLoadingRMisses;
+            		++m_numDelayedReads;
+
+            		PushRegister(&line, reg);
+            	}
+
+            	return DELAYED;
+        	}
+        }
+        else
+        {//Case L3/L4
+        	if(freeLine(line))
+        	{//Case L4
+        		DebugMemWrite("CASE L4");
+        	    size_t pOffset = offsetBits;
+
+        		Request request;
+        		request.write     = false;
+        		request.address   = tlbData.pAddr() - pOffset; //MLDTODO pAddr
+
+        		if (!m_outgoing.Push(request))
+        		{
+        			++m_numStallingRMisses;//MLDTODO Statistics
+        			DeadlockWrite("Unable to push request to outgoing buffer");
+        			return FAILED;
+        		}
+        		COMMIT{
+        			line.pTag = tlbData.pAddr() - pOffset;
+        		}
+				COMMIT {
+					if (line.state == LINE_EMPTY){
+						++m_numEmptyRMisses;//MLDTODO Statistics
+					}else{
+						++m_numResolvedConflicts;//MLDTODO Statistics
+					}
+
+					line.state = LINE_LOADING;
+					PushRegister(&line, reg);
+
+					++m_numDelayedReads; //MLDTODO Statistics
+				}
+				return DELAYED;
+        	}
+        	else
+        	{//Case L3
+            	DebugMemWrite("CASE L3");
+
+            	++m_numHardConflicts; //MLDTODO Statistics
+                //DeadlockWrite() is done in freeLine
+                return FAILED;
+        	}
+        }
+    }
     UNREACHABLE
 }
 
@@ -501,6 +526,9 @@ void DCache::PushRegister(Line* line, RegAddr* reg){
 
 Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
 {
+	size_t offsetBits, indexBits, vTag;
+	splitAddress(address, offsetBits, indexBits, &vTag);
+
     assert(fid != INVALID_LFID);
     assert(tid != INVALID_TID);
 
@@ -537,7 +565,19 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     //MLDTODO Perform TLB Request
 
     Line* line = NULL;
-    Result result = FindLine(address, contextId, line, true, false);
+
+    //Result result = FindLine(address, contextId, line, true, false);
+    //Replaced by the following lines:
+    Line& lineTmp = fetchLine(address);
+    bool res = (compareCTag(lineTmp, contextId) && comparePTag(lineTmp, address));
+
+    Result result = FAILED;
+    if(res){
+    	result = SUCCESS;
+    	line = &lineTmp;
+    }
+    //End replacement
+
     if (result == SUCCESS)
     {
         assert(line->state != LINE_EMPTY);
@@ -636,12 +676,10 @@ bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the
     // bus from memory, so we have to check if we actually need the data.
-    Line* line;
-    if (!(ReverseFindLine(addr, line) == SUCCESS && line->state != LINE_FULL && !line->processing))
-    {
-    	DebugMemWrite("Cannot find a loading/invalid line with address 0x%lX", addr); //MLDTODO Remove after debugging
-    }else{
-        assert(line->state == LINE_LOADING || line->state == LINE_INVALID);
+    Line& line = fetchLine(addr);
+
+    if(comparePTag(line, addr) && line.state != LINE_EMPTY && line.state != LINE_FULL && !line.processing){
+    	assert(line.state == LINE_LOADING || line.state == LINE_INVALID);
 
         // Registers are waiting on this data
         COMMIT
@@ -668,16 +706,16 @@ bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
 
             // Copy the data into the cache line.
             // Mask by valid bytes (don't overwrite already written data).
-            line::blitnot(line->data, mdata, line->valid, m_lineSize);
-            line::setifnot(line->valid, true, line->valid, m_lineSize);
+            line::blitnot(line.data, mdata, line.valid, m_lineSize);
+            line::setifnot(line.valid, true, line.valid, m_lineSize);
 
-            line->processing = true;
+            line.processing = true;
         }
 
         //MLDTODO Waarom staat dit niet in een commit block en wat betekend dat voor ontlbresp...
         // Push the cache-line to the back of the queue
         ReadResponse response;
-        response.cid   = line - &m_lines[0];
+        response.cid = GET_LINE_ID(&line);
 
         DebugMemWrite("Received read completion for %#016llx -> CID %u", (unsigned long long)addr, (unsigned)response.cid);
 
@@ -686,6 +724,8 @@ bool DCache::OnMemoryReadCompleted2(MemAddr addr, const char* data)
             DeadlockWrite("Unable to push read completion to buffer");
             return false;
         }
+    }else{
+    	DebugMemWrite("Cannot find a loading/invalid line with address 0x%lX", addr); //MLDTODO Remove after debugging
     }
     return true;
 }
@@ -710,7 +750,7 @@ bool DCache::OnMemoryWriteCompleted2(WClientID wid)
 
 bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask)
 {
-    Line*  line;
+    Line &line = fetchLine(address);
 
     // FIXME: snoops should really either lock the line or access
     // through a different port. Here we cannot (yet) invoke the
@@ -727,7 +767,7 @@ bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask
     */
 
     // Cache coherency: check if we have the same address
-    if (ReverseFindLine(address, line) == SUCCESS)
+    if (comparePTag(line, address))
     {
         DebugMemWrite("Received snoop request for loaded line %#016llx", (unsigned long long)address);
 
@@ -737,8 +777,8 @@ bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask
             // Note that we don't have to check against already written data or queued reads
             // because we don't have to guarantee sequential semantics from other cores.
             // This falls within the non-determinism behavior of the architecture.
-            line::blit(line->data, data, mask, m_lineSize);
-            line::setif(line->valid, true, mask, m_lineSize);
+            line::blit(line.data, data, mask, m_lineSize);
+            line::setif(line.valid, true, mask, m_lineSize);
 
             // Statistics
             ++m_numSnoops;
@@ -751,19 +791,19 @@ bool DCache::OnMemoryInvalidated(MemAddr address)
 {
     COMMIT
     {
-        Line* line;
-        if (ReverseFindLine(address, line) == SUCCESS)
+        Line &line = fetchLine(address);
+        if(comparePTag(line, address))
         {
             DebugMemWrite("Received invalidation request for loaded line %#016llx", (unsigned long long)address);
 
             // We have the line, invalidate it
-            if (line->state == LINE_FULL) {
+            if (line.state == LINE_FULL) {
                 // Full lines are invalidated by clearing them. Simple.
-                line->state = LINE_EMPTY;
-            } else if (line->state == LINE_LOADING) {
+                line.state = LINE_EMPTY;
+            } else if (line.state == LINE_LOADING) {
                 // The data is being loaded. Invalidate the line and it will get cleaned up
                 // when the data is read.
-                line->state = LINE_INVALID;
+                line.state = LINE_INVALID;
             }
         }
     }

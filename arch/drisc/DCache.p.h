@@ -103,9 +103,16 @@ private:
       (LFID         fid    (init 0))           ///< FID of the thread's that's waiting on the register
     ))
     // {% endcall %}
+	void splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag);
 
-	Result FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags);
-    Result ReverseFindLine(MemAddr pAddr, Line* &line);
+	//Result FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags);
+	Line& fetchLine(MemAddr address);
+	bool comparePTag(Line &line, MemAddr pTag);
+	bool compareCTag(Line &line, CID cid);
+	bool getEmptyLine(MemAddr address, Line* &line);
+	bool freeLine(Line &line);
+
+    //Result ReverseFindLine(MemAddr pAddr, Line* &line);
 
     IMemory*             m_memory;          	///< Memory
     MCID                 m_mcid;            	///< Memory Client ID
