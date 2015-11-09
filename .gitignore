@@ -38,3 +38,4 @@ stamp-h1
 *.trs
 *-bin
 /mgsim.dbg
+/.settings
