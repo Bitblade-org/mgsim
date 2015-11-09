@@ -24,7 +24,7 @@ int init_pt_set(pt_t* pt0, unsigned context_id, void *v_base, pt_t** next_table,
 
 	//Reserve a 2MiB page at physical location p_base, mapped pt_index
 	//Create new tables where needed, starting at next_table. (a 2MiB page has a 19-bit offset)
-	return write_entry(pt0, pts_index, pt0, 0, next_table, free);
+	return write_entry(pt0, pts_index, pt0, 0, next_table, free, 1, 1, 0);
 }
 
 // If free==0, no new tables will be constructed.
@@ -34,7 +34,7 @@ int init_pt_set(pt_t* pt0, unsigned context_id, void *v_base, pt_t** next_table,
 // page_size=1 --> 2MiB
 // page_size=2 --> 1GiB
 //MLDTODO Rewrite with section nomenclature
-int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned page_size, pt_t** next_table, size_t *free){
+int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned page_size, pt_t** next_table, size_t *free, uint8_t r, uint8_t w, uint8_t x){
 	pt_t*  table = pt0;
 	pte_t* entry;
 
@@ -52,6 +52,9 @@ int write_entry(pt_t* pt0, uint64_t pts_index, void* dst, unsigned page_size, pt
 
 			entry->p = 1;
 			entry->t = 0;
+			entry->page_p.r = r;
+			entry->page_p.w = w;
+			entry->page_p.x = x;
 			set_pointer(entry, dst);
 		}else if(entry->p){
 			table = get_pointer(entry);

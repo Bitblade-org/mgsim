@@ -89,19 +89,19 @@ int main(void) {
 	 */
 	uint64_t index;
 	index = calculate_pt_index(OS_CONTEXT_ID, 0x440000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 0, 0);
 
 	index = calculate_pt_index(OS_CONTEXT_ID, 0x500000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 1, 1);
 
 	index = calculate_pt_index(OS_CONTEXT_ID, 0x510000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 0, 0);
 
 	index = calculate_pt_index(OS_CONTEXT_ID, 0x520000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 0, 0);
 
 	index = calculate_pt_index(OS_CONTEXT_ID, 0x530000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free);
+	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 0, 1, 0);
 
 	uint64_t* mem = (uint64_t*)0x500000ul;
 	*mem = 0x12345ul;
