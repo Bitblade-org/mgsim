@@ -259,11 +259,6 @@ bool DCache::freeLine(Line &line){
     return true;
 }
 
-bool DCache::getEmptyLine(MemAddr address, Line* &line){
-	*line = fetchLine(address);
-	return freeLine(*line);
-}
-
 //Result DCache::FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags)
 //{
 //	size_t offsetBits, indexBits;
@@ -339,7 +334,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
 	splitAddress(address, offsetBits, indexBits, &vTag);
 
 	//std::cout << "OB:" << offsetBits << ", SZ:" << size << ", LS:" << m_lineSize << std::endl;
-	if (offsetBits + (size * 8) > (m_lineSize * 8))
+	if (offsetBits + size > m_lineSize)
     {
         throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Address range crosses over cache line boundary",
                                                 (unsigned long long)address, (size_t)size);
@@ -423,7 +418,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
         {//Case L1/L2
 
             // Update last line access
-            COMMIT{ line.access = GetDRISC().GetCycleNo(); } //MLDTODO Where to place this?
+            COMMIT{ line.access = GetDRISC().GetCycleNo(); } //MLDTODO Call on L2?
         	// Check if the data that we want is valid in the line.
         	// This happens when the line is FULL, or LOADING and has been
         	// snooped to (written to from another core) in the mean time.
@@ -467,11 +462,10 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
         	if(freeLine(line))
         	{//Case L4
         		DebugMemWrite("CASE L4");
-        	    size_t pOffset = offsetBits;
 
         		Request request;
         		request.write     = false;
-        		request.address   = tlbData.pAddr() - pOffset; //MLDTODO pAddr
+        		request.address   = tlbData.pAddr() - offsetBits; //MLDTODO pAddr
 
         		if (!m_outgoing.Push(request))
         		{
@@ -480,7 +474,7 @@ Result DCache::Read2(ContextId contextId, MemAddr address, void* data, MemSize s
         			return FAILED;
         		}
         		COMMIT{
-        			line.pTag = tlbData.pAddr() - pOffset;
+        			line.pTag = tlbData.pAddr() - offsetBits;
         		}
 				COMMIT {
 					if (line.state == LINE_EMPTY){
@@ -532,8 +526,7 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     assert(fid != INVALID_LFID);
     assert(tid != INVALID_TID);
 
-    size_t offset = (size_t)(address % m_lineSize);
-    if (offset + size > m_lineSize)
+    if (offsetBits + size > m_lineSize)
     {
         throw exceptf<InvalidArgumentException>(*this, "Write (%#016llx, %zd): Address range crosses over cache line boundary",
                                                 (unsigned long long)address, (size_t)size);
@@ -547,14 +540,6 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     }
 #endif
 
-    // Check that we're writing writable memory
-    //auto& cpu = GetDRISC();
-//    if (!cpu.CheckPermissions(address, size, IMemory::PERM_WRITE))
-//    {
-//        throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory",
-//                                         (unsigned long long)address, (size_t)size);
-//    }
-
     if (!p_service.Invoke())
     {
         DeadlockWrite("Unable to acquire port for D-Cache write access (%#016llx, %zd)",
@@ -562,27 +547,34 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
         return FAILED;
     }
 
-    //MLDTODO Perform TLB Request
+    if (!m_mmu->getDTlb().invoke()){
+        DeadlockWrite("Unable to acquire port for D-TLB read access (%#016llx, %zd)",
+                      (unsigned long long)address, (size_t)size);
 
-    Line* line = NULL;
-
-    //Result result = FindLine(address, contextId, line, true, false);
-    //Replaced by the following lines:
-    Line& lineTmp = fetchLine(address);
-    bool res = (compareCTag(lineTmp, contextId) && comparePTag(lineTmp, address));
-
-    Result result = FAILED;
-    if(res){
-    	result = SUCCESS;
-    	line = &lineTmp;
+        return FAILED;
     }
-    //End replacement
 
-    if (result == SUCCESS)
+    Line& line = fetchLine(address);
+    mmu::TLBResult tlbData;
+    Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
+
+    if(tlbResult == DELAYED){
+    	//MLDTODO Statistics
+    	tlbData.dcacheReference(INVALID_CID);
+    	return DELAYED;
+    }
+
+    if (compareCTag(line, contextId) && comparePTag(line, address))
     {
-        assert(line->state != LINE_EMPTY);
+        assert(line.state != LINE_EMPTY);
 
-        if (line->state == LINE_LOADING || line->state == LINE_INVALID)
+		if (!tlbData.write())
+		{
+			throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory",
+											 (unsigned long long)address, (size_t)size);
+		}
+
+        if (line.state == LINE_LOADING || line.state == LINE_INVALID)
         {
         	//MLDNOTE STORE, MISS, WAITING, *
         	//MLDTODO Handle TLB request result
@@ -604,11 +596,11 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
         else
         {
             // Update the line
-            assert(line->state == LINE_FULL);
+            assert(line.state == LINE_FULL);
             COMMIT{
             	//MLDNOTE STORE, HIT
-                std::copy((char*)data, (char*)data + size, line->data + offset);
-                std::fill(line->valid + offset, line->valid + offset + size, true);
+                std::copy((char*)data, (char*)data + size, line.data + offsetBits);
+                std::fill(line.valid + offsetBits, line.valid + offsetBits + size, true);
 
                 // Statistics
                 ++m_numWHits;
@@ -624,17 +616,17 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
     //MLDTODO Handle TLB request result
     Request request;
     request.write     = true;
-    request.address   = address - offset;
+    request.address   = tlbData.pAddr() - offsetBits;
     request.wid       = tid;//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
     //MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
     //MLDNOTE Beginnen met een stall.
     //MLDTODO-DOC Hoort ook weer in scriptie.
 
     COMMIT{
-    std::copy((char*)data, ((char*)data)+size, request.data.data+offset);
-    std::fill(request.data.mask, request.data.mask+offset, false);
-    std::fill(request.data.mask+offset, request.data.mask+offset+size, true);
-    std::fill(request.data.mask+offset+size, request.data.mask+m_lineSize, false);
+    std::copy((char*)data, ((char*)data)+size, request.data.data+offsetBits);
+    std::fill(request.data.mask, request.data.mask+offsetBits, false);
+    std::fill(request.data.mask+offsetBits, request.data.mask+offsetBits+size, true);
+    std::fill(request.data.mask+offsetBits+size, request.data.mask+m_lineSize, false);
     }
 
     if (!m_outgoing.Push(request))
@@ -650,9 +642,11 @@ Result DCache::Write2(ContextId contextId, MemAddr address, void* data, MemSize 
 }
 
 bool DCache::OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool present){ //MLDTODO Modify cid type
-	Line& line = m_lines[cid]; //MLDTODO If the mapping from vAddr/ContextId to cid is deterministic, no CID is needed.
-	assert(line.state == LINE_LOADING); //MLDTODO Handle
-	assert(present); //MLDTODO Handle
+	if(cid != INVALID_CID){
+		Line& line = m_lines[cid]; //MLDTODO If the mapping from vAddr/ContextId to cid is deterministic, no CID is needed.
+		assert(line.state == LINE_LOADING); //MLDTODO Handle
+		assert(present); //MLDTODO Handle
+	}
 
     // Push the cache-line to the back of the queue
     LookupResponse response;
@@ -660,7 +654,11 @@ bool DCache::OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool pres
     response.tlbLineRef = tlbLineRef;
     response.present = present;
 
-    DebugMemWrite("Received lookup completion for CID %u", (unsigned)response.cid);
+	if(cid == INVALID_CID){
+		DebugMemWrite("Received lookup completion for 'magic' CID");
+	}else{
+		DebugMemWrite("Received lookup completion for CID %u", (unsigned)response.cid);
+	}
 
     if (!m_lookup_responses.Push(response))
     {
@@ -826,8 +824,8 @@ Result DCache::DoLookupResponses(){
 
     auto& response = m_lookup_responses.Front();
 
-    if(response.cid == INVALID_CID){
-    	//'Magic' CID, case S? or L5
+    if(response.cid == INVALID_CID)
+    {//Case (L5)/S5/S7/S8
     	UNREACHABLE //MLDTODO Handle
     }
 
@@ -842,6 +840,12 @@ Result DCache::DoLookupResponses(){
 
     mmu::TLBResult tlbData;
 	m_mmu->getDTlb().getLine(response.tlbLineRef, tlbData);
+
+	if(!tlbData.read())
+	{//Case P
+		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from non-readable virtual address",
+										 (unsigned long long)tlbData.vAddr());
+	}
 
     //// DO REQUEST
 
@@ -858,8 +862,9 @@ Result DCache::DoLookupResponses(){
 		DeadlockWrite("Unable to push request to outgoing buffer");
 		return FAILED;
 	}
-	COMMIT{line.pTag = tlbData.pAddr() - pOffset;}
 	COMMIT {
+		line.pTag = tlbData.pAddr() - pOffset;
+
 		if (line.state == LINE_EMPTY){
 			++m_numEmptyRMisses; //MLDTODO Fix statistics
 		}else{
