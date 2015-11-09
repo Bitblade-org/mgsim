@@ -11,33 +11,70 @@ sl_def(memreader, , ) {
 	uint64_t data;
 
 	loc = (uint64_t*)0x440000;
-	printf("Memreader will start request for location %p after the break\n", loc);
-	svp_abort();
+	printf("Memreader reading from %p\n", loc);
 	data = *loc;
-    printf("location %p contains 0x%X (expecting 0x12345)\n", loc, data);
+	if(data == 0x12345){
+		printf("RESULT: OK\n");
+	}else{
+		svp_abort();
+	}
 
     loc = (uint64_t*)0x500000;
-	printf("Memreader will start request for location %p after the break\n", loc);
-	svp_abort();
+	printf("\nMemreader reading from %p\n", loc);
 	data = *loc;
-    printf("location %p contains 0x%X\n", loc, data);
+	if(data == 0x12345){
+		printf("RESULT: OK\n");
+	}else{
+		svp_abort();
+	}
 
     loc = (uint64_t*)0x510000;
-	printf("Memreader will start request for location %p after the break\n", loc);
-	svp_abort();
+	printf("\nMemreader reading from %p\n", loc);
 	data = *loc;
-    printf("location %p contains 0x%X\n", loc, data);
+	if(data == 0x12345){
+		printf("RESULT: OK\n");
+	}else{
+		svp_abort();
+	}
 
     loc = (uint64_t*)0x520000;
-	printf("Memreader will start request for location %p after the break\n", loc);
-	svp_abort();
+	printf("\nMemreader reading from %p\n", loc);
 	data = *loc;
-    printf("location %p contains 0x%X\n", loc, data);
+	if(data == 0x12345){
+		printf("RESULT: OK\n");
+	}else{
+		svp_abort();
+	}
+
+    printf("\nMemreader has undergone an identity crisis and assumes the role of a memreader/writer\n");
+
+    loc = (uint64_t*)0x500000;
+	printf("\nMemreader WRITING to %p\n", loc);
+	*loc = 0x23456;
+
+    loc = (uint64_t*)0x500000;
+	printf("\nMemreader reading from %p\n", loc);
+	data = *loc;
+	if(data == 0x23456){
+		printf("RESULT: OK\n");
+	}else{
+		svp_abort();
+	}
 
     loc = (uint64_t*)0x530000;
-	printf("Memreader will start request for location %p after the break\n", loc);
-	svp_abort();
+	printf("\nMemreader WRITING to %p\n", loc);
+	*loc = 0x23456;
+
+    loc = (uint64_t*)0x500000;
+	printf("\nMemreader reading from %p\n", loc);
 	data = *loc;
-    printf("location %p contains 0x%X\n", loc, data);
+	if(data == 0x23456){
+		printf("RESULT: OK\n");
+	}else{
+		svp_abort();
+	}
+
+
+	svp_abort();
 }
 sl_enddef
