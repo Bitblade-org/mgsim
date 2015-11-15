@@ -35,7 +35,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_raunit      ("rau",           *this, m_registerFile.GetSizes()),
     m_allocator   ("alloc",         *this, clock),
     m_icache      ("icache",        *this, clock),
-    m_dcache      ("dcache",        *this, clock),
+    m_dcache      (DCache::makeCache("dcache",*this, clock)),
     m_pipeline    ("pipeline",      *this, clock),
     m_network     ("network",       *this, clock, grid),
     m_mmio        ("mmio",          *this),
@@ -51,10 +51,10 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     RegisterModelProperty(*this, "pid", (uint32_t)pid);
     RegisterModelProperty(*this, "ic.assoc", (uint32_t)m_icache.GetAssociativity());
     RegisterModelProperty(*this, "ic.lsz", (uint32_t)m_icache.GetLineSize());
-    RegisterModelProperty(*this, "dc.assoc", (uint32_t)m_dcache.GetAssociativity());
-    RegisterModelProperty(*this, "dc.sets", (uint32_t)m_dcache.GetNumSets());
-    RegisterModelProperty(*this, "dc.lines", (uint32_t)m_dcache.GetNumLines());
-    RegisterModelProperty(*this, "dc.lsz", (uint32_t)m_dcache.GetLineSize());
+    RegisterModelProperty(*this, "dc.assoc", (uint32_t)m_dcache->GetAssociativity());
+    RegisterModelProperty(*this, "dc.sets", (uint32_t)m_dcache->GetNumSets());
+    RegisterModelProperty(*this, "dc.lines", (uint32_t)m_dcache->GetNumLines());
+    RegisterModelProperty(*this, "dc.lsz", (uint32_t)m_dcache->GetLineSize());
     RegisterModelProperty(*this, "threads", (uint32_t)m_threadTable.GetNumThreads());
     RegisterModelProperty(*this, "families", (uint32_t)m_familyTable.GetFamilies().size());
     RegisterModelProperty(*this, "iregs", (uint32_t)m_registerFile.GetSizes()[RT_INTEGER]);
@@ -129,7 +129,7 @@ void DRISC::ConnectMemory(IMemory* memory, IMemoryAdmin* admin)
     m_memadmin = admin;
     m_symtable = &admin->GetSymbolTable(),
     m_icache.ConnectMemory(memory);
-    m_dcache.ConnectMemory(memory);
+    m_dcache->ConnectMemory(memory);
     if (m_io_if != NULL)
         m_io_if->ConnectMemory(memory);
 }
@@ -190,10 +190,10 @@ void DRISC::Initialize()
 
     // Unfortunately the D-Cache needs priority here because otherwise all cache-lines can
     // remain filled and we get deadlock because the pipeline keeps wanting to do a read.
-    m_dcache.p_service.AddProcess(m_dcache.p_ReadResponses);     // Memory read returns
-    m_dcache.p_service.AddProcess(m_dcache.p_LookupResponses);		// TLB Lookup returns
-    m_dcache.p_service.AddProcess(m_pipeline.p_Pipeline);         // Memory read/write
-    m_dcache.p_service.AddProcess(m_allocator.p_BundleCreate);    // Indirect create read
+    m_dcache->p_service.AddProcess(m_dcache->p_ReadResponses);     // Memory read returns
+    m_dcache->p_service.AddProcess(m_dcache->p_LookupResponses);		// TLB Lookup returns
+    m_dcache->p_service.AddProcess(m_pipeline.p_Pipeline);         // Memory read/write
+    m_dcache->p_service.AddProcess(m_allocator.p_BundleCreate);    // Indirect create read
 
     m_allocator.p_allocation.AddProcess(m_pipeline.p_Pipeline);         // ALLOCATE instruction
     m_allocator.p_allocation.AddProcess(m_network.p_DelegationIn);      // Delegated non-exclusive create
@@ -218,8 +218,8 @@ void DRISC::Initialize()
 
     m_allocator.p_readyThreads.AddProcess(m_network.p_Link);                // Thread wakeup due to write
     m_allocator.p_readyThreads.AddProcess(m_network.p_DelegationIn);        // Thread wakeup due to write
-    m_allocator.p_readyThreads.AddProcess(m_dcache.p_ReadWritebacks);        // Thread wakeup due to load completion
-    m_allocator.p_readyThreads.AddProcess(m_dcache.p_WriteResponses);       // Thread wakeup due to write completion
+    m_allocator.p_readyThreads.AddProcess(m_dcache->p_ReadWritebacks);        // Thread wakeup due to load completion
+    m_allocator.p_readyThreads.AddProcess(m_dcache->p_WriteResponses);       // Thread wakeup due to write completion
     if (m_fpu != NULL)
     {
         m_allocator.p_readyThreads.AddProcess(m_fpu->p_Pipeline);                // Thread wakeup due to FP completion
@@ -239,7 +239,7 @@ void DRISC::Initialize()
 
     m_registerFile.p_asyncW.AddProcess(m_network.p_Link);                   // Place register receives
     m_registerFile.p_asyncW.AddProcess(m_network.p_DelegationIn);           // Remote register receives
-    m_registerFile.p_asyncW.AddProcess(m_dcache.p_ReadWritebacks);          // Mem Load writebacks
+    m_registerFile.p_asyncW.AddProcess(m_dcache->p_ReadWritebacks);          // Mem Load writebacks
 
     if (m_fpu != NULL)
     {
@@ -261,14 +261,14 @@ void DRISC::Initialize()
 
     m_network.m_link.out.AddProcess(m_network.p_Link);                      // Forwarding link messages
     m_network.m_link.out.AddProcess(m_network.p_DelegationIn);              // Delegation message forwards onto link
-    m_network.m_link.out.AddProcess(m_dcache.p_ReadWritebacks);             // Completed read causes sync
+    m_network.m_link.out.AddProcess(m_dcache->p_ReadWritebacks);             // Completed read causes sync
     m_network.m_link.out.AddProcess(m_allocator.p_FamilyAllocate);          // Allocate process sending place-wide allocate
     m_network.m_link.out.AddProcess(m_allocator.p_FamilyCreate);            // Create process sends place-wide create
     m_network.m_link.out.AddProcess(m_allocator.p_ThreadAllocate);          // Thread cleanup causes sync
 
     m_network.m_delegateIn.AddProcess(m_network.p_Link);                    // Link messages causes remote
 
-    m_network.m_delegateIn.AddProcess(m_dcache.p_ReadWritebacks);           // Read completion causes sync
+    m_network.m_delegateIn.AddProcess(m_dcache->p_ReadWritebacks);           // Read completion causes sync
 
     m_network.m_delegateIn.AddProcess(m_allocator.p_ThreadAllocate);        // Allocate process completes family sync
     m_network.m_delegateIn.AddProcess(m_allocator.p_FamilyAllocate);        // Allocate process returning FID
@@ -287,7 +287,7 @@ void DRISC::Initialize()
     m_network.m_delegateOut.AddProcess(m_network.p_DelegationIn);     // Returning registers
     m_network.m_delegateOut.AddProcess(m_network.p_Link);             // Place sync causes final sync
 
-    m_network.m_delegateOut.AddProcess(m_dcache.p_ReadWritebacks);    // Read completion causes sync
+    m_network.m_delegateOut.AddProcess(m_dcache->p_ReadWritebacks);    // Read completion causes sync
 
     m_network.m_delegateOut.AddProcess(m_network.p_AllocResponse);    // Allocate response writing back to parent
     m_network.m_delegateOut.AddProcess(m_allocator.p_FamilyAllocate); // Allocation process sends FID
@@ -333,19 +333,19 @@ void DRISC::Initialize()
     m_allocator.p_ThreadActivation.SetStorageTraces(
         opt(m_allocator.m_activeThreads ^ m_icache.m_outgoing) );
 
-    m_allocator.p_BundleCreate.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
+    m_allocator.p_BundleCreate.SetStorageTraces( m_dcache->m_outgoing ^ DELEGATE );
 
     m_icache.p_Incoming.SetStorageTraces(
         opt(m_allocator.m_activeThreads) );
 
     // m_icache.p_Outgoing is set in the memory
 
-    m_dcache.p_WriteResponses.SetStorageTraces(
+    m_dcache->p_WriteResponses.SetStorageTraces(
         /* Writes */    opt(m_allocator.m_readyThreadsOther) ^ opt(m_allocator.m_cleanup) );
 
-    m_dcache.p_ReadResponses.SetStorageTraces(opt(m_dcache.m_writebacks));
+    m_dcache->p_ReadResponses.SetStorageTraces(opt(m_dcache->m_writebacks));
 
-    m_dcache.p_ReadWritebacks.SetStorageTraces(
+    m_dcache->p_ReadWritebacks.SetStorageTraces(
         /* Thread wakeup */ opt(m_allocator.m_readyThreadsOther) *
         /* Family sync */   opt(m_network.m_link.out ^ m_network.m_syncs) );
 
@@ -358,7 +358,7 @@ void DRISC::Initialize()
             m_allocator.m_cleanup ^
             m_allocator.m_readyThreadsPipe);
     StorageTraceSet pls_memory =
-        m_dcache.m_outgoing;
+        m_dcache->m_outgoing;
 
     if (m_io_if != NULL)
     {

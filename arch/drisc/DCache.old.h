@@ -1,6 +1,6 @@
 // -*- c++ -*-
-#ifndef DCACHE_VIRTUAL_H
-#define DCACHE_VIRTUAL_H
+#ifndef DCACHE_H
+#define DCACHE_H
 
 #include <sim/kernel.h>
 #include <sim/inspect.h>
@@ -9,6 +9,8 @@
 #include <arch/drisc/forward.h>
 #include <arch/simtypes.h>
 #include "arch/drisc/mmu/MMU.h"
+
+#define GET_LINE_ID(linePointer) (unsigned int)((Line*)linePointer - &m_lines[0])
 
 namespace Simulator
 {
@@ -19,7 +21,7 @@ class DCache : public Object, public IMemoryCallback, public Inspect::Interface<
 {
     friend class Simulator::DRISC;
 
-protected:
+public:
     /// The state of a cache-line
     enum LineState
     {
@@ -29,77 +31,206 @@ protected:
         LINE_FULL        ///< Line is full.
     };
 
-    // {% from "sim/macros.p.h" import gen_struct %}
-    // {% call gen_struct() %}
-    ((name Line)
-     (state
-      (MemAddr     tag)               ///< The address tag.
-	  (ContextId   contextTag)		  ///< The contextId part of the tag //MLDTODO Implement in D$!
-      (char*       data noserialize)  ///< The data in this line.
-      (bool*       valid noserialize) ///< A bitmap of valid bytes in this line.
-      (CycleNo     access)            ///< Last access time of this line (for LRU).
-      (RegAddr     waiting)           ///< First register waiting on this line.
-      (LineState   state)             ///< The line state.
-      (bool        processing)        ///< Has the line been added to m_returned yet?
-      (bool        create)            ///< Is the line expected by the create process (bundle)?
-	  (unsigned    next)  			  ///< The next D$ line waiting for this line
-	  (size_t      tlbOffset)         ///< The offset of the request
-	  (MemAddr     pTag)			  ///< MLDTODO Remove after testing
+    // 
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
 
-	  ))
-    // {% endcall %}
+struct Line
+{
+    
+   MemAddr tag;
+   ContextId contextTag;
+   char* data;
+   bool* valid;
+   CycleNo access;
+   RegAddr waiting;
+   LineState state;
+   bool processing;
+   bool create;
+   unsigned next;
+   size_t tlbOffset;
+   MemAddr pTag;
+    SERIALIZE(__a) {
+    __a & "[cb27";
+     __a & tag;
+     __a & contextTag;
+     __a & access;
+     __a & waiting;
+     __a & state;
+     __a & processing;
+     __a & create;
+     __a & next;
+     __a & tlbOffset;
+     __a & pTag;
+  __a & "]";
+}
 
-	// {% call gen_struct() %}
-	((name Request)
-	 (state
-	  (MemData   data)
-	  (MemAddr   address)
-	  (WClientID wid)
-	  (bool      write)
-	))
-	// {% endcall %}
+    
+};
+// ***** END GENERATED CODE *****
 
-	// {% call gen_struct() %}
-	((name LookupResponse)
-	 (state
-	  (CID 	cid)
-	  (mmu::TlbLineRef tlbLineRef noserialize)
-	  (bool present)
-	))
-	// {% endcall %}
 
-	// {% call gen_struct() %}
-	((name ReadResponse)
-	 (state (CID cid)
-	))
-	// {% endcall %}
+private:
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
 
-	// {% call gen_struct() %}
-	((name WritebackRequest)
-	 (state
-	  (array data char MAX_MEMORY_OPERATION_SIZE)
-	  (RegAddr waiting)
-	))
-	// {% endcall %}
+struct Request
+{
+    
+   MemData data;
+   MemAddr address;
+   WClientID wid;
+   bool write;
+    SERIALIZE(__a) {
+    __a & "[eece";
+     __a & data;
+     __a & address;
+     __a & wid;
+     __a & write;
+  __a & "]";
+}
 
-	// {% call gen_struct() %}
-	((name WriteResponse)
-	 (state (WClientID wid)
-	))
-	// {% endcall %}
+    
+};
+// ***** END GENERATED CODE *****
 
-	// Information for multi-register writes
-	// {% call gen_struct() %}
-	((name WritebackState)
-	 (state
-	  (uint64_t     value  (init 0))           ///< Value to write
-	  (RegAddr      addr   (init INVALID_REG)) ///< Address of the next register to write
-	  (RegAddr      next   (init INVALID_REG)) ///< Next register after this one
-	  (unsigned     size   (init 0))           ///< Number of registers remaining to write
-	  (unsigned     offset (init 0))           ///< Current offset in the multi-register operand
-	  (LFID         fid    (init 0))           ///< FID of the thread's that's waiting on the register
-	))
-	// {% endcall %}
+
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
+
+struct LookupResponse
+{
+    
+   CID cid;
+   mmu::TlbLineRef tlbLineRef;
+   bool present;
+    SERIALIZE(__a) {
+    __a & "[cbd4";
+     __a & cid;
+     __a & present;
+  __a & "]";
+}
+
+    
+};
+// ***** END GENERATED CODE *****
+
+
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
+
+struct ReadResponse
+{
+    
+   CID cid;
+    SERIALIZE(__a) {
+    __a & "[4b7c";
+     __a & cid;
+  __a & "]";
+}
+
+    
+};
+// ***** END GENERATED CODE *****
+
+
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
+
+struct WritebackRequest
+{
+    
+    char data[ MAX_MEMORY_OPERATION_SIZE];
+   RegAddr waiting;
+    SERIALIZE(__a) {
+    __a & "[c33f";
+     __a & Serialization::binary(data, MAX_MEMORY_OPERATION_SIZE);
+     __a & waiting;
+  __a & "]";
+}
+
+    
+};
+// ***** END GENERATED CODE *****
+
+
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
+
+struct WriteResponse
+{
+    
+   WClientID wid;
+    SERIALIZE(__a) {
+    __a & "[db98";
+     __a & wid;
+  __a & "]";
+}
+
+    
+};
+// ***** END GENERATED CODE *****
+
+
+    // Information for multi-register writes
+    // 
+// ***** GENERATED CODE - DO NOT MODIFY  *****
+
+struct WritebackState
+{
+    
+   uint64_t value;
+   RegAddr addr;
+   RegAddr next;
+   unsigned size;
+   unsigned offset;
+   LFID fid;
+    SERIALIZE(__a) {
+    __a & "[78e9";
+     __a & value;
+     __a & addr;
+     __a & next;
+     __a & size;
+     __a & offset;
+     __a & fid;
+  __a & "]";
+}
+
+    
+    WritebackState (
+         uint64_t _value, 
+         RegAddr _addr, 
+         RegAddr _next, 
+         unsigned _size, 
+         unsigned _offset, 
+         LFID _fid) :
+      value(_value), 
+      addr(_addr), 
+      next(_next), 
+      size(_size), 
+      offset(_offset), 
+      fid(_fid){}
+
+    WritebackState():
+      value( 0 ) ,
+      addr( INVALID_REG ) ,
+      next( INVALID_REG ) ,
+      size( 0 ) ,
+      offset( 0 ) ,
+      fid( 0 ) {}
+};
+// ***** END GENERATED CODE *****
+
+	void splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag);
+
+	//Result FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags);
+	Line& fetchLine(MemAddr address);
+	bool comparePTag(Line &line, MemAddr pTag);
+	bool compareCTag(Line &line, CID cid);
+	bool getEmptyLine(MemAddr address, Line* &line);
+	bool freeLine(Line &line);
+
+    //Result ReverseFindLine(MemAddr pAddr, Line* &line);
 
     IMemory*             m_memory;          	///< Memory
     MCID                 m_mcid;            	///< Memory Client ID
@@ -117,6 +248,7 @@ protected:
     Buffer<Request>      m_outgoing;        	///< Outgoing buffer to memory bus.
     WritebackState       m_wbstate;         	///< Writeback state
     mmu::MMU*			 m_mmu;					///< Memory Management Unit
+
 
     // Statistics
 
@@ -138,18 +270,18 @@ protected:
 
     DefineSampleVariable(uint64_t, numSnoops);
 
-    static DCache* makeCache(const std::string& name, DRISC& parent, Clock& clock);
+
     void PushRegister(Line* line, RegAddr* reg);
     Line* getLineById(size_t id) { return &m_lines[id]; }
     size_t getLineId(Line* line) { return (size_t)(line - &m_lines[0]) / sizeof(Line); }
 
-    Object& GetDRISCParent() const { return *GetParent(); }
+    Result DoLookupResponses();
+    Result DoReadWritebacks();
+    Result DoReadResponses();
+    Result DoWriteResponses();
+    Result DoOutgoingRequests();
 
-    virtual Result DoLookupResponses() = 0;
-    virtual Result DoReadWritebacks() = 0;
-    virtual Result DoReadResponses() = 0;
-    virtual Result DoWriteResponses() = 0;
-    virtual Result DoOutgoingRequests() = 0;
+    Object& GetDRISCParent() const { return *GetParent(); }
 
 public:
     DCache(const std::string& name, DRISC& parent, Clock& clock);
@@ -157,12 +289,6 @@ public:
     DCache& operator=(const DCache&) = delete;
     ~DCache();
     void ConnectMemory(IMemory* memory);
-
-	virtual Line& fetchLine(MemAddr address) = 0;
-	virtual bool comparePTag(Line &line, MemAddr pTag) = 0;
-	virtual bool compareCTag(Line &line, CID cid) = 0;
-	virtual bool getEmptyLine(MemAddr address, Line* &line) = 0;
-	virtual bool freeLine(Line &line) = 0;
 
     // Processes
     Process p_LookupResponses;
@@ -177,9 +303,8 @@ public:
     Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg);
     Result Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
-    virtual Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) = 0;
-    virtual Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) = 0;
-
+    Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg);
+    Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
     size_t GetLineSize() const { return m_lineSize; }
 
@@ -189,6 +314,8 @@ public:
     // Memory callbacks
     bool OnMemoryReadCompleted(MemAddr addr, const char* data) override;
     bool OnMemoryWriteCompleted(TID tid) override;
+    bool OnMemoryReadCompleted2(MemAddr addr, const char* data);
+    bool OnMemoryWriteCompleted2(TID tid);
     bool OnMemorySnooped(MemAddr addr, const char* data, const bool* mask) override;
     bool OnMemoryInvalidated(MemAddr addr) override;
 

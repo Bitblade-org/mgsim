@@ -17,7 +17,6 @@
 #include <arch/drisc/FamilyTable.h>
 #include <arch/drisc/ThreadTable.h>
 #include <arch/drisc/ICache.h>
-#include <arch/drisc/DCache.h>
 #include <arch/drisc/IOInterface.h>
 #include <arch/drisc/Network.h>
 #include <arch/drisc/Allocator.h>
@@ -26,6 +25,7 @@
 #include <arch/drisc/old/IOMatchUnit.h>
 #include <arch/drisc/mmu/MMU.h>
 #include <arch/dev/JTAG/MMUTester.h>
+#include "DCache.h"
 
 class Config;
 
@@ -113,7 +113,7 @@ public:
     drisc::RegisterFile& GetRegisterFile() { return m_registerFile; }
     drisc::mmu::MMU& getMMU() {return m_mmu; }
     drisc::ICache& GetICache() { return m_icache; }
-    drisc::DCache& GetDCache() { return m_dcache; }
+    drisc::DCache& GetDCache() { return *m_dcache; }
     drisc::Allocator& GetAllocator() { return m_allocator; }
     drisc::RAUnit& GetRAUnit() { return m_raunit; }
     drisc::Pipeline& GetPipeline() { return m_pipeline; }
@@ -150,7 +150,7 @@ private:
     drisc::RAUnit         m_raunit;
     drisc::Allocator      m_allocator;
     drisc::ICache         m_icache;
-    drisc::DCache         m_dcache;
+    drisc::DCache*        m_dcache;
     drisc::Pipeline       m_pipeline;
     drisc::Network        m_network;
 

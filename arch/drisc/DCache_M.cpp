@@ -1,5 +1,4 @@
- #include <arch/drisc/DCache.h>
-#include <arch/drisc/DRISC.h>
+ #include <arch/drisc/DRISC.h>
 #include <sim/log2.h>
 #include <sim/config.h>
 #include <sim/sampling.h>
@@ -8,6 +7,8 @@
 #include <cstring>
 #include <iomanip>
 #include <cstdio>
+
+#include "DCache.h"
 using namespace std;
 
 namespace Simulator
