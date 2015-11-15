@@ -1,6 +1,5 @@
 #include "DCache.h"
 
-#include "DCache_naive.h"
 #include <arch/drisc/DRISC.h>
 #include <sim/log2.h>
 #include <sim/config.h>
@@ -10,6 +9,8 @@
 #include <cstring>
 #include <iomanip>
 #include <cstdio>
+
+#include "DCache_pre_nov.h"
 using namespace std;
 
 
@@ -24,9 +25,14 @@ namespace Simulator
 namespace drisc
 {
 
-DCache* DCache::makeCache(const std::string& name, DRISC& parent, Clock& clock) {
-	//MLDTODO DRISC needs to delete this?
-	return (DCache*)new DCacheNaive(name, parent, clock);
+DCache* DCache::cacheFactory(const std::string cacheType, const std::string& componentName, DRISC& parent, Clock& clock) {
+	if(cacheType == "NAIVE"){
+		return (DCache*)new DCachePreNov(componentName, parent, clock);
+	}else if(cacheType == "PRENOV"){
+		return (DCache*)new DCachePreNov(componentName, parent, clock);
+	}else{
+        throw exceptf<InvalidArgumentException>(parent, "Unknown cache type: %s", cacheType.c_str());
+	}
 }
 
 /*MLDTODO Limitations:
@@ -345,6 +351,9 @@ bool DCache::OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool pres
 
 bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 {
+	if(addr == 0x18e40){
+		cout << "Pre-Echo" << endl;
+	}
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the
     // bus from memory, so we have to check if we actually need the data.
@@ -353,10 +362,11 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
     if(comparePTag(line, addr) && line.state != LINE_EMPTY && line.state != LINE_FULL && !line.processing){
     	assert(line.state == LINE_LOADING || line.state == LINE_INVALID);
 
+
         // Registers are waiting on this data
         COMMIT
         {
-            /*
+    		/*
                       Merge with pending writes because the incoming line
                       will not know about those yet and we don't want inconsistent
                       content in L1.
@@ -384,7 +394,6 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
             line.processing = true;
         }
 
-        //MLDTODO Waarom staat dit niet in een commit block en wat betekend dat voor ontlbresp...
         // Push the cache-line to the back of the queue
         ReadResponse response;
         response.cid = getLineId(&line);

@@ -98,9 +98,8 @@ PROCESSOR_SRC = \
 	arch/drisc/DCache.p.h \
 	arch/drisc/DCache.h \
 	arch/drisc/DCache.cpp \
-	arch/drisc/DCache_naive.p.h \
-	arch/drisc/DCache_naive.h \
-	arch/drisc/DCache_naive.cpp \
+	arch/drisc/DCache_pre_nov.h \
+	arch/drisc/DCache_pre_nov.cpp \
 	arch/drisc/DebugChannel.h \
 	arch/drisc/DebugChannel.cpp \
 	arch/drisc/DecodeStage.cpp \
@@ -155,7 +154,6 @@ BUILT_SOURCES += \
 	arch/drisc/IODirectCacheAccess.h \
 	arch/drisc/IOResponseMultiplexer.h \
 	arch/drisc/DCache.h
-	arch/drisc/DCache_naive.h
 
 COMMON_SRC = \
     arch/area.cpp \

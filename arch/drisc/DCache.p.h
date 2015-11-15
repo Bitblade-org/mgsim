@@ -137,11 +137,10 @@ protected:
     DefineSampleVariable(uint64_t, numStallingWMisses);
 
     DefineSampleVariable(uint64_t, numSnoops);
-
-    static DCache* makeCache(const std::string& name, DRISC& parent, Clock& clock);
+    static DCache* cacheFactory(const std::string cacheType, const std::string& name, DRISC& parent, Clock& clock);
     void PushRegister(Line* line, RegAddr* reg);
     Line* getLineById(size_t id) { return &m_lines[id]; }
-    size_t getLineId(Line* line) { return (size_t)(line - &m_lines[0]) / sizeof(Line); }
+    size_t getLineId(Line* line) { return (size_t)(line - &m_lines[0]); }
 
     Object& GetDRISCParent() const { return *GetParent(); }
 

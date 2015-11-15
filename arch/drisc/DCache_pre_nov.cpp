@@ -1,3 +1,5 @@
+#include "DCache_pre_nov.h"
+
 #include <arch/drisc/DRISC.h>
 #include <sim/log2.h>
 #include <sim/config.h>
@@ -8,7 +10,6 @@
 #include <iomanip>
 #include <cstdio>
 
-#include "DCache_naive.h"
 using namespace std;
 
 
@@ -33,11 +34,11 @@ namespace drisc
 
 //MLDTODO-DOC: ContextId is at least 16 bits. But the number of threads running within a single TLB's domain is not going to fill that. A simple lookup table could save an enourmous amount of storage space!
 
-DCacheNaive::DCacheNaive(const std::string& name, DRISC& parent, Clock& clock)
+DCachePreNov::DCachePreNov(const std::string& name, DRISC& parent, Clock& clock)
 :DCache(name, parent, clock)
 {}
 
-DCacheNaive::~DCacheNaive()
+DCachePreNov::~DCachePreNov()
 {}
 //
 ////MLDTODO Create reverse lookup directory
@@ -100,7 +101,7 @@ DCacheNaive::~DCacheNaive()
  * 		 vTag		|      d$ max index	|     d$ offset
  * 		 vTag       |               page offset
  */
-void DCacheNaive::splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag){
+void DCachePreNov::splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag){
 	//MLDTODO Merge with map function (selector)?
 	//MLDTODO m_linesize must be 2^x
 	//size_t indexBits = ilog2(this->m_lineSize);
@@ -114,7 +115,7 @@ void DCacheNaive::splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cach
 	}
 }
 
-DCache::Line& DCacheNaive::fetchLine(MemAddr address){
+DCache::Line& DCachePreNov::fetchLine(MemAddr address){
 	assert(m_assoc == 1); // Associativity must be 1
 
 	size_t offsetBits, indexBits;
@@ -130,15 +131,15 @@ DCache::Line& DCacheNaive::fetchLine(MemAddr address){
     return m_lines[setindex];
 }
 
-bool DCacheNaive::comparePTag(Line &line, MemAddr pTag){
+bool DCachePreNov::comparePTag(Line &line, MemAddr pTag){
 	return line.pTag == pTag;
 }
 
-bool DCacheNaive::compareCTag(Line &line, CID cid){
+bool DCachePreNov::compareCTag(Line &line, CID cid){
 	return line.contextTag == cid;
 }
 
-bool DCacheNaive::freeLine(Line &line){
+bool DCachePreNov::freeLine(Line &line){
 	// Invalid lines may not be touched or considered
 	if (line.state != LINE_EMPTY && line.state != LINE_FULL)
 	{
@@ -157,7 +158,7 @@ bool DCacheNaive::freeLine(Line &line){
     return true;
 }
 
-bool DCacheNaive::getEmptyLine(MemAddr /*address*/, Line* &/*line*/){
+bool DCachePreNov::getEmptyLine(MemAddr /*address*/, Line* &/*line*/){
 	throw "myFunction is not implemented yet.";
 }
 
@@ -231,7 +232,7 @@ bool DCacheNaive::getEmptyLine(MemAddr /*address*/, Line* &/*line*/){
 //    return DELAYED;
 //}
 
-Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg)
+Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg)
 {//CASE L1/L2/L3/L4/L5/L6/L7/L8/P/F
 	size_t offsetBits, indexBits, vTag;
 	splitAddress(address, offsetBits, indexBits, &vTag);
@@ -406,7 +407,7 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
     UNREACHABLE
 }
 
-Result DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
+Result DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
 {
 	size_t offsetBits, indexBits, vTag;
 	splitAddress(address, offsetBits, indexBits, &vTag);
@@ -529,7 +530,7 @@ Result DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, Mem
     return DELAYED;
 }
 
-Result DCacheNaive::DoLookupResponses(){
+Result DCachePreNov::DoLookupResponses(){
 	assert(!m_lookup_responses.Empty());
 
     if (!p_service.Invoke())
@@ -600,7 +601,7 @@ Result DCacheNaive::DoLookupResponses(){
     return SUCCESS;
 }
 
-Result DCacheNaive::DoReadResponses()
+Result DCachePreNov::DoReadResponses()
 {
     assert(!m_read_responses.Empty());
 
@@ -613,6 +614,7 @@ Result DCacheNaive::DoReadResponses()
     // Process a waiting register
     auto& response = m_read_responses.Front();
     Line& line = m_lines[response.cid];
+
     assert(line.state == LINE_LOADING || line.state == LINE_INVALID);
 
     DebugMemWrite("Processing read completion for CID %u", (unsigned)response.cid);
@@ -650,7 +652,7 @@ Result DCacheNaive::DoReadResponses()
     return SUCCESS;
 }
 
-Result DCacheNaive::DoReadWritebacks()
+Result DCachePreNov::DoReadWritebacks()
 {
     assert(!m_writebacks.Empty());
 
@@ -790,7 +792,7 @@ Result DCacheNaive::DoReadWritebacks()
     return SUCCESS;
 }
 
-Result DCacheNaive::DoWriteResponses()
+Result DCachePreNov::DoWriteResponses()
 {
     assert(!m_write_responses.Empty());
     auto& response = m_write_responses.Front();
@@ -808,7 +810,7 @@ Result DCacheNaive::DoWriteResponses()
     return SUCCESS;
 }
 
-Result DCacheNaive::DoOutgoingRequests()
+Result DCachePreNov::DoOutgoingRequests()
 {
     assert(m_memory != NULL);
     assert(!m_outgoing.Empty());

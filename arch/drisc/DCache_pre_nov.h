@@ -2,7 +2,6 @@
 #ifndef DCACHE_NAIVE_H
 #define DCACHE_NAIVE_H
 
-#include <arch/drisc/DCache_virtual.h>
 #include <sim/kernel.h>
 #include <sim/inspect.h>
 #include <sim/buffer.h>
@@ -10,20 +9,21 @@
 #include <arch/drisc/forward.h>
 #include <arch/simtypes.h>
 #include "arch/drisc/mmu/MMU.h"
+#include "DCache.h"
 
 namespace Simulator
 {
 namespace drisc
 {
 
-class DCacheNaive : public DCache
+class DCachePreNov : public DCache
 {
 
 public:
-    DCacheNaive(const std::string& name, DRISC& parent, Clock& clock);
-    DCacheNaive(const DCache&) = delete;
-    DCacheNaive& operator=(const DCache&) = delete;
-    ~DCacheNaive();
+    DCachePreNov(const std::string& name, DRISC& parent, Clock& clock);
+    DCachePreNov(const DCache&) = delete;
+    DCachePreNov& operator=(const DCache&) = delete;
+    ~DCachePreNov();
 
     Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) override;
     Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
