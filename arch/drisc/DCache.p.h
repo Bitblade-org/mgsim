@@ -3,6 +3,7 @@
 #define DCACHE_VIRTUAL_H
 
 #include <sim/kernel.h>
+#include <memory>
 #include <sim/inspect.h>
 #include <sim/buffer.h>
 #include <arch/Memory.h>
@@ -137,7 +138,7 @@ protected:
     DefineSampleVariable(uint64_t, numStallingWMisses);
 
     DefineSampleVariable(uint64_t, numSnoops);
-    static DCache* cacheFactory(const std::string cacheType, const std::string& name, DRISC& parent, Clock& clock);
+    static std::unique_ptr<DCache> cacheFactory(const std::string cacheType, const std::string& name, DRISC& parent, Clock& clock);
     void PushRegister(Line* line, RegAddr* reg);
     Line* getLineById(size_t id) { return &m_lines[id]; }
     size_t getLineId(Line* line) { return (size_t)(line - &m_lines[0]); }

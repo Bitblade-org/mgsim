@@ -150,7 +150,7 @@ private:
     drisc::RAUnit         m_raunit;
     drisc::Allocator      m_allocator;
     drisc::ICache         m_icache;
-    drisc::DCache*        m_dcache;
+    std::unique_ptr<drisc::DCache>	m_dcache;
     drisc::Pipeline       m_pipeline;
     drisc::Network        m_network;
 

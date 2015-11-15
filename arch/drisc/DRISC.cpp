@@ -35,7 +35,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_raunit      ("rau",           *this, m_registerFile.GetSizes()),
     m_allocator   ("alloc",         *this, clock),
     m_icache      ("icache",        *this, clock),
-    m_dcache      (DCache::cacheFactory("NAIVE", "dcache",*this, clock)), //GetConf("BankSelector", string)
+    m_dcache      (DCache::cacheFactory(GetSubConf("DCache", "CacheType", string), "dcache",*this, clock)),
     m_pipeline    ("pipeline",      *this, clock),
     m_network     ("network",       *this, clock, grid),
     m_mmio        ("mmio",          *this),
@@ -121,7 +121,6 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
 DRISC::~DRISC()
 {
     delete m_io_if;
-    delete m_dcache;
 }
 
 void DRISC::ConnectMemory(IMemory* memory, IMemoryAdmin* admin)

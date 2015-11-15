@@ -25,11 +25,11 @@ namespace Simulator
 namespace drisc
 {
 
-DCache* DCache::cacheFactory(const std::string cacheType, const std::string& componentName, DRISC& parent, Clock& clock) {
+std::unique_ptr<DCache> DCache::cacheFactory(const std::string cacheType, const std::string& componentName, DRISC& parent, Clock& clock) {
 	if(cacheType == "NAIVE"){
-		return (DCache*)new DCachePreNov(componentName, parent, clock);
+		return std::unique_ptr<DCache>(new DCachePreNov(componentName, parent, clock));
 	}else if(cacheType == "PRENOV"){
-		return (DCache*)new DCachePreNov(componentName, parent, clock);
+		return std::unique_ptr<DCache>(new DCachePreNov(componentName, parent, clock));
 	}else{
         throw exceptf<InvalidArgumentException>(parent, "Unknown cache type: %s", cacheType.c_str());
 	}
