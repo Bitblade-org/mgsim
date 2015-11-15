@@ -1,6 +1,6 @@
 // -*- c++ -*-
-#ifndef DCACHE_NAIVE_H
-#define DCACHE_NAIVE_H
+#ifndef DCACHE_PRE_NOV_H
+#define DCACHE_PRE_NOV_H
 
 #include <sim/kernel.h>
 #include <sim/inspect.h>
