@@ -158,12 +158,6 @@ public:
     ~DCache();
     void ConnectMemory(IMemory* memory);
 
-	virtual Line& fetchLine(MemAddr address) = 0;
-	virtual bool comparePTag(Line &line, MemAddr pTag) = 0;
-	virtual bool compareCTag(Line &line, CID cid) = 0;
-	virtual bool getEmptyLine(MemAddr address, Line* &line) = 0;
-	virtual bool freeLine(Line &line) = 0;
-
     // Processes
     Process p_LookupResponses;
     Process p_ReadWritebacks;
@@ -180,6 +174,9 @@ public:
     virtual Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) = 0;
     virtual Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) = 0;
 
+	void splitAddress(MemAddr addr, MemAddr &cacheOffset, size_t &setIndex, MemAddr *pTag);
+	MemAddr unsplitAddress(MemAddr cacheOffset, size_t setIndex, MemAddr pTag);
+	Line* findLine(size_t setIndex, size_t pTag);
 
     size_t GetLineSize() const { return m_lineSize; }
 

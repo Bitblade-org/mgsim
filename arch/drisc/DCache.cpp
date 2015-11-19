@@ -11,6 +11,7 @@
 #include <cstdio>
 
 #include "DCache_pre_nov.h"
+#include "DCache_naive.h"
 using namespace std;
 
 
@@ -27,7 +28,7 @@ namespace drisc
 
 std::unique_ptr<DCache> DCache::cacheFactory(const std::string cacheType, const std::string& componentName, DRISC& parent, Clock& clock) {
 	if(cacheType == "NAIVE"){
-		return std::unique_ptr<DCache>(new DCachePreNov(componentName, parent, clock));
+		return std::unique_ptr<DCache>(new DCacheNaive(componentName, parent, clock));
 	}else if(cacheType == "PRENOV"){
 		return std::unique_ptr<DCache>(new DCachePreNov(componentName, parent, clock));
 	}else{
@@ -35,7 +36,7 @@ std::unique_ptr<DCache> DCache::cacheFactory(const std::string cacheType, const 
 	}
 }
 
-/*MLDTODO Limitations:
+/*MLDTODO Limitations: (Some of which need to be removed!)
  * 		  - Only works for a direct mapped cache. (1-way set associative)
  * 		  - Only works for DIRECT bank selection.
  * 		  - Only works for memory systems that respond to the requesting $ only.
@@ -136,6 +137,42 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     m_wbstate.size   = 0;
     m_wbstate.offset = 0;
     RegisterStateObject(m_wbstate, "wbstate");//MLDTODO Registreren variabelen voorbeeld
+}
+
+void DCache::splitAddress(MemAddr addr, MemAddr &cacheOffset, size_t &setIndex, MemAddr *pTag){
+	MemAddr tagBuffer;
+	cacheOffset = addr & (m_lineSize - 1);
+	m_selector->Map(addr / m_lineSize, tagBuffer, setIndex);
+
+	if(pTag != NULL){
+		*pTag = tagBuffer;
+	}
+}
+
+MemAddr DCache::unsplitAddress(MemAddr cacheOffset, size_t setIndex, MemAddr pTag){
+	MemAddr addrBuffer = m_selector->Unmap(pTag, setIndex);
+	addrBuffer *= m_lineSize;
+	addrBuffer += cacheOffset;
+	return addrBuffer;
+}
+
+DCache::Line* DCache::findLine(size_t setIndex, size_t pTag){
+	Line* line = NULL;
+
+	for (size_t i = 0; i < m_assoc; ++i)
+	{
+		line = &m_lines[(setIndex * m_assoc) + i];
+
+		// Consider only FULL, LOADING and INVALID lines
+		if (line->state == LINE_FULL || line->state == LINE_LOADING || line->state == LINE_INVALID)
+		{
+			if(line->pTag == pTag){
+				return line;
+			}
+		}
+	}
+
+	return NULL;
 }
 
 Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
@@ -351,16 +388,20 @@ bool DCache::OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool pres
 
 bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 {
-	if(addr == 0x18e40){
-		cout << "Pre-Echo" << endl;
+	MemAddr cacheOffset, pTag;
+	size_t setIndex;
+	splitAddress(addr, cacheOffset, setIndex, &pTag);
+
+	if(addr == 0x500000){
+		cout << "Pre-Echo" << endl; //MLDTODO Remove after debugging
 	}
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the
     // bus from memory, so we have to check if we actually need the data.
-    Line& line = fetchLine(addr);
+    Line* line = findLine(setIndex, pTag);
 
-    if(comparePTag(line, addr) && line.state != LINE_EMPTY && line.state != LINE_FULL && !line.processing){
-    	assert(line.state == LINE_LOADING || line.state == LINE_INVALID);
+    if(line && line->state != LINE_FULL && !line->processing){
+    	assert(line->state == LINE_LOADING || line->state == LINE_INVALID);
 
 
         // Registers are waiting on this data
@@ -388,15 +429,15 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 
             // Copy the data into the cache line.
             // Mask by valid bytes (don't overwrite already written data).
-            line::blitnot(line.data, mdata, line.valid, m_lineSize);
-            line::setifnot(line.valid, true, line.valid, m_lineSize);
+            line::blitnot(line->data, mdata, line->valid, m_lineSize);
+            line::setifnot(line->valid, true, line->valid, m_lineSize);
 
-            line.processing = true;
+            line->processing = true;
         }
 
         // Push the cache-line to the back of the queue
         ReadResponse response;
-        response.cid = getLineId(&line);
+        response.cid = getLineId(line);
 
         DebugMemWrite("Received read completion for %#016llx -> CID %u", (unsigned long long)addr, (unsigned)response.cid);
 
@@ -431,7 +472,10 @@ bool DCache::OnMemoryWriteCompleted(WClientID wid)
 
 bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask)
 {
-    Line &line = fetchLine(address);
+	MemAddr cacheOffset, pTag;
+	size_t setIndex;
+	splitAddress(address, cacheOffset, setIndex, &pTag);
+    Line *line = findLine(setIndex, pTag);
 
     // FIXME: snoops should really either lock the line or access
     // through a different port. Here we cannot (yet) invoke the
@@ -448,7 +492,7 @@ bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask
     */
 
     // Cache coherency: check if we have the same address
-    if (comparePTag(line, address))
+    if(line) //MLDTODO INVALID? LOADING? FULL?
     {
         DebugMemWrite("Received snoop request for loaded line %#016llx", (unsigned long long)address);
 
@@ -458,8 +502,8 @@ bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask
             // Note that we don't have to check against already written data or queued reads
             // because we don't have to guarantee sequential semantics from other cores.
             // This falls within the non-determinism behavior of the architecture.
-            line::blit(line.data, data, mask, m_lineSize);
-            line::setif(line.valid, true, mask, m_lineSize);
+            line::blit(line->data, data, mask, m_lineSize);
+            line::setif(line->valid, true, mask, m_lineSize);
 
             // Statistics
             ++m_numSnoops;
@@ -472,19 +516,23 @@ bool DCache::OnMemoryInvalidated(MemAddr address)
 {
     COMMIT
     {
-        Line &line = fetchLine(address);
-        if(comparePTag(line, address))
+    	MemAddr cacheOffset, pTag;
+    	size_t setIndex;
+    	splitAddress(address, cacheOffset, setIndex, &pTag);
+        Line *line = findLine(setIndex, pTag);
+
+        if(line)
         {
             DebugMemWrite("Received invalidation request for loaded line %#016llx", (unsigned long long)address);
 
             // We have the line, invalidate it
-            if (line.state == LINE_FULL) {
+            if (line->state == LINE_FULL) {
                 // Full lines are invalidated by clearing them. Simple.
-                line.state = LINE_EMPTY;
-            } else if (line.state == LINE_LOADING) {
+                line->state = LINE_EMPTY;
+            } else if (line->state == LINE_LOADING) {
                 // The data is being loaded. Invalidate the line and it will get cleaned up
                 // when the data is read.
-                line.state = LINE_INVALID;
+                line->state = LINE_INVALID;
             }
         }
     }

@@ -1,6 +1,6 @@
 // -*- c++ -*-
-#ifndef DCACHE_PRE_NOV_H
-#define DCACHE_PRE_NOV_H
+#ifndef DCACHE_NAIVE_H
+#define DCACHE_NAIVE_H
 
 #include <sim/kernel.h>
 #include <sim/inspect.h>
@@ -16,28 +16,24 @@ namespace Simulator
 namespace drisc
 {
 
-class DCachePreNov : public DCache
+class DCacheNaive : public DCache
 {
-
 public:
-    DCachePreNov(const std::string& name, DRISC& parent, Clock& clock);
-    DCachePreNov(const DCache&) = delete;
-    DCachePreNov& operator=(const DCache&) = delete;
-    ~DCachePreNov();
+	typedef size_t Set;
+
+    DCacheNaive(const std::string& name, DRISC& parent, Clock& clock);
+    DCacheNaive(const DCache&) = delete;
+    DCacheNaive& operator=(const DCache&) = delete;
+    ~DCacheNaive();
 
     Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) override;
     Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
 
 private:
-	void splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag);
-
-	//Result FindLine(MemAddr address, ContextId contextId, Line* &line, bool check_only, bool ignore_tags);
-	Line& fetchLine(MemAddr address);
-	bool comparePTag(Line &line, MemAddr pTag);
-	bool compareCTag(Line &line, CID cid);
+	bool getEmptyLine(size_t address, Line* &line);
 	bool freeLine(Line &line);
-
-    //Result ReverseFindLine(MemAddr pAddr, Line* &line);
+	Line* getEmptyLine(size_t setIndex); //MLDTODO Needs beter name...
+	void resetLine(Line* line);
 
     Result DoLookupResponses() override;
     Result DoReadWritebacks() override;

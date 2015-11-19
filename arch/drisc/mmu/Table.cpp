@@ -175,12 +175,14 @@ bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* 
 			return false;
 		}
 
-		freeLine(*line);
+		COMMIT{
+			freeLine(*line);
 
-		line->present = false;
-		line->locked = true;
-		line->processId = processId;
-		line->vAddr = vAddr;
+			line->present = false;
+			line->locked = true;
+			line->processId = processId;
+			line->vAddr = vAddr;
+		}
 	}
 
 	tableLineId = getIndex(*line);

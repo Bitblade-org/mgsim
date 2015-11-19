@@ -100,6 +100,8 @@ PROCESSOR_SRC = \
 	arch/drisc/DCache.cpp \
 	arch/drisc/DCache_pre_nov.h \
 	arch/drisc/DCache_pre_nov.cpp \
+    arch/drisc/DCache_naive.h \
+	arch/drisc/DCache_naive.cpp \
 	arch/drisc/DebugChannel.h \
 	arch/drisc/DebugChannel.cpp \
 	arch/drisc/DecodeStage.cpp \

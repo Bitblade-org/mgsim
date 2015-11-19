@@ -215,25 +215,27 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res)
 		Addr tableLineId;
 
 		if(!m_tables[0]->storePending(processId, vAddr, tableLineId, line)){
-			std::cout << "Unable to store pending entry in TLB" << std::endl;
 			DeadlockWrite("Unable to store pending entry in TLB");
 			return Result::FAILED;
 		}
 
-		MgtMsg msg;
-		msg.type = (uint64_t)MgtMsgType::MISS;
-		msg.mReq.vAddr = vAddr.m_value;
-		msg.mReq.contextId = processId.m_value;
-		msg.mReq.lineIndex = tableLineId;
-		msg.mReq.tlbType = (uint64_t)manager::TlbType::DTLB;
-		msg.mReq.caller = m_ioDevId;
+		COMMIT{
+			MgtMsg msg;
+			msg.type = (uint64_t)MgtMsgType::MISS;
+			msg.mReq.vAddr = vAddr.m_value;
+			msg.mReq.contextId = processId.m_value;
+			msg.mReq.lineIndex = tableLineId;
+			msg.mReq.tlbType = (uint64_t)manager::TlbType::DTLB;
+			msg.mReq.caller = m_ioDevId;
 
-		if(!sendMgtMsg(msg)){
-			std::cout << "Unable to send msg to Manager" << std::endl;
 
-	        DeadlockWrite("Unable to send msg to Manager");
+			if(!sendMgtMsg(msg)){
+				std::cout << "Unable to send msg to Manager" << std::endl;
 
-			return Result::FAILED;
+				DeadlockWrite("Unable to send msg to Manager");
+
+				return Result::FAILED;
+			}
 		}
 
 		res.m_destroy=false;
@@ -245,7 +247,7 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res)
 	}
 
 	if(line->locked && mayUnlock){
-		line->locked = false;
+		COMMIT{line->locked = false;}
 	}
 
 	res = TLBResult(line, &getMMU(), false);
