@@ -145,6 +145,9 @@ protected:
 
     Object& GetDRISCParent() const { return *GetParent(); }
 
+    bool initiateMemoryRequest(bool write, MemAddr cacheOffset, size_t setIndex, MemAddr pTag, void* data, MemSize size, TID tid);
+    bool initiateMemoryRequest(MemAddr cacheOffset, size_t setIndex, MemAddr pTag){return initiateMemoryRequest(false, cacheOffset, setIndex, pTag, NULL, 0, 0);}
+
     virtual Result DoLookupResponses() = 0;
     virtual Result DoReadWritebacks() = 0;
     virtual Result DoReadResponses() = 0;

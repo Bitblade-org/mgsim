@@ -325,6 +325,59 @@ ExtendedResult DCache::Write(MemAddr address, void* data, MemSize size, LFID fid
 //    RegisterStateObject(m_wbstate, "wbstate");//MLDTODO Registreren variabelen voorbeeld
 //}
 
+//if(!initiateMemoryRequest(true, setIndex, pTag, cacheOffset, data, size)){
+//	return FAILED;
+//}
+//Request request;
+//request.write     = true;
+//request.address   = unsplitAddress(0, setIndex, pTag);
+//request.wid       = tid;
+
+//
+//COMMIT{
+//	std::copy((char*)data, ((char*)data)+size, request.data.data+cacheOffset);
+//	std::fill(request.data.mask, request.data.mask+cacheOffset, false);
+//	std::fill(request.data.mask+cacheOffset, request.data.mask+cacheOffset+size, true);
+//	std::fill(request.data.mask+cacheOffset+size, request.data.mask+m_lineSize, false);
+//}
+//
+//if (!m_outgoing.Push(request))
+//{
+//    //++m_numStallingWMisses; MLDTODO Statistics
+//    DeadlockWrite("Unable to push request to outgoing buffer");
+//    return ExtendedResult::FAILED;
+//}
+
+bool DCache::initiateMemoryRequest
+(bool write, MemAddr cacheOffset, size_t setIndex, MemAddr pTag, void* data, MemSize size, TID tid){
+
+    Request request;
+    request.write     = write;
+    request.address   = unsplitAddress(0, setIndex, pTag);
+
+    if(write){
+    	//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
+    	//MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
+    	//MLDNOTE Beginnen met een stall.
+    	//MLDTODO-DOC Hoort ook weer in scriptie.
+    	request.wid = tid;
+    	COMMIT{
+    		std::copy((char*)data, ((char*)data)+size, request.data.data+cacheOffset);
+    		std::fill(request.data.mask, request.data.mask+cacheOffset, false);
+    		std::fill(request.data.mask+cacheOffset, request.data.mask+cacheOffset+size, true);
+    		std::fill(request.data.mask+cacheOffset+size, request.data.mask+m_lineSize, false);
+    	}
+    }
+
+	if (!m_outgoing.Push(request))
+	{
+//		++m_numStallingRMisses; //MLDTODO Fix statistics
+		DeadlockWrite("Unable to push request to outgoing buffer");
+		return false;
+	}
+	return true;
+}
+
 void DCache::ConnectMemory(IMemory* memory)
 {
     assert(memory != NULL);
@@ -359,27 +412,14 @@ void DCache::PushRegister(Line* line, RegAddr* reg){
 }
 
 bool DCache::OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool present){ //MLDTODO Modify cid type
-	if(cid != INVALID_CID){
-		Line& line = m_lines[cid]; //MLDTODO If the mapping from vAddr/ContextId to cid is deterministic, no CID is needed.
-		assert(line.state == LINE_LOADING); //MLDTODO Handle
-		assert(present); //MLDTODO Handle
-	}
-
-    // Push the cache-line to the back of the queue
+    // Push the completion to the back of the queue
     LookupResponse response;
     response.cid   = cid;
     response.tlbLineRef = tlbLineRef;
     response.present = present;
 
-	if(cid == INVALID_CID){
-		DebugMemWrite("Received lookup completion for 'magic' CID");
-	}else{
-		DebugMemWrite("Received lookup completion for CID %u", (unsigned)response.cid);
-	}
-
     if (!m_lookup_responses.Push(response))
     {
-    	std::cout << "Lookup response NOT pushed to buffer!" << std::endl;
         DeadlockWrite("Unable to push lookup completion to buffer");
         return false;
     }

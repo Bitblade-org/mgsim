@@ -40,7 +40,6 @@ DCacheNaive::~DCacheNaive()
 {}
 
 /*
- * MLDTODO Ombouwen naar VIPT+PID
  * Index op basis van (V+P)addr
  * CID tag
  * Paddr tag
@@ -302,16 +301,9 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
     		line = getEmptyLine(setIndex);
     		if(line)
     		{ //Case 3 MLDTODO
-        		Request request;
-        		request.write     = false;
-        		request.address   = unsplitAddress(0, setIndex, pTag);
-
-        		if (!m_outgoing.Push(request))
-        		{
-        			//++m_numStallingRMisses;//MLDTODO Statistics
-        			DeadlockWrite("Unable to push request to outgoing buffer");
-        			return FAILED;
-        		}
+    			if(!initiateMemoryRequest(cacheOffset, setIndex, pTag)){
+    				return FAILED;
+    			}
         		COMMIT{
         			line->pTag = pTag;
 //					if (line.state == LINE_EMPTY){
@@ -417,7 +409,7 @@ ExtendedResult DCacheNaive::Write2(ContextId contextId, MemAddr address, void* d
 	}
 
     MemAddr pTag;
-	splitAddress(address, cacheOffset, setIndex, &pTag);
+	splitAddress(tlbData.pAddr(), cacheOffset, setIndex, &pTag);
 
 	Line* line = findLine(setIndex, pTag);
 	if(line)
@@ -454,29 +446,9 @@ ExtendedResult DCacheNaive::Write2(ContextId contextId, MemAddr address, void* d
 //		COMMIT{ ++m_numPassThroughWMisses; } MLDTODO Statistics
 	}
 
-    Request request;
-    request.write     = true;
-    request.address   = tlbData.pAddr() - cacheOffset;
-    request.wid       = tid;//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
-    //MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
-    //MLDNOTE Beginnen met een stall.
-    //MLDTODO-DOC Hoort ook weer in scriptie.
-
-    COMMIT{
-    std::copy((char*)data, ((char*)data)+size, request.data.data+cacheOffset);
-    std::fill(request.data.mask, request.data.mask+cacheOffset, false);
-    std::fill(request.data.mask+cacheOffset, request.data.mask+cacheOffset+size, true);
-    std::fill(request.data.mask+cacheOffset+size, request.data.mask+m_lineSize, false);
-    }
-
-    if (!m_outgoing.Push(request))
-    {
-        //++m_numStallingWMisses; MLDTODO Statistics
-        DeadlockWrite("Unable to push request to outgoing buffer");
-        return ExtendedResult::FAILED;
-    }
-
-//    COMMIT{ ++m_numWAccesses; }MLDTODO Statistics
+	if(!initiateMemoryRequest(true, cacheOffset, setIndex, pTag, data, size, tid)){
+		return ExtendedResult::FAILED;
+	}
 
     return ExtendedResult::DELAYED;
 }
@@ -491,69 +463,59 @@ Result DCacheNaive::DoLookupResponses(){
     }
 
     auto& response = m_lookup_responses.Front();
+	if(!response.present)
+	{ //Case 12
+		throw exceptf<SecurityException>(*this, "Page fault"); //MLDTODO Add information
+	}
 
     if(response.cid == INVALID_CID)
-    {//Case (L5)/S5/S7/S8 //MLDTODO Old cases
-    	//Do nothing
-    	//UNREACHABLE //MLDTODO Handle
+    { //Case 10
+    	//Do nothing...
+		DebugMemWrite("Handling lookup completion for 'magic' CID");
         m_lookup_responses.Pop();
         return SUCCESS;
     }
 
-    //Valid CID, this must be the callback for cases L6 or L8!
-    assert(response.present); //MLDTODO Handle
-
-    //We need to restart the memory req.
+    //Unreachable by writes, so this must be case 1, 2, 3 or 5 (read)
     Line& line = m_lines[response.cid];
     assert(line.state == LINE_LOADING);
 
-    DebugMemWrite("Processing lookup completion for Line ID %u", response.cid);
-
     mmu::TLBResult tlbData;
 	m_mmu->getDTlb().getLine(response.tlbLineRef, tlbData);
+	assert(!tlbData.isPending());
+	DebugMemWrite("Handling lookup completion for CID %u, (%#016llx => %#016llx)", (unsigned)response.cid, (unsigned long long)tlbData.vAddr(), (unsigned long long)tlbData.pAddr());
+
+	if(!tlbData.read())
+	{ //Case 5
+		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from non-readable virtual address", (unsigned long long)tlbData.vAddr());
+	}
 
 	MemAddr cacheOffset, pTag;
 	size_t setIndex;
 	splitAddress(tlbData.pAddr(), cacheOffset, setIndex, &pTag);
 
-	if(!tlbData.read())
-	{//Case P
-		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from non-readable virtual address",
-										 (unsigned long long)tlbData.vAddr());
-	}
-
-    //// DO REQUEST
-
-    DebugTLBWrite("TLBLookupComplete: address: 0x%lX", tlbData.pAddr());
-    Request request;
-    request.write     = false;
-    request.address   = tlbData.pAddr() - cacheOffset; //MLDTODO pAddr
-
-	if (!m_outgoing.Push(request))
-	{
-		++m_numStallingRMisses; //MLDTODO Fix statistics
-		DeadlockWrite("Unable to push request to outgoing buffer");
+	if(!initiateMemoryRequest(cacheOffset, setIndex, pTag)){ //MLDTODO In case of write?
 		return FAILED;
 	}
+
 	COMMIT {
 		line.pTag = pTag;
 
 		if (line.state == LINE_EMPTY){
-			++m_numEmptyRMisses; //MLDTODO Fix statistics
+//			++m_numEmptyRMisses; //MLDTODO Fix statistics
 		}else{
-			++m_numResolvedConflicts; //MLDTODO Fix statistics
+//			++m_numResolvedConflicts; //MLDTODO Fix statistics
 		}
 
-		line.state = LINE_LOADING; //MLDTODO Fix statistics
+		line.state = LINE_LOADING;
 		//PushRegister(line, reg); //MLDTODO Fix register linked list
 
-		++m_numDelayedReads; //MLDTODO Fix statistics
+//		++m_numDelayedReads; //MLDTODO Fix statistics
 	}
 
     ////END DO REQUEST
 
     m_lookup_responses.Pop();
-
     return SUCCESS;
 }
 
