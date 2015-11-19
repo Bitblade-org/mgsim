@@ -203,7 +203,7 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
 }
 
 
-Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid)
+ExtendedResult DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid)
 {
 //	size_t pos = GetName().find('.');
 	//unsigned cpuId = std::stoul(GetName().substr(3, pos-3));
@@ -217,7 +217,7 @@ Result DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID ti
 		//}
 	}
 
-	Result result = Write2(contextId, address, data, size, fid, tid);
+	ExtendedResult result = Write2(contextId, address, data, size, fid, tid);
 //	COMMIT{
 //		if((address | 0xff) == 0x801fffffffffffff){
 //			std::cout << std::dec << GetKernel()->GetCycleNo() << ": write naar 0x" << std::hex << address << "! Data:0x" << std::hex << *((uint64_t*)data) << ", component:" << GetName() << std::dec << std::endl;
@@ -392,9 +392,6 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 	size_t setIndex;
 	splitAddress(addr, cacheOffset, setIndex, &pTag);
 
-	if(addr == 0x500000){
-		cout << "Pre-Echo" << endl; //MLDTODO Remove after debugging
-	}
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the
     // bus from memory, so we have to check if we actually need the data.

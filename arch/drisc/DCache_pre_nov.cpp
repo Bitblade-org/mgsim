@@ -402,7 +402,7 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
     UNREACHABLE
 }
 
-Result DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
+ExtendedResult DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
 {
 	size_t offsetBits, indexBits, vTag;
 	splitAddress(address, offsetBits, indexBits, &vTag);
@@ -428,14 +428,14 @@ Result DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, Me
     {
         DeadlockWrite("Unable to acquire port for D-Cache write access (%#016llx, %zd)",
                       (unsigned long long)address, (size_t)size);
-        return FAILED;
+        return ExtendedResult::FAILED;
     }
 
     if (!m_mmu->getDTlb().invoke()){
         DeadlockWrite("Unable to acquire port for D-TLB read access (%#016llx, %zd)",
                       (unsigned long long)address, (size_t)size);
 
-        return FAILED;
+        return ExtendedResult::FAILED;
     }
 
     Line& line = fetchLine(address);
@@ -445,7 +445,7 @@ Result DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, Me
     if(tlbResult == DELAYED){
     	//MLDTODO Statistics
     	tlbData.dcacheReference(INVALID_CID);
-    	return DELAYED;
+    	return ExtendedResult::DELAYED;
     }
 
     if (compareCTag(line, contextId) && comparePTag(line, address))
@@ -475,7 +475,7 @@ Result DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, Me
             // So for now, just stall the write
             ++m_numLoadingWMisses;
             DeadlockWrite("Unable to write into loading cache line");
-            return FAILED;
+            return ExtendedResult::FAILED;
         }
         else
         {
@@ -517,12 +517,12 @@ Result DCachePreNov::Write2(ContextId contextId, MemAddr address, void* data, Me
     {
         ++m_numStallingWMisses;
         DeadlockWrite("Unable to push request to outgoing buffer");
-        return FAILED;
+        return ExtendedResult::FAILED;
     }
 
     COMMIT{ ++m_numWAccesses; }
 
-    return DELAYED;
+    return ExtendedResult::DELAYED;
 }
 
 Result DCachePreNov::DoLookupResponses(){

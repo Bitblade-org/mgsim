@@ -70,9 +70,12 @@ Pipeline::PipeAction Pipeline::MemoryStage::OnCycle()
                 }
                 else
                 {
+                	ExtendedResult eRes = m_dcache.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid);
+                	result = resultConv(eRes);
                     // Normal request to memory
-                    if ((result = resultConv(m_dcache.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid))) == FAILED)
-                    {
+                	if(eRes == ExtendedResult::ACTIVE){
+                		return PIPE_DELAY;
+                	}else if (result == FAILED){
                         // Stall
                         DeadlockWrite("F%u/T%u(%llu) %s stall (L1 store *%#.*llx/%zd <- %s)",
                                       (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index,

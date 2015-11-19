@@ -89,16 +89,17 @@ Result TLB::doTransmit(){
 	m_fifo_out.Pop();
 
 	if(!m_ioBus.SendNotification(item.addr.devid, item.addr.chan, item.payload)){
-		DeadlockWrite_("Could not send message");
-		return Result::FAILED;
+		DeadlockWrite("Could not send message");
+		DebugTLBWrite("message 1 not send");
+		return FAILED;
 	}
 
-	return Result::SUCCESS;
+	return SUCCESS;
 }
 
 Result TLB::doReceive(){
 	if(m_fifo_in.Empty()){
-		return m_receiving.Clear() ? Result::SUCCESS : Result::FAILED;
+		return m_receiving.Clear() ? SUCCESS : FAILED;
 	}
 
 	IoMsg item = m_fifo_in.Front();
@@ -136,7 +137,6 @@ Result TLB::handleMgtMsg(MgtMsg msg){
 	}
 }
 
-//MLDTODO BUG push twee berichten waar maar ruimte voor een...
 bool TLB::sendMgtMsg(MgtMsg msg){
 	IoMsg msg0, msg1;
 
@@ -145,8 +145,11 @@ bool TLB::sendMgtMsg(MgtMsg msg){
 	msg1.payload = msg.data.part[1];
 
 	if(!m_fifo_out.Push(msg1) || !m_fifo_out.Push(msg0)){
+		DebugTLBWrite("message 2 not send");
 		return false;
 	}
+	DebugTLBWrite("message 2 SEND");
+
 
 	return true;
 }
@@ -210,32 +213,33 @@ Result TLB::loopback(Addr processId, Addr vAddr, TLBResult &res){
 Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res){
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
-	Line* line = doLookup(processId, vAddr, LineTag::PRESENT);
+	Line* line = doLookup(processId, vAddr, LineTag::INDEXABLE);
+	if(line != NULL && line->present == false){
+		res.m_destroy=false;
+		res.m_line=line;
+		res.m_mmu=&getMMU();
+		return DELAYED;
+	}
 	if(line == NULL){
 		Addr tableLineId;
 
 		if(!m_tables[0]->storePending(processId, vAddr, tableLineId, line)){
 			DeadlockWrite("Unable to store pending entry in TLB");
-			return Result::FAILED;
+			return FAILED;
 		}
 
-		COMMIT{
-			MgtMsg msg;
-			msg.type = (uint64_t)MgtMsgType::MISS;
-			msg.mReq.vAddr = vAddr.m_value;
-			msg.mReq.contextId = processId.m_value;
-			msg.mReq.lineIndex = tableLineId;
-			msg.mReq.tlbType = (uint64_t)manager::TlbType::DTLB;
-			msg.mReq.caller = m_ioDevId;
+		MgtMsg msg;
+		msg.type = (uint64_t)MgtMsgType::MISS;
+		msg.mReq.vAddr = vAddr.m_value;
+		msg.mReq.contextId = processId.m_value;
+		msg.mReq.lineIndex = tableLineId;
+		msg.mReq.tlbType = (uint64_t)manager::TlbType::DTLB;
+		msg.mReq.caller = m_ioDevId;
 
-
-			if(!sendMgtMsg(msg)){
-				std::cout << "Unable to send msg to Manager" << std::endl;
-
-				DeadlockWrite("Unable to send msg to Manager");
-
-				return Result::FAILED;
-			}
+		if(!sendMgtMsg(msg)){
+			DebugTLBWrite("message 3 not send");
+			DeadlockWrite("Unable to send request to memory manager");
+			return FAILED;
 		}
 
 		res.m_destroy=false;
@@ -374,7 +378,9 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 			return Result::FAILED;
 		}
 
-		COMMIT{cache.OnTLBLookupCompleted(d$lineId.m_value, TlbLineRef{NULL}, false);}
+		COMMIT{
+			cache.OnTLBLookupCompleted(d$lineId.m_value, TlbLineRef{NULL}, false);
+		}
 		return SUCCESS;
 	}
 
@@ -406,7 +412,9 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 	//MLDTODO-DOC Continuatie gegarandeerd zolang een line enkel vanaf netwerk gelocked kan worden. (Line van table <> 0 kan niet pending zijn)
 
 	//MLDTODO D$ locken / process claimen
-	COMMIT{cache.OnTLBLookupCompleted(d$lineId.m_value, tlbLineRef, true);}
+	COMMIT{
+		cache.OnTLBLookupCompleted(d$lineId.m_value, tlbLineRef, true);
+	}
 
 	return Result::SUCCESS;
 }

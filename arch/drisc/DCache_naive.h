@@ -27,7 +27,7 @@ public:
     ~DCacheNaive();
 
     Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) override;
-    Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
+    ExtendedResult Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
 
 private:
 	bool getEmptyLine(size_t address, Line* &line);

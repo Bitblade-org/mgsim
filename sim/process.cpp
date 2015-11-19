@@ -69,7 +69,7 @@ namespace Simulator
     		case ExtendedResult::SUCCESS: result = SUCCESS; break;
     		case ExtendedResult::DELAYED: result = DELAYED; break;
     		case ExtendedResult::FAILED:  result = FAILED;  break;
-    		case ExtendedResult::PARTIAL: result = FAILED;  break;
+    		case ExtendedResult::ACTIVE: result = FAILED;  break;
     		default: UNREACHABLE
     	}
     	return result;
@@ -93,7 +93,7 @@ namespace Simulator
     		case ExtendedResult::SUCCESS: os << "SUCCESS"; break;
     		case ExtendedResult::DELAYED: os << "DELAYED"; break;
     		case ExtendedResult::FAILED: os << "FAILED"; break;
-    		case ExtendedResult::PARTIAL: os << "PARTIAL"; break;
+    		case ExtendedResult::ACTIVE: os << "PARTIAL"; break;
     		default: UNREACHABLE
     	}
 
@@ -106,7 +106,7 @@ namespace Simulator
     		case ExtendedResult::SUCCESS: str = "SUCCESS"; break;
     		case ExtendedResult::DELAYED: str = "DELAYED"; break;
     		case ExtendedResult::FAILED: str = "FAILED"; break;
-    		case ExtendedResult::PARTIAL: str = "PARTIAL"; break;
+    		case ExtendedResult::ACTIVE: str = "PARTIAL"; break;
     		default: UNREACHABLE
     	}
 

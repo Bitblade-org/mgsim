@@ -151,8 +151,9 @@ Line* Table::fillPending(RAddr tableLineId, bool read, bool write, RAddr pAddr, 
 	Line &line = m_lines[tableLineId.m_value];
 	assert(line.is(LineTag::PENDING));
 
+	d$LineId = line.d$lineRef;
+
 	COMMIT{
-		d$LineId = line.d$lineRef;
 		// locked stays true
 		line.present = true;
 		line.read = read;
@@ -167,9 +168,9 @@ bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* 
 	processId.strictExpect(getMMU().procAW());
 	vAddr.strictExpect(m_vWidth);
 
-	line = find(processId, vAddr, LineTag::PENDING);
+	//line = find(processId, vAddr, LineTag::PENDING);
 
-	if(line == NULL){
+	//if(line == NULL){
 		line = &pickDestination();
 		if(line->locked){
 			return false;
@@ -183,7 +184,7 @@ bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* 
 			line->processId = processId;
 			line->vAddr = vAddr;
 		}
-	}
+	//}
 
 	tableLineId = getIndex(*line);
 
@@ -192,8 +193,6 @@ bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* 
 }
 
 void Table::setPrioHigh(Line &line) {
-	assert(line.present);
-
 	if (this->m_evictionStrategy == EvictionStrategy::ACCESSED) {
 		line.accessed = true;
 	} else if (this->m_evictionStrategy == EvictionStrategy::LRU) {

@@ -16,6 +16,7 @@ sl_def(memreader, , ) {
 	if(data == 0x12345){
 		printf("RESULT: OK\n");
 	}else{
+		printf("RESULT: FAIL: %llX\n", data);
 		svp_abort();
 	}
 
@@ -25,6 +26,7 @@ sl_def(memreader, , ) {
 	if(data == 0x12345){
 		printf("RESULT: OK\n");
 	}else{
+		printf("RESULT: FAIL: %llX\n", data);
 		svp_abort();
 	}
 
@@ -34,6 +36,7 @@ sl_def(memreader, , ) {
 	if(data == 0x12345){
 		printf("RESULT: OK\n");
 	}else{
+		printf("RESULT: FAIL: %llX\n", data);
 		svp_abort();
 	}
 
@@ -43,6 +46,7 @@ sl_def(memreader, , ) {
 	if(data == 0x12345){
 		printf("RESULT: OK\n");
 	}else{
+		printf("RESULT: FAIL: %llX\n", data);
 		svp_abort();
 	}
 
@@ -58,19 +62,21 @@ sl_def(memreader, , ) {
 	if(data == 0x23456){
 		printf("RESULT: OK\n");
 	}else{
+		printf("RESULT: FAIL: %llX\n", data);
 		svp_abort();
 	}
 
     loc = (uint64_t*)0x530000;
 	printf("\nMemreader WRITING to %p\n", loc);
-	*loc = 0x23456;
+	*loc = 0x34567;
 
     loc = (uint64_t*)0x500000;
 	printf("\nMemreader reading from %p\n", loc);
 	data = *loc;
-	if(data == 0x23456){
+	if(data == 0x34567){
 		printf("RESULT: OK\n");
 	}else{
+		printf("RESULT: FAIL: %llX\n", data);
 		svp_abort();
 	}
 

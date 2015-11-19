@@ -360,7 +360,7 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
     }
 }
 
-Result DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
+ExtendedResult DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid)
 {
     assert(fid != INVALID_LFID);
     assert(tid != INVALID_TID);
@@ -387,24 +387,28 @@ Result DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, Mem
     {
         DeadlockWrite("Unable to acquire port for D-Cache write access (%#016llx, %zd)",
                       (unsigned long long)address, (size_t)size);
-        return FAILED;
+        return ExtendedResult::FAILED;
     }
 
     if (!m_mmu->getDTlb().invoke()){
         DeadlockWrite("Unable to acquire port for D-TLB read access (%#016llx, %zd)",
                       (unsigned long long)address, (size_t)size);
 
-        return FAILED;
+        return ExtendedResult::FAILED;
     }
 
     mmu::TLBResult tlbData;
     Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
-    if(tlbResult != SUCCESS)
-    { //Case 6, 7, 8 or 9
+    if(tlbResult == DELAYED)
+    { //Case 8, 9
     	COMMIT{tlbData.dcacheReference(INVALID_CID);}
+    	DeadlockWrite("TLB delayed on write");
+    	return ExtendedResult::ACTIVE;
+    }else if(tlbResult != SUCCESS)
+    { //Case 6, 7
     	DeadlockWrite("TLB miss on write");
-    	return FAILED;
+    	return ExtendedResult::FAILED;
     }
 
 	if (!tlbData.write())
@@ -433,7 +437,7 @@ Result DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, Mem
 			// So for now, just stall the write
 			//++m_numLoadingWMisses; MLDTODO Statistics
 			DeadlockWrite("Unable to write into loading cache line");
-			return FAILED;
+			return ExtendedResult::FAILED;
 		}
 		else
 		{
@@ -469,12 +473,12 @@ Result DCacheNaive::Write2(ContextId contextId, MemAddr address, void* data, Mem
     {
         //++m_numStallingWMisses; MLDTODO Statistics
         DeadlockWrite("Unable to push request to outgoing buffer");
-        return FAILED;
+        return ExtendedResult::FAILED;
     }
 
 //    COMMIT{ ++m_numWAccesses; }MLDTODO Statistics
 
-    return DELAYED;
+    return ExtendedResult::DELAYED;
 }
 
 Result DCacheNaive::DoLookupResponses(){
@@ -489,8 +493,11 @@ Result DCacheNaive::DoLookupResponses(){
     auto& response = m_lookup_responses.Front();
 
     if(response.cid == INVALID_CID)
-    {//Case (L5)/S5/S7/S8
-    	UNREACHABLE //MLDTODO Handle
+    {//Case (L5)/S5/S7/S8 //MLDTODO Old cases
+    	//Do nothing
+    	//UNREACHABLE //MLDTODO Handle
+        m_lookup_responses.Pop();
+        return SUCCESS;
     }
 
     //Valid CID, this must be the callback for cases L6 or L8!

@@ -51,14 +51,14 @@ namespace Simulator
      *  - DELAYED: 	The operation did make progress but must be retried.
      *  			Note: Some handlers use DELAYED to signal a dataflow pending
      *  			request!
-     *  - PARTIAL:	The operation did make progress but must be retried.
+     *  - ACTIVE:	The operation did make progress or is in progress but must be retried.
      *  - SUCCESS: 	The operation made progress and need not be retried.
      */
     enum class ExtendedResult
     {
         FAILED,
         DELAYED,
-		PARTIAL,
+		ACTIVE,
         SUCCESS
     };
     std::string resultStr(ExtendedResult result);

@@ -169,10 +169,10 @@ public:
 
     // Public interface
     Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg);
-    Result Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
+    ExtendedResult Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
     virtual Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) = 0;
-    virtual Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) = 0;
+    virtual ExtendedResult Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) = 0;
 
 	void splitAddress(MemAddr addr, MemAddr &cacheOffset, size_t &setIndex, MemAddr *pTag);
 	MemAddr unsplitAddress(MemAddr cacheOffset, size_t setIndex, MemAddr pTag);

@@ -26,7 +26,7 @@ public:
     ~DCachePreNov();
 
     Result Read2 (ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg) override;
-    Result Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
+    ExtendedResult Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
 
 private:
 	void splitAddress(MemAddr addr, MemAddr &cacheOffset, MemAddr &cacheIndex, MemAddr *vTag);
