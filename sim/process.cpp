@@ -58,12 +58,55 @@ namespace Simulator
     	return os;
     }
 
+    Result resultConv(Result result){
+    	return result;
+    }
+
+
+    Result resultConv(ExtendedResult eRes){
+    	Result result;
+    	switch (eRes) {
+    		case ExtendedResult::SUCCESS: result = SUCCESS; break;
+    		case ExtendedResult::DELAYED: result = DELAYED; break;
+    		case ExtendedResult::FAILED:  result = FAILED;  break;
+    		case ExtendedResult::PARTIAL: result = FAILED;  break;
+    		default: UNREACHABLE
+    	}
+    	return result;
+    }
+
     std::string resultStr(Result result){
     	std::string str;
     	switch (result) {
     		case Result::SUCCESS: str = "SUCCESS"; break;
     		case Result::DELAYED: str = "DELAYED"; break;
     		case Result::FAILED: str = "FAILED"; break;
+    		default: UNREACHABLE
+    	}
+
+    	return str;
+
+    }
+
+    std::ostream& operator<<(std::ostream& os, ExtendedResult result) {
+    	switch (result) {
+    		case ExtendedResult::SUCCESS: os << "SUCCESS"; break;
+    		case ExtendedResult::DELAYED: os << "DELAYED"; break;
+    		case ExtendedResult::FAILED: os << "FAILED"; break;
+    		case ExtendedResult::PARTIAL: os << "PARTIAL"; break;
+    		default: UNREACHABLE
+    	}
+
+    	return os;
+    }
+
+    std::string resultStr(ExtendedResult result){
+    	std::string str;
+    	switch (result) {
+    		case ExtendedResult::SUCCESS: str = "SUCCESS"; break;
+    		case ExtendedResult::DELAYED: str = "DELAYED"; break;
+    		case ExtendedResult::FAILED: str = "FAILED"; break;
+    		case ExtendedResult::PARTIAL: str = "PARTIAL"; break;
     		default: UNREACHABLE
     	}
 

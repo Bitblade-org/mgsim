@@ -71,7 +71,7 @@ Pipeline::PipeAction Pipeline::MemoryStage::OnCycle()
                 else
                 {
                     // Normal request to memory
-                    if ((result = m_dcache.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid)) == FAILED)
+                    if ((result = resultConv(m_dcache.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid))) == FAILED)
                     {
                         // Stall
                         DeadlockWrite("F%u/T%u(%llu) %s stall (L1 store *%#.*llx/%zd <- %s)",

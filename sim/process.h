@@ -42,6 +42,30 @@ namespace Simulator
     std::string resultStr(Result result);
     std::ostream& operator<<(std::ostream& os, Result result);
 
+    /**
+     * Enumeration for the result type of a cycle handler.
+     * Includes extension needed for DCache
+     *  Values:
+     *  - FAILED: 	The operation could not make progress, must be retried.
+     *    			For example a producer encountered a full FIFO.
+     *  - DELAYED: 	The operation did make progress but must be retried.
+     *  			Note: Some handlers use DELAYED to signal a dataflow pending
+     *  			request!
+     *  - PARTIAL:	The operation did make progress but must be retried.
+     *  - SUCCESS: 	The operation made progress and need not be retried.
+     */
+    enum class ExtendedResult
+    {
+        FAILED,
+        DELAYED,
+		PARTIAL,
+        SUCCESS
+    };
+    std::string resultStr(ExtendedResult result);
+    std::ostream& operator<<(std::ostream& os, ExtendedResult result);
+    Result resultConv(ExtendedResult eRes);
+    Result resultConv(Result result);
+
 
     // The most common delegate form in MGSim is cycle handlers, of
     // type Result (*)(). So alias this to "delegate" for convenience.
