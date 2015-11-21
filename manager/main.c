@@ -81,39 +81,22 @@ int main(void) {
 		sl_seta(end, 1);
 	sl_sync();
 
-	printf("Done initialising victim core!\n");
+	printf("Done initialising victim core!\nCreating testing environment...\n");
+
+	createPageEntries(OS_CONTEXT_ID, PTS_PBASE, &next_table, &free);
+	writeStartingData();
 
 
-	/*
-	 * ---===[ Create some entries ]===---
-	 */
-	uint64_t index;
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x440000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 0, 0);
-
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x500000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 1, 1);
-
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x510000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 0, 0);
-
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x520000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 1, 0, 0);
-
-	index = calculate_pt_index(OS_CONTEXT_ID, 0x530000ul);
-	write_entry(PTS_PBASE, index, (void*)0x500000ul, 0, &next_table, &free, 0, 1, 0);
-
-	uint64_t* mem = (uint64_t*)0x500000ul;
-	*mem = 0x12345ul;
-
-
+	printf("Starting memory test suite...\n");
 
 	/*
 	 * ---===[ Run memreader ]===---
 	 */
 
-	sl_create(,p,,,,,,memreader);
+	sl_create(,p,,,,,,memTester);
 	sl_sync();
+
+	svp_abort();
 
 	while(1){
 		asm("NOP");

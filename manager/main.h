@@ -13,7 +13,7 @@
 #include "mgsim.h"
 #include "PTBuilder.h"
 #include "manager.h"
-#include "memreader.h"
+#include "test/memTester.h"
 #include "pt_index.h"
 
 
