@@ -114,6 +114,20 @@ void VirtualMemory::UnreserveAll(ProcessID pid)
     }
 }
 
+bool VirtualMemory::has(MemAddr address, MemSize size) const
+{
+#if MEMSIZE_MAX >= SIZE_MAX
+    if (size > SIZE_MAX)
+    {
+        throw exceptf<InvalidArgumentException>("CheckPerm (%#016llx, %zd): Size argument too big",
+                                                (unsigned long long)address, (size_t)size);
+    }
+#endif
+
+    auto p = GetReservationRange(address, size);
+    return (p != m_ranges.end());
+}
+
 bool VirtualMemory::CheckPermissions(MemAddr address, MemSize size, int access) const
 {
 #if MEMSIZE_MAX >= SIZE_MAX

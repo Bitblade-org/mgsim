@@ -52,6 +52,7 @@ public:
     void Write(MemAddr address, const void* data, const bool* mask, MemSize size) override;
 
     bool CheckPermissions(MemAddr address, MemSize size, int access) const override;
+    bool has(MemAddr address, MemSize size) const override;
 
     VirtualMemory(const std::string& name, Object& parent);
     VirtualMemory(const VirtualMemory&) = delete;

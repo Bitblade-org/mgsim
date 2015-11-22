@@ -103,6 +103,7 @@ public:
     FCapability GenerateFamilyCapability() const;
 
     void MapMemory(MemAddr address, MemSize size, ProcessID pid = 0);
+    bool isMapped(MemAddr address, MemSize size);
     void UnmapMemory(MemAddr address, MemSize size);
     void UnmapMemory(ProcessID pid);
     bool CheckPermissions(MemAddr address, MemSize size, int access) const;

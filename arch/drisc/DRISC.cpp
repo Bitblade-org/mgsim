@@ -531,6 +531,12 @@ unsigned int DRISC::GetNumSuspendedRegisters() const
     return num;
 }
 
+bool DRISC::isMapped(MemAddr address, MemSize size)
+{
+    assert(m_memadmin != NULL);
+    return m_memadmin->has(address, size);
+}
+
 void DRISC::MapMemory(MemAddr address, MemSize size, ProcessID pid)
 {
     assert(m_memadmin != NULL);

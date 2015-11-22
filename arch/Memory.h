@@ -115,6 +115,7 @@ public:
     virtual void Unreserve(MemAddr address, MemSize size) = 0;
     virtual void UnreserveAll(ProcessID pid) = 0;
     virtual bool CheckPermissions(MemAddr address, MemSize size, int access) const = 0;
+    virtual bool has(MemAddr address, MemSize size) const = 0;
 
 	//MLDNOTE Interface simulatie <> kernel, console
     virtual void Read (MemAddr address, void* data, MemSize size) const = 0;
