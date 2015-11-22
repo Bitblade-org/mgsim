@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include "defines.h"
+#include "debug.h"
 
 #define PTI_VADDR_SECTIONS		((VADDR_WIDTH - VADDR_LSO) / PT_INDEX_WIDTH)
 #define PTI_CONTEXT_SECTIONS	(CONTEXTID_WIDTH / PT_INDEX_WIDTH)

@@ -22,40 +22,53 @@ void print_pt_index(uint64_t index){
 	size_t vaddr_sections = PTI_VADDR_SECTIONS;
 	size_t context_sections = PTI_CONTEXT_SECTIONS;
 
+	char buffer[80];
+	memset(buffer, 0, 80);
+	unsigned bufferIndex = 0;
+
 	for(int i=0; i<PTI_CONTEXT_SECTIONS; i++){
 		for(int j=0; j<PT_INDEX_WIDTH; j++){
-			putchar('C');
+			buffer[bufferIndex++] = 'C';
 		}
-		putchar(' ');
+		buffer[bufferIndex++] = ' ';
 	}
 
 	for(int i=0; i<PTI_VADDR_SECTIONS; i++){
 		for(int j=0; j<PT_INDEX_WIDTH; j++){
-			putchar('V');
+			buffer[bufferIndex++] = 'V';
 		}
-		putchar(' ');
+		buffer[bufferIndex++] = ' ';
 	}
 
-	putchar('\n');
+	buffer[bufferIndex++] = '\n';
+
+	PRINT_STRING(buffer);
+	memset(buffer, 0, 80);
+	bufferIndex = 0;
 
 	for(int i=PTS_INDEX_WIDTH-1; i>=0; i--){
 		int val = (index >> i) & 1;
 		if((i+1)%PT_INDEX_WIDTH == 0 && i < PTS_INDEX_WIDTH-1){
-			putchar(' ');
+			buffer[bufferIndex++] = ' ';
 		}
-		putchar(val + '0');
+		buffer[bufferIndex++] = val + '0';
 	}
-	putchar('\n');
+	buffer[bufferIndex++] = '\n';
+
+	PRINT_STRING(buffer);
+	memset(buffer, 0, 80);
+	bufferIndex = 0;
 
 	for(int i=PTI_SECTIONS-1; i >= 0; i--){
 		uint64_t val = get_index_section(index, i);
 
 		//uint64_t val = (index >> (PTI_SECTIONS - i - 1) * PT_INDEX_WIDTH);
 		//val &= PT_INDEX_MASK;
-		printf("%*d ", PT_INDEX_WIDTH, val);
+		bufferIndex += sprintf(buffer, "%*d ", PT_INDEX_WIDTH, val); //MLDTODO Cheating?
 	}
 
-	putchar('\n');
+	buffer[bufferIndex++] = '\n';
+	PRINT_STRING(buffer);
 }
 
 uint64_t get_index_section(uint64_t index, unsigned section){

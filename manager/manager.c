@@ -1,7 +1,5 @@
 #include "manager.h"
 
-//MLDTODO Remove all printf after testing
-//MLDTODO React correctly to TLS requests
 #include <svp/abort.h>
 
 
@@ -21,7 +19,8 @@ sl_def(manager, , sl_shparm(unsigned, channel), sl_shparm(uint64_t, pt0)) {
 
 	first_pt((pt_t*)sl_getp(pt0));
     int res = manager_main(sl_getp(channel));
-    printf("Manager failed with error code %d", res);
+    PRINT_STRING("Manager failed with error code ");
+    PRINT_INT(res);
     svp_abort();
 
 	// To stop compiler from whining
@@ -88,21 +87,37 @@ int handleMsg(MgtMsg_t* msg){
 }
 
 int handleSetPT(MgtMsg_t* msg){
-//	printf("Setting PT pointer from %p to %p\n", get_pointer(NULL), (void*)msg->data.part[2]);
+	PRINT_STRING("Setting PT pointer from ");
+	PRINT_HEX(get_pointer(NULL));
+	PRINT_STRING(" to ");
+	PRINT_HEX((void*)msg->data.part[2]);
+	PRINT_CHAR('\n');
+
 	get_pointer((pte_t*)msg->set.val0);
 	return 1;
 }
 
 int handleInvalidation(MgtMsg_t* req){
 	(void)(req);
-	printf("handleInvalidation called. Not implemented...\n");
+	PRINT_STRING("handleInvalidation called. Not implemented...\n");
 	//MLDTODO Implement!
 	return 1;
 }
 
 int handleMiss(MgtMsg_t* msg){
-//	printf("\nHandling miss for context:%u, addr:0x%lX (0x%lX), lineref:%d\n", msg->mReq.contextId, msg->mReq.vAddr, (msg->mReq.vAddr << VADDR_LSO), msg->mReq.lineIndex);
-//	printf("Using pagetable start ptr: %p\n", first_pt(NULL));
+	PRINT_STRING("\nHandling miss for context:");
+	PRINT_UINT(msg->mReq.contextId);
+	PRINT_STRING(", addr:");
+	PRINT_HEX(msg->mReq.vAddr);
+	PRINT_STRING(" (");
+	PRINT_HEX(msg->mReq.vAddr << VADDR_LSO);
+	PRINT_STRING("), lineref:");
+	PRINT_UINT(msg->mReq.lineIndex);
+	PRINT_CHAR('\n');
+	PRINT_STRING("Using pagetable start ptr: ");
+	PRINT_HEX(first_pt(NULL));
+	PRINT_CHAR('\n');
+
 
 
 //  000000000 000000000 111111111 111111111 000000000 000000000 ADDR
@@ -118,7 +133,13 @@ int handleMiss(MgtMsg_t* msg){
 	pte_t* entry;
 	unsigned levels;
 	int result = walkPageTable(addr, (VADDR_WIDTH - VADDR_LSO) + CONTEXTID_WIDTH, &entry, &levels);
-//	printf("Walk result: (%d) Levels: %d, Address:%p\n", result, levels, get_pointer(entry));
+	PRINT_STRING("Walk result: (");
+	PRINT_INT(result);
+	PRINT_STRING(") Levels: ");
+	PRINT_UINT(levels);
+	PRINT_STRING(", Address:");
+	PRINT_HEX(get_pointer(entry));
+	PRINT_CHAR('\n');
 
 	if(result < 0){ return result; }
 
@@ -149,17 +170,23 @@ int handleMiss(MgtMsg_t* msg){
  * use getPointer(entry) to get the full address from the entry.
  */
 int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
-//	print_pt_index(addr);
+	print_pt_index(addr);
 
 	pt_t* t = first_pt(NULL);
 	*levels = 0;
 
 	while(len >= PT_INDEX_WIDTH){
-//		printf("len %u--walkPageTable arrived at level %u with entries: (only present)\n", len, *levels);
-//		printTable(t);
+		PRINT_STRING("len ");
+		PRINT_UINT(len);
+		PRINT_STRING("--walkPageTable arrived at level ");
+		PRINT_UINT(*levels);
+		PRINT_STRING(" with entries: (only present)\n");
+		printTable(t);
 		uint64_t offset = PT_INDEX_MASK & (addr >> (len - PT_INDEX_WIDTH));
 
-//		printf("Entry ID: %lu\n", offset);
+		PRINT_STRING("Entry ID: ");
+		PRINT_UINT(offset);
+		PRINT_CHAR('\n');
 
 		*entry = &(t->entries[offset]);
 		len -= PT_INDEX_WIDTH;
@@ -175,7 +202,13 @@ int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
 void printTable(pt_t* t){
 	for(int i=0; i<512; i++){
 		if(t->entries[i].p){
-			printf("Entry %d: p=%u, t=%u\n", i, t->entries[i].p, t->entries[i].t);
+			PRINT_STRING("Entry ");
+			PRINT_UINT(i);
+			PRINT_STRING(": p=");
+			PRINT_UINT(t->entries[i].p);
+			PRINT_STRING(", t=");
+			PRINT_UINT(t->entries[i].t);
+			PRINT_CHAR('\n');
 		}
 	}
 }

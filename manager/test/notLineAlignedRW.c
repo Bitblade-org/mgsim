@@ -1,22 +1,24 @@
 #include "tests.h"
 
 void testNotLineAlignedRW(result_t *result, char abort, char quiet){
-	write8(SANDBOXW_START, 0xFF, 0);
-	write8(SANDBOXW_START + 1, 0x55, 0);
-	addSResult(result, read8(SANDBOXR_START, 0xFF, abort, quiet));
-	addSResult(result, read8(SANDBOXR_START + 1, 0x55, abort, quiet));
+	write8(S_SANDBOXW, 0xFF, quiet);
+	addSResult(result, read8(S_SANDBOXR, 0xFF, abort, quiet));
+
+	write8(S_SANDBOXW + 1, 0x55, quiet);
+	addSResult(result, read8(S_SANDBOXR, 0xFF, abort, quiet));
+	addSResult(result, read8(S_SANDBOXR + 1, 0x55, abort, quiet));
 
 	int fails = 0;
 	int testNr = 0;
-	for(testNr=0; testNr<128; testNr++){
-		write8(SANDBOXW_START + testNr, testNr, 1);
-		if(read8(SANDBOXR_START + testNr, testNr, 0, 1)){
+	for(testNr=0; testNr<(2*LINE_SIZE); testNr++){
+		write8(S_SANDBOXW + testNr, testNr, 1);
+		if(read8(S_SANDBOXR + testNr, testNr, 0, 1)){
 			fails++;
-			write8(SANDBOXW_START + testNr, testNr, quiet);
-			read8(SANDBOXR_START + testNr, testNr, abort, quiet);
+			write8(S_SANDBOXW + testNr, testNr, quiet);
+			read8(S_SANDBOXR + testNr, testNr, abort, quiet);
 		}
 		if(fails >= 5){
-			printString("Ending test prematurely due to many failures\n", quiet);
+			printString("Ending test prematurely due too many failures\n", quiet);
 			break;
 		}
 	}

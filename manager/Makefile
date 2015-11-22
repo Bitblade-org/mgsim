@@ -8,7 +8,7 @@ SLCFLAGS=-b mta -O1
 LDFLAGS=
 HEADERS=defines.h main.h manager.h MgtMsg.h pagetable.h PTBuilder.h pt_index.h test/memTester.h test/tests.h
 SOURCES=main.c manager.c pagetable.c PTBuilder.c pt_index.c \
-test/memTester.c test/tests.c test/lineBoundariesR.c test/smallPageAlignedRW.c test/notLineAlignedR.c test/notLineAlignedRW.c  
+test/memTester.c test/tests.c test/lineBoundariesR.c test/lineBoundariesRW.c test/quickPageAlignedRW.c test/notLineAlignedR.c test/notLineAlignedRW.c test/unalignedR.c test/unalignedRW.c test/smallPageBoundaries.c test/mediumPageBoundaries.c test/notPageAligned.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=boot.bin
 PREFIX=/home/nijntje/mgexec/slr/assets
