@@ -79,16 +79,6 @@ Line *Table::find(std::function<bool (Line&)> const &lambda)
 	return (res == m_lines.end())? NULL : &(*res);
 }
 
-Addr Table::getIndex(const Line &line) const{
-	//MLDTODO Use vector contiguity
-	for(unsigned int i=0; i<m_numLines; i++){
-		if(&(m_lines.at(i)) == &line){
-			return i;
-		}
-	}
-	throw exceptf<std::invalid_argument>("The line does not exist!");
-}
-
 bool Table::getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId){
 	tableLineId.strictExpect(m_indexWidth);
 

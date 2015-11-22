@@ -54,8 +54,11 @@ TLB::TLB(const std::string& name, Object& parent, IIOBus* iobus)
 	m_mgtAddr({0,2}),
 	m_numTables(GetConf("NumberOfTables", size_t)),
 	m_tables(m_numTables),
-	m_enabled(false)
+	m_enabled(false),
+	m_lastLine(nullptr)
 {
+	//By using offsetWidth (e.g. 12) instead of offset (e.g. 4KB), we guarantee the offset
+	//is always a power of two, as is required for the TLB to function.
 
 	if(m_numTables == 0){
         throw exceptf<InvalidArgumentException>("%s must have at least one table.", name.c_str());
@@ -170,18 +173,27 @@ bool TLB::OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData&
 // DELAYED: Address not in TLB, expecting refill
 // FAILED:  Stalled or Address not in TLB and unable to transmit refill request
 // Expects address including bits within page (offset)
-Result TLB::lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResult &res){
-	if(
-			!m_enabled ||
-			(vAddr >> 63) ||
-			(vAddr < 0x440000) ||
-			(vAddr > 0x550000) //||
-			//(vAddr <= 0x1af87) ||
-			//(vAddr >= 0x2c000 && vAddr <= 0x33917) ||
-			//(vAddr >= 0x100000000 && vAddr <= 0x100007fff) ||
-			//(vAddr >= 0x82000000 && vAddr < 0x85000000)
-	){ //MLDTODO Generalise
+Result TLB::lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResultMessage &res){
+	if(!m_enabled){
+		//DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLB disabled", processId, vAddr);
 		return loopback(processId, vAddr, res);
+	}else if(vAddr >> 63){
+		DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLS address", processId, vAddr);
+		return loopback(processId, vAddr, res);
+	}
+
+	unsigned dcache_linesize = GetDRISCParent()->GetDCache().GetLineSize();
+	if(GetDRISCParent()->isMapped(vAddr, dcache_linesize)){
+		if(
+				(vAddr < 0x440000)
+				|| (vAddr > 0x550000 && vAddr  < 0x200000000)
+				|| (					vAddr >= 0x600000000)
+		){
+			DebugTLBWrite("Lookup request for %lu:0x%lX looped back, mapped to old-style Virtual Memory", processId, vAddr);
+			return loopback(processId, vAddr, res);
+		}else{
+			throw exceptf<std::logic_error>("Address 0x%lX is both within TLB reserved space and is mapped to old-style Virtual Memory", vAddr);
+		}
 	}
 
 	RAddr rProcessId = RAddr(processId, getMMU().procAW());
@@ -192,32 +204,31 @@ Result TLB::lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResult &res){
 	return lookup(rProcessId, rVAddr, mayUnlock, res);
 }
 
-Result TLB::loopback(Addr processId, Addr vAddr, TLBResult &res){
-	res.m_line = new Line(16, 64, 64);
-	res.m_line->read = res.m_line->write = res.m_line->present = true;
-	res.m_line->processId = processId;
-	res.m_line->vAddr = vAddr;
-	res.m_line->pAddr = RAddr(vAddr, 64);
-	res.m_mmu = &getMMU();
-	res.m_destroy = true;
-
-	if(m_enabled){
-		DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLS address", processId, vAddr);
-	}else{
-		//DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLB disabled", processId, vAddr);
-	}
-
+Result TLB::loopback(Addr /*processId*/, Addr vAddr, TLBResultMessage &res){
+	m_lastLine = nullptr;
+	res.pAddr = vAddr;
+	res.tlbOffsetWidth = 0;
+	res.pending = false;
+	res.read = true;
+	res.write = true;
 	return SUCCESS;
 }
 
-Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res){
+Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResultMessage &res){
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
-	Line* line = doLookup(processId, vAddr, LineTag::INDEXABLE);
+	TlbLineRef ref = doLookup(processId, vAddr, LineTag::INDEXABLE);
+	Line* line = ref.m_line;
+	Table* table = ref.m_table;
 	if(line != NULL && line->present == false){
-		res.m_destroy=false;
-		res.m_line=line;
-		res.m_mmu=&getMMU();
+		res.pending = true;
+		res.write = false;
+		res.read = false;
+		res.tlbOffsetWidth = 0;
+		res.pAddr = 0;
+		m_lastLine = line;
+		DebugTLBWrite("Lookup request for %lu:0x%lX is already pending...", processId.m_value, vAddr.m_value);
+
 		return DELAYED;
 	}
 	if(line == NULL){
@@ -237,14 +248,16 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res)
 		msg.mReq.caller = m_ioDevId;
 
 		if(!sendMgtMsg(msg)){
-			DebugTLBWrite("message 3 not send");
 			DeadlockWrite("Unable to send request to memory manager");
 			return FAILED;
 		}
 
-		res.m_destroy=false;
-		res.m_line=line;
-		res.m_mmu=&getMMU();
+		res.pending = true;
+		res.write = false;
+		res.read = false;
+		res.tlbOffsetWidth = 0;
+		res.pAddr = 0;
+		m_lastLine = line;
 
 		DebugTLBWrite("Lookup request for %lu:0x%lX delayed, waiting for requested refill", processId.m_value, vAddr.m_value);
 		return Result::DELAYED;
@@ -254,35 +267,51 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResult &res)
 		COMMIT{line->locked = false;}
 	}
 
-	res = TLBResult(line, &getMMU(), false);
+	res.pending = false;
+	res.write = line->write;
+	res.read = line->read;
+	res.tlbOffsetWidth = table->getOffsetWidth();
+	res.pAddr = line->pAddr.m_value;
+	m_lastLine = NULL;
+	return SUCCESS;
+
 	DebugTLBWrite("Lookup request for %lu:0x%lX success: 0x%lx, r=%d, w=%d", processId.m_value, vAddr.m_value, line->pAddr.m_value, line->read, line->write);
 
 	return Result::SUCCESS;
 }
 
-void TLB::getLine(TlbLineRef lineRef, TLBResult &res){
+TLBResultMessage TLB::getLine(TlbLineRef lineRef){
 	assert(lineRef.m_line->locked == true);
 	assert(lineRef.m_line->present == true);
 
+	TLBResultMessage msg;
+
 	COMMIT{	lineRef.m_line->locked = false; }
 
-	res = TLBResult(lineRef.m_line, &getMMU(), false);
+	msg.pAddr = lineRef.m_line->pAddr.m_value;
+	msg.pending = false;
+	msg.read = lineRef.m_line->read;
+	msg.write = lineRef.m_line->write;
+	msg.tlbOffsetWidth = lineRef.m_table->getOffsetWidth();
+
+	return msg;
 }
 
-Line* TLB::doLookup(RAddr processId, RAddr vAddr, LineTag tag){
+TlbLineRef TLB::doLookup(RAddr processId, RAddr vAddr, LineTag tag){
 	processId.strictExpect(getMMU().procAW());
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
-	Line *discoveredEntry = NULL; //MLDTODO Remove after debugging
+	TlbLineRef discoveredEntry{0,0}; //MLDTODO Remove after debugging
 
 	for(Table *table : m_tables){
 		RAddr truncatedAddr = vAddr.truncateLsb(vAddr.m_width - table->getVAddrWidth());
 		Line *line = table->lookup(processId, truncatedAddr, tag);
 		if(line != NULL){
-			if(discoveredEntry != NULL){ //MLDTODO Remove after debugging
+			if(discoveredEntry.m_line != NULL){ //MLDTODO Remove after debugging
 				throw exceptf<std::domain_error>("vAddr %lX exists in multiple tables!", vAddr.m_value);
 			}
-			discoveredEntry = line;
+			discoveredEntry.m_line = line;
+			discoveredEntry.m_table = table;
 		}
 	}
 
@@ -308,6 +337,12 @@ void TLB::invalidate(RAddr pid, RAddr addr){
 		std::cout << " result: " << tableAddr << std::endl;
 		table->freeLines(pid, &tableAddr);
 	}
+}
+
+void TLB::setDCacheReference(unsigned dRef){
+	assert(m_lastLine != NULL);
+	assert(!m_lastLine->present);
+	m_lastLine->d$lineRef = dRef;
 }
 
 Result TLB::onInvalidateMsg(MgtMsg &msg){
@@ -356,6 +391,9 @@ Result TLB::onPropertyMsg(MgtMsg &msg){
 Result TLB::onStoreMsg(MgtMsg &msg){
 	assert(msg.type == (uint64_t)MgtMsgType::REFILL);
 	assert(msg.refill.table < m_numTables);
+
+	DebugTLBWrite("Handling store message");
+
 	DCache& cache = GetDRISCParent()->GetDCache();
 
 	char tableId = (m_tables.size() - 1) - msg.refill.table;
@@ -374,12 +412,13 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 
 		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
 		if(!res){
-			DeadlockWrite("Cannot find pending tlb entry"); //MLDTODO Include more info
-			return Result::FAILED;
+			throw exceptf<std::domain_error>("Cannot find pending tlb entry"); //MLDTODO Add information
 		}
+		DebugTLBWrite("Lookup request for %lu:0x%lX << %d failed: No page table entry", processId.m_value, vAddr.m_value, table->getOffsetWidth());
 
 		COMMIT{
-			cache.OnTLBLookupCompleted(d$lineId.m_value, TlbLineRef{NULL}, false);
+			//MLDTODO Generalise response to DCache to get rid of hacky TlbLineRef usage
+			cache.OnTLBLookupCompleted(d$lineId.m_value, TlbLineRef{(Line*)vAddr.m_value, (Table*)processId.m_value}, false);
 		}
 		return SUCCESS;
 	}
@@ -387,8 +426,12 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 	TlbLineRef tlbLineRef;
 
 	if(tableId == 0){
+		DebugTLBWrite("Lookup request for %lu:0x%lX succeeded: placing in table 0", processId.m_value, vAddr.m_value);
 		tlbLineRef.m_line = table->fillPending(lineIndex, msg.dRefill.read, msg.dRefill.write, pAddr, d$lineId);
+		tlbLineRef.m_table = table;
 	}else{
+		DebugTLBWrite("Lookup request for %lu:0x%lX succeeded: placing in table %d", processId.m_value, vAddr.m_value, tableId);
+
 		bool res;
 		vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
 		processId = RAddr(0, getMMU().procAW());
@@ -402,6 +445,7 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 		vAddr = vAddr.truncateLsb(table->getOffsetWidth() - m_tables[0]->getOffsetWidth());
 
 		tlbLineRef.m_line = table->storeNormal(processId, vAddr, pAddr, msg.dRefill.read, msg.dRefill.write);
+		tlbLineRef.m_table = table;
 		if(tlbLineRef.m_line == NULL){
 			// DeadlockWrite done in storeNormal
 			return FAILED;
@@ -472,27 +516,27 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		m_mgtAddr.chan = arg.getUnsigned(2);
 		out << " to " << m_mgtAddr.devid << ":" << m_mgtAddr.chan << std::endl;
 	}else if(arg.is(0, false, "sim-l", "sim-lookup")){
-		arg.expect(4);
-		//lookup(procid, vaddr, d$lineid, r, w, paddr, mayunlock)
-		//lookup(procid, vaddr, mayunlock)
-		//lookup(d$lineid, r, w, paddr)
-
-		RAddr procId = arg.getRMAddr(1, getMMU().procAW());
-		RAddr vAddr = arg.getRMAddr(2, getMMU().vAW());
-		vAddr >>= getMinOffsetWidth();
-		bool mayUnlock = arg.getBool(3);
-
-		TLBResult data;
-
-		Result res = lookup(procId, vAddr, mayUnlock, data);
-
-		out << "Simulated lookup with result " << res << std::endl;
-		if(res == Result::SUCCESS){
-			out << "   d$LineIndex: " << data.dcacheReference() << std::endl;
-			out << "   read: " << data.read() << std::endl;
-			out << "   write: " << data.write() << std::endl;
-			out << "   pAddr: " << data.pAddr() << std::endl;
-		}
+//		arg.expect(4);
+//		//lookup(procid, vaddr, d$lineid, r, w, paddr, mayunlock)
+//		//lookup(procid, vaddr, mayunlock)
+//		//lookup(d$lineid, r, w, paddr)
+//
+//		RAddr procId = arg.getRMAddr(1, getMMU().procAW());
+//		RAddr vAddr = arg.getRMAddr(2, getMMU().vAW());
+//		vAddr >>= getMinOffsetWidth();
+//		bool mayUnlock = arg.getBool(3);
+//
+//		TLBResult data;
+//
+//		Result res = lookup(procId, vAddr, mayUnlock, data);
+//
+//		out << "Simulated lookup with result " << res << std::endl;
+//		if(res == Result::SUCCESS){
+//			out << "   d$LineIndex: " << data.dcacheReference() << std::endl;
+//			out << "   read: " << data.read() << std::endl;
+//			out << "   write: " << data.write() << std::endl;
+//			out << "   pAddr: " << data.pAddr() << std::endl;
+//		}
 	}else if(arg.is(0, false, "sim-i", "sim-invalidate")){
 		arg.expect(5);
 		MgtMsg msg;
@@ -543,28 +587,28 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 	}
 }
 
-unsigned TLBResult::dcacheReference(unsigned ref) {
-	assert(m_line && !m_line->present);
-	unsigned old = m_line->d$lineRef;
-	m_line->d$lineRef = ref;
-	return old;
-}
-
-Addr TLBResult::vAddr() {
-	assert(m_line);
-	//MLDTODO Hack to allow for 64-bit addresses
-	int offset = m_mmu->vAW() - m_line->vAddr.m_width;
-	offset = offset < 0 ? 0 : offset;
-	return (m_line->vAddr << (offset)).m_value;
-}
-
-Addr TLBResult::pAddr() {
-	assert(m_line && m_line->present);
-	//MLDTODO Hack to allow for 64-bit addresses
-	int offset = m_mmu->pAW() - m_line->pAddr.m_width;
-	offset = offset < 0 ? 0 : offset;
-	return (m_line->pAddr << offset).m_value;
-}
+//unsigned TLBResult::dcacheReference(unsigned ref) {
+//	assert(m_line && !m_line->present);
+//	unsigned old = m_line->d$lineRef;
+//	m_line->d$lineRef = ref;
+//	return old;
+//}
+//
+//Addr TLBResult::vAddr() {
+//	assert(m_line);
+//	//MLDTODO Hack to allow for 64-bit addresses
+//	int offset = m_mmu->vAW() - m_line->vAddr.m_width;
+//	offset = offset < 0 ? 0 : offset;
+//	return (m_line->vAddr << (offset)).m_value;
+//}
+//
+//Addr TLBResult::pAddr() {
+//	assert(m_line && m_line->present);
+//	//MLDTODO Hack to allow for 64-bit addresses
+//	int offset = m_mmu->pAW() - m_line->pAddr.m_width;
+//	offset = offset < 0 ? 0 : offset;
+//	return (m_line->pAddr << offset).m_value;
+//}
 
 } /* namespace mmu */
 } /* namespace drisc */

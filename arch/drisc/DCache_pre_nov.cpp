@@ -132,11 +132,7 @@ DCache::Line& DCachePreNov::fetchLine(MemAddr address){
 }
 
 bool DCachePreNov::comparePTag(Line &line, MemAddr pTag){
-	return line.pTag == pTag;
-}
-
-bool DCachePreNov::compareCTag(Line &line, CID cid){
-	return line.contextTag == cid;
+	return line.tag == pTag;
 }
 
 bool DCachePreNov::freeLine(Line &line){
@@ -263,7 +259,7 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
     }
 
     Line& line = fetchLine(address);
-    mmu::TLBResult tlbData;
+    mmu::TLBResultMessage tlbData;
     Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
     if(tlbResult == FAILED)
@@ -284,7 +280,7 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
     	{//Case L8
     		DebugMemWrite("CASE L8");
     		COMMIT{
-    			line.next = tlbData.dcacheReference(getLineId(&line));
+    			m_mmu->getDTlb().setDCacheReference(getLineId(&line));
     			line.tlbOffset = offsetBits + indexBits;
     		}
         	COMMIT {
@@ -306,14 +302,14 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
     }
     else if(tlbResult == SUCCESS)
     {//Case L1/L2/L3/L4/P
-    	if(!tlbData.read())
+    	if(!tlbData.read)
     	{//Case P
 			throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory",
 											 (unsigned long long)address, (size_t)size);
     	}
 
         //Compare tags
-        if(compareCTag(line, contextId) && comparePTag(line, tlbData.pAddr()))
+        if(comparePTag(line, tlbData.pAddr))
         {//Case L1/L2
 
             // Update last line access
@@ -364,7 +360,7 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
 
         		Request request;
         		request.write     = false;
-        		request.address   = tlbData.pAddr() - offsetBits; //MLDTODO pAddr
+        		request.address   = tlbData.pAddr - offsetBits; //MLDTODO pAddr
 
         		if (!m_outgoing.Push(request))
         		{
@@ -373,7 +369,7 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
         			return FAILED;
         		}
         		COMMIT{
-        			line.pTag = tlbData.pAddr() - offsetBits;
+        			line.tag = tlbData.pAddr - offsetBits;
         		}
 				COMMIT {
 					if (line.state == LINE_EMPTY){
@@ -439,20 +435,20 @@ ExtendedResult DCachePreNov::Write2(ContextId contextId, MemAddr address, void* 
     }
 
     Line& line = fetchLine(address);
-    mmu::TLBResult tlbData;
+    mmu::TLBResultMessage tlbData;
     Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
     if(tlbResult == DELAYED){
     	//MLDTODO Statistics
-    	tlbData.dcacheReference(INVALID_CID);
+    	m_mmu->getDTlb().setDCacheReference(INVALID_CID);
     	return ExtendedResult::DELAYED;
     }
 
-    if (compareCTag(line, contextId) && comparePTag(line, address))
+    if (comparePTag(line, address))
     {
         assert(line.state != LINE_EMPTY);
 
-		if (!tlbData.write())
+		if (!tlbData.write)
 		{
 			throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory",
 											 (unsigned long long)address, (size_t)size);
@@ -500,7 +496,7 @@ ExtendedResult DCachePreNov::Write2(ContextId contextId, MemAddr address, void* 
     //MLDTODO Handle TLB request result
     Request request;
     request.write     = true;
-    request.address   = tlbData.pAddr() - offsetBits;
+    request.address   = tlbData.pAddr - offsetBits;
     request.wid       = tid;//MLDNOTE wid=write id, continuation word opgeslagen (wachten tot alle writes gecommit, optioneel)
     //MLDNOTE Bij store+TLB Miss --> Threads hebben ook een linkedlist. Threads suspenden. On request completion: Reschedule threads.
     //MLDNOTE Beginnen met een stall.
@@ -550,23 +546,22 @@ Result DCachePreNov::DoLookupResponses(){
 
     DebugMemWrite("Processing lookup completion for Line ID %u", response.cid);
 
-    mmu::TLBResult tlbData;
-	m_mmu->getDTlb().getLine(response.tlbLineRef, tlbData);
+    mmu::TLBResultMessage tlbData = m_mmu->getDTlb().getLine(response.tlbLineRef);
 
-	if(!tlbData.read())
+	if(!tlbData.read)
 	{//Case P
-		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from non-readable virtual address",
-										 (unsigned long long)tlbData.vAddr());
+		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from non-readable physical address",
+										 (unsigned long long)tlbData.pAddr);
 	}
 
     //// DO REQUEST
 
-    size_t pOffset = (size_t)(tlbData.pAddr() % m_lineSize);
+    size_t pOffset = (size_t)(tlbData.pAddr % m_lineSize);
 
-    DebugTLBWrite("TLBLookupComplete: address: 0x%lX", tlbData.pAddr());
+    DebugTLBWrite("TLBLookupComplete: address: 0x%lX", tlbData.pAddr);
     Request request;
     request.write     = false;
-    request.address   = tlbData.pAddr() - pOffset; //MLDTODO pAddr
+    request.address   = tlbData.pAddr - pOffset; //MLDTODO pAddr
 
 	if (!m_outgoing.Push(request))
 	{
@@ -575,7 +570,7 @@ Result DCachePreNov::DoLookupResponses(){
 		return FAILED;
 	}
 	COMMIT {
-		line.pTag = tlbData.pAddr() - pOffset;
+		line.tag = tlbData.pAddr - pOffset;
 
 		if (line.state == LINE_EMPTY){
 			++m_numEmptyRMisses; //MLDTODO Fix statistics

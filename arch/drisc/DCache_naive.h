@@ -30,7 +30,8 @@ public:
     ExtendedResult Write2(ContextId contextId, MemAddr address, void* data, MemSize size, LFID fid, TID tid) override;
 
 private:
-	bool getEmptyLine(size_t address, Line* &line);
+    bool initiateWriteback(Line* line);
+    bool getEmptyLine(size_t address, Line* &line);
 	bool freeLine(Line &line);
 	Line* getEmptyLine(size_t setIndex); //MLDTODO Needs beter name...
 	void resetLine(Line* line);

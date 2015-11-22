@@ -139,9 +139,24 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     RegisterStateObject(m_wbstate, "wbstate");//MLDTODO Registreren variabelen voorbeeld
 }
 
+bool DCache::hasData(Line* line, size_t offset, size_t size){
+	// Check if the data that we want is valid in the line.
+	// This happens when the line is FULL, or LOADING and has been
+	// snooped to (written to from another core) in the mean time.
+	if(line->state == LINE_FULL){ return true; }
+
+	size_t i;
+	for (i = 0; i < size; ++i)
+	{
+		if (!line->valid[offset + i]){ break; }
+	}
+
+	return (i == size);
+}
+
 void DCache::splitAddress(MemAddr addr, MemAddr &cacheOffset, size_t &setIndex, MemAddr *pTag){
 	MemAddr tagBuffer;
-	cacheOffset = addr & (m_lineSize - 1);
+	cacheOffset = addr & (m_lineSize - 1); //m_lineSize is guaranteed to be a power of 2
 	m_selector->Map(addr / m_lineSize, tagBuffer, setIndex);
 
 	if(pTag != NULL){
@@ -156,17 +171,20 @@ MemAddr DCache::unsplitAddress(MemAddr cacheOffset, size_t setIndex, MemAddr pTa
 	return addrBuffer;
 }
 
-DCache::Line* DCache::findLine(size_t setIndex, size_t pTag){
+DCache::Line* DCache::findLine(size_t setIndex, size_t pTag, Line* ignore){
 	Line* line = NULL;
 
 	for (size_t i = 0; i < m_assoc; ++i)
 	{
 		line = &m_lines[(setIndex * m_assoc) + i];
+		if(line == ignore){
+			continue;
+		}
 
 		// Consider only FULL, LOADING and INVALID lines
 		if (line->state == LINE_FULL || line->state == LINE_LOADING || line->state == LINE_INVALID)
 		{
-			if(line->pTag == pTag){
+			if(line->tag == pTag){
 				return line;
 			}
 		}
@@ -183,7 +201,7 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
 	COMMIT{
 		//if((address >> 63) == 0 ){//|| cpuId > 3){ //Ignore TLS
 			//if(cpuId > 3){
-				DebugTLBWrite("Read: address: 0x%lX, size:%lu", address, size);
+    	DebugMemWrite("Read: address: 0x%lX, size:%lu", address, size);
 			//}
 		//}
 	}
@@ -193,9 +211,9 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
 	COMMIT{
 		//if(cpuId > 3){
 			if(result == SUCCESS){
-				DebugTLBWrite("Read: address: 0x%lX, size:%lu, result: %s, data: 0x%lX", address, size, resultStr(result).c_str(), *((uint64_t*)data));
+				DebugMemWrite("Read: address: 0x%lX, size:%lu, result: %s, data: 0x%lX", address, size, resultStr(result).c_str(), *((uint64_t*)data));
 			}else{
-				DebugTLBWrite("Read: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
+				DebugMemWrite("Read: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
 			}
 		//}
 	}
@@ -212,7 +230,7 @@ ExtendedResult DCache::Write(MemAddr address, void* data, MemSize size, LFID fid
 	COMMIT{
 		//if((address >> 63) == 0 ){//|| cpuId > 3){ //Ignore TLS
 			//if(cpuId > 3){
-				DebugTLBWrite("Write: address: 0x%lX, size:%lu, data: 0x%lX", address, size, *((uint64_t*)data));
+    		DebugMemWrite("Write: address: 0x%lX, size:%lu, data: 0x%lX", address, size, *((uint64_t*)data));
 			//}
 		//}
 	}
@@ -226,7 +244,7 @@ ExtendedResult DCache::Write(MemAddr address, void* data, MemSize size, LFID fid
 
 	COMMIT{
 		//if(cpuId > 3){
-			DebugTLBWrite("Write: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
+			DebugMemWrite("Write: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
 		//}
 	}
 	return result;
@@ -800,7 +818,7 @@ void DCache::Cmd_Read(std::ostream& out, const std::vector<std::string>& argumen
         }
 
         if (line.state == LINE_EMPTY) {
-            out << " |                     |                                                 |";
+            out << " |  <<<LINE_EMPTY>>>   |                                                 |";
         } else {
             out << " | "
                 << hex << "0x" << setw(16) << setfill('0') << m_selector->Unmap(line.tag, set) * m_lineSize;
@@ -809,7 +827,7 @@ void DCache::Cmd_Read(std::ostream& out, const std::vector<std::string>& argumen
             {
                 case LINE_LOADING: out << "L"; break;
                 case LINE_INVALID: out << "I"; break;
-                default: out << " ";
+                default: out << "F";
             }
             out << " |";
 

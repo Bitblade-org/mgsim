@@ -29,33 +29,42 @@ namespace mmu {
 using manager::MgtMsg;
 using manager::MgtMsgType;
 
+struct TLBResultMessage{
+	bool pending;
+	bool read;
+	bool write;
+	MemAddr pAddr;
+	MemSize tlbOffsetWidth;
+};
+
 struct TlbLineRef{
-	Line* m_line;
+	Line* 	m_line;
+	Table*	m_table;
 };
 
-class TLBResult{
-	friend class TLB;
-private:
-	Line* m_line;
-	MMU*  m_mmu;
-	bool  m_destroy;
-
-public:
-	TLBResult(Line* line, MMU* mmu, bool destroy = false) : m_line(line), m_mmu(mmu), m_destroy(destroy) {}
-	TLBResult() : m_line(0), m_mmu(0), m_destroy(false) {}
-	~TLBResult(){ if(m_destroy){delete m_line;} }
-	TLBResult(const TLBResult&) = delete;
-	TLBResult& operator=(const TLBResult& other) {m_line = other.m_line; m_mmu = other.m_mmu; m_destroy = other.m_destroy; return *this;}
-
-	bool isPending(){assert(m_line); return !m_line->present;}
-	unsigned dcacheReference() {assert(m_line && !m_line->present); return m_line->d$lineRef;}
-	unsigned dcacheReference(unsigned ref);
-	bool read() {assert(m_line && m_line->present); return m_line->read;}
-	bool write() {assert(m_line && m_line->present); return m_line->write;}
-	Addr contextId() {assert(m_line && m_line->present); return m_line->processId.m_value;}
-	Addr vAddr();
-	Addr pAddr();
-};
+//class TLBResult{
+//	friend class TLB;
+//private:
+//	Line* m_line;
+//	//MMU*  m_mmu;
+//	bool  m_destroy;
+//
+//public:
+//	TLBResult(Line* line, MMU* mmu, bool destroy = false) : m_line(line), /*m_mmu(mmu),*/ m_destroy(destroy) {}
+//	TLBResult() : m_line(0), /*m_mmu(0),*/ m_destroy(false) {}
+//	~TLBResult(){ if(m_destroy){delete m_line;} }
+//	TLBResult(const TLBResult&) = delete;
+//	TLBResult& operator=(const TLBResult& other) {m_line = other.m_line; /*m_mmu = other.m_mmu;*/ m_destroy = other.m_destroy; return *this;}
+//
+//	bool isPending(){assert(m_line); return !m_line->present;}
+//	unsigned dcacheReference() {assert(m_line && !m_line->present); return m_line->d$lineRef;}
+//	unsigned dcacheReference(unsigned ref);
+//	bool read() {assert(m_line && m_line->present); return m_line->read;}
+//	bool write() {assert(m_line && m_line->present); return m_line->write;}
+//	Addr contextId() {assert(m_line && m_line->present); return m_line->processId.m_value;}
+//	Addr vAddr();
+//	Addr pAddr();
+//};
 
 //MLDNOTE Not extending MMIOComponent. TLB is not a memory component itself. Table probably is.
 class TLB :	public Object, public IIOBusClient, public Inspect::Interface<Inspect::Info | Inspect::Write> {
@@ -89,16 +98,21 @@ class TLB :	public Object, public IIOBusClient, public Inspect::Interface<Inspec
 	 */
 public:
     TLB(const std::string& name, Object& parent, IIOBus* iobus);
+    TLB(const TLB&) = delete;
     ~TLB();
 
     bool invoke(){ return true; } //MLDTODO Implement invoke
     bool OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size);
 	bool OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData& data);
 
-	void getLine(TlbLineRef lineRef, TLBResult &res);
+	TLBResultMessage getLine(TlbLineRef lineRef);
 
-	Result lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResult &res);
+	Result lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResultMessage &res);
 	AddrWidth getMinOffsetWidth(){return m_tables[0]->getOffsetWidth();}
+	AddrWidth getMaxOffsetWidth(){return m_tables[m_numTables-1]->getOffsetWidth();}
+
+
+	void setDCacheReference(unsigned dRef);
 
     Result onInvalidateMsg(MgtMsg &msg);
     Result onPropertyMsg(MgtMsg &msg);
@@ -112,9 +126,10 @@ public:
 
     const std::string& GetIODeviceName() const {return GetName();}
     void GetDeviceIdentity(IODeviceIdentification& id) const {id = IODeviceIdentification{1,10,1};} //MLDTODO Figure out what this does
+    void operator=(TLB&) = delete;
 private:
-	Result lookup(RAddr const processId, RAddr const vAddr, bool mayUnlock, TLBResult &res);
-	Result loopback(Addr processId, Addr vAddr, TLBResult &res);
+	Result lookup(RAddr const processId, RAddr const vAddr, bool mayUnlock, TLBResultMessage &res);
+	Result loopback(Addr processId, Addr vAddr, TLBResultMessage &res);
 
     Result handleMgtMsg(MgtMsg msg);
 
@@ -126,7 +141,7 @@ private:
     Result store_entry(Line &line);
     Result store_pending_entry(RAddr processId, RAddr vAddr, int D$line);
 
-    Line* doLookup(RAddr processId, RAddr vAddr, LineTag tag);
+    TlbLineRef doLookup(RAddr processId, RAddr vAddr, LineTag tag);
 
     Process			p_transmit;
     Buffer<IoMsg> 	m_fifo_out;
@@ -148,6 +163,7 @@ private:
     uint8_t	const		m_numTables;
     std::vector<Table*>	m_tables;
     bool				m_enabled;
+    Line*		m_lastLine;
 
     DRISC*  GetDRISCParent() { return (DRISC*)GetParent()->GetParent(); }
    	MMU&	getMMU() const { return (MMU&)*GetParent(); }

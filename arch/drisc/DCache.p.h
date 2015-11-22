@@ -35,7 +35,6 @@ protected:
     ((name Line)
      (state
       (MemAddr     tag)               ///< The address tag.
-	  (ContextId   contextTag)		  ///< The contextId part of the tag //MLDTODO Implement in D$!
       (char*       data noserialize)  ///< The data in this line.
       (bool*       valid noserialize) ///< A bitmap of valid bytes in this line.
       (CycleNo     access)            ///< Last access time of this line (for LRU).
@@ -43,10 +42,7 @@ protected:
       (LineState   state)             ///< The line state.
       (bool        processing)        ///< Has the line been added to m_returned yet?
       (bool        create)            ///< Is the line expected by the create process (bundle)?
-	  (unsigned    next)  			  ///< The next D$ line waiting for this line
 	  (size_t      tlbOffset)         ///< The offset of the request
-	  (MemAddr     pTag)			  ///< MLDTODO Remove after testing
-
 	  ))
     // {% endcall %}
 
@@ -179,9 +175,11 @@ public:
 
 	void splitAddress(MemAddr addr, MemAddr &cacheOffset, size_t &setIndex, MemAddr *pTag);
 	MemAddr unsplitAddress(MemAddr cacheOffset, size_t setIndex, MemAddr pTag);
-	Line* findLine(size_t setIndex, size_t pTag);
+	Line* findLine(size_t setIndex, size_t pTag, Line* ignore);
+	Line* findLine(size_t setIndex, size_t pTag){return findLine(setIndex, pTag, NULL);}
 
     size_t GetLineSize() const { return m_lineSize; }
+    bool hasData(Line* line, size_t offset, size_t size);
 
     // TLB callbacks
     bool OnTLBLookupCompleted(CID cid, mmu::TlbLineRef tlbLineRef, bool present);

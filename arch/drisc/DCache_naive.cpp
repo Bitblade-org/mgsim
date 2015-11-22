@@ -173,7 +173,7 @@ void DCacheNaive::resetLine(Line* line){
 	COMMIT
 	{	//MLDTODO Does not reset line->state due to statistics...
 		line->processing = false;
-		line->pTag       = 0;
+		line->tag       = 0;
 		line->waiting    = INVALID_REG;
 		std::fill(line->valid, line->valid + m_lineSize, false);
 	}
@@ -221,7 +221,7 @@ DCache::Line* DCacheNaive::getEmptyLine(size_t setIndex){
  * 	CASE 9: TLB FAILED, SET LINES OCCUPIED
  */
 Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemSize size, RegAddr* reg)
-{
+{ //MLDTODO It seems that the original D$ does not store size information when delaying a request.
 	MemAddr cacheOffset;
 	size_t setIndex;
 	splitAddress(address, cacheOffset, setIndex, NULL);
@@ -249,16 +249,20 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
         return FAILED;
     }
 
-    mmu::TLBResult tlbData;
+    mmu::TLBResultMessage tlbData;
     Result lookupResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
     if(lookupResult == SUCCESS){
     	Line* line;
     	MemAddr pTag;
-    	splitAddress(address, cacheOffset, setIndex, &pTag);
+    	MemAddr pAddr = tlbData.pAddr << tlbData.tlbOffsetWidth;
+    	pAddr |= ((1 << tlbData.tlbOffsetWidth) - 1) & address;
 
-    	if(!tlbData.read())
+    	splitAddress(pAddr, cacheOffset, setIndex, &pTag);
+
+    	if(!tlbData.read)
     	{ //Case 5
+    		DebugMemWrite("D-Cache state 5");
 			throw exceptf<SecurityException>(*this, "Read (%#016llx, %zd): Attempting to read from non-readable memory", (unsigned long long)address, (size_t)size);
     	}
 
@@ -266,17 +270,10 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
     	if(line && line->state != LINE_INVALID){
             COMMIT{ line->access = GetDRISC().GetCycleNo(); } //MLDTODO Call on L2?
 
-        	// Check if the data that we want is valid in the line.
-        	// This happens when the line is FULL, or LOADING and has been
-        	// snooped to (written to from another core) in the mean time.
-        	size_t i;
-        	for (i = 0; i < size; ++i)
-        	{
-        		if (!line->valid[cacheOffset + i]){ break; }
-        	}
 
-    		if(i == size)
+    		if(hasData(line, cacheOffset, size))
     		{ //Case 1
+    			DebugMemWrite("D-Cache state 1");
 				COMMIT
 				{
 					memcpy(data, line->data + cacheOffset, (size_t)size);
@@ -288,6 +285,7 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
 
     		}else
     		{ //Case 2
+    			DebugMemWrite("D-Cache state 2");
             	COMMIT{
             		PushRegister(line, reg);
 
@@ -301,11 +299,12 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
     		line = getEmptyLine(setIndex);
     		if(line)
     		{ //Case 3 MLDTODO
-    			if(!initiateMemoryRequest(cacheOffset, setIndex, pTag)){
+    			DebugMemWrite("D-Cache state 3");
+    			if(!initiateMemoryRequest(cacheOffset, setIndex, pTag)){ //MLDTODO Will only work for smallest page size
     				return FAILED;
     			}
         		COMMIT{
-        			line->pTag = pTag;
+        			line->tag = pTag;
 //					if (line.state == LINE_EMPTY){
 //						++m_numEmptyRMisses;//MLDTODO Statistics
 //					}else{
@@ -321,6 +320,7 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
 
     		}else
     		{ //Case 4 MLDTODO
+    			DebugMemWrite("D-Cache state 4");
 //            	COMMIT {++m_numHardConflicts;} //MLDTODO Statistics
     	        DeadlockWrite("DCache write for (%u, %#016llx) failed! [CASE 4]", contextId, (unsigned long long)address);
     	        return FAILED;
@@ -330,9 +330,10 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
 		Line* line = getEmptyLine(setIndex);
 		if(line)
 		{ //Case 6
+			DebugMemWrite("D-Cache state 6");
 			COMMIT{
-				line->next = tlbData.dcacheReference(getLineId(line));
-				line->tlbOffset = unsplitAddress(cacheOffset, setIndex, 0);
+				m_mmu->getDTlb().setDCacheReference(getLineId(line));
+				line->tlbOffset = address && ~(UINT64_MAX << m_mmu->getDTlb().getMaxOffsetWidth());
 				line->state = LINE_LOADING;
 				PushRegister(line, reg);
 //        		//MLDTODO Statistics
@@ -342,11 +343,13 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
 			return DELAYED;
 		}else
 		{ //Case 7
+			DebugMemWrite("D-Cache state 7");
 	        DeadlockWrite("DCache write for (%u, %#016llx) failed! [CASE 7]", contextId, (unsigned long long)address);
 	        return FAILED;
 		}
     }else
 	{ //Case 8 | 9
+    	DebugMemWrite("D-Cache state 8|9");
 		DeadlockWrite("dTLB lookup for (%u, %#016llx) failed! [CASE 8|9]", contextId, (unsigned long long)address);
 		return FAILED;
     }
@@ -389,12 +392,12 @@ ExtendedResult DCacheNaive::Write2(ContextId contextId, MemAddr address, void* d
         return ExtendedResult::FAILED;
     }
 
-    mmu::TLBResult tlbData;
+    mmu::TLBResultMessage tlbData;
     Result tlbResult = m_mmu->getDTlb().lookup(contextId, address, false, tlbData);
 
     if(tlbResult == DELAYED)
     { //Case 8, 9
-    	COMMIT{tlbData.dcacheReference(INVALID_CID);}
+    	COMMIT{ m_mmu->getDTlb().setDCacheReference(INVALID_CID); }
     	DeadlockWrite("TLB delayed on write");
     	return ExtendedResult::ACTIVE;
     }else if(tlbResult != SUCCESS)
@@ -403,13 +406,17 @@ ExtendedResult DCacheNaive::Write2(ContextId contextId, MemAddr address, void* d
     	return ExtendedResult::FAILED;
     }
 
-	if (!tlbData.write())
+	if (!tlbData.write)
 	{
 		throw exceptf<SecurityException>(*this, "Write (%#016llx, %zd): Attempting to write to non-writable memory", (unsigned long long)address, (size_t)size);
 	}
+	MemAddr pAddr = tlbData.pAddr << tlbData.tlbOffsetWidth;
+	pAddr |= ((1 << tlbData.tlbOffsetWidth) - 1) & address;
+
+	//std::cout << "offs:" << tlbData.tlbOffsetWidth << ", " << std::hex << pAddr << std::dec << std::endl;
 
     MemAddr pTag;
-	splitAddress(tlbData.pAddr(), cacheOffset, setIndex, &pTag);
+	splitAddress(pAddr, cacheOffset, setIndex, &pTag);
 
 	Line* line = findLine(setIndex, pTag);
 	if(line)
@@ -463,57 +470,78 @@ Result DCacheNaive::DoLookupResponses(){
     }
 
     auto& response = m_lookup_responses.Front();
+
 	if(!response.present)
 	{ //Case 12
-		throw exceptf<SecurityException>(*this, "Page fault"); //MLDTODO Add information
+		throw exceptf<SecurityException>(*this, "Page fault %p, %lu", (void *)response.tlbLineRef.m_line, (unsigned long)response.tlbLineRef.m_table); //MLDTODO Add information
 	}
 
     if(response.cid == INVALID_CID)
     { //Case 10
     	//Do nothing...
-		DebugMemWrite("Handling lookup completion for 'magic' CID");
+		DebugMemWrite("'Handling' lookup completion for 'magic' CID");
         m_lookup_responses.Pop();
         return SUCCESS;
     }
 
+    mmu::TLBResultMessage tlbData = m_mmu->getDTlb().getLine(response.tlbLineRef);
+	MemAddr pAddr = tlbData.pAddr << tlbData.tlbOffsetWidth;
+	//std::cout << "offs:" << tlbData.tlbOffsetWidth << std::endl;
+	assert(!tlbData.pending);
+
     //Unreachable by writes, so this must be case 1, 2, 3 or 5 (read)
-    Line& line = m_lines[response.cid];
-    assert(line.state == LINE_LOADING);
+    Line* line = &m_lines[response.cid];
+    assert(line->state == LINE_LOADING);
 
-    mmu::TLBResult tlbData;
-	m_mmu->getDTlb().getLine(response.tlbLineRef, tlbData);
-	assert(!tlbData.isPending());
-	DebugMemWrite("Handling lookup completion for CID %u, (%#016llx => %#016llx)", (unsigned)response.cid, (unsigned long long)tlbData.vAddr(), (unsigned long long)tlbData.pAddr());
+	pAddr |= ((1 << tlbData.tlbOffsetWidth) - 1) & line->tlbOffset;
+	//MLDTODO Add offset bits
+	DebugMemWrite("Handling lookup completion for CID %u, (%#016llx)", (unsigned)response.cid, (unsigned long long)pAddr);
 
-	if(!tlbData.read())
+	if(!tlbData.read)
 	{ //Case 5
-		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from non-readable virtual address", (unsigned long long)tlbData.vAddr());
+		throw exceptf<SecurityException>(*this, "Read (%#016llx): Attempting to read from physical address through non-readable virtual address", (unsigned long long)pAddr);
 	}
 
 	MemAddr cacheOffset, pTag;
 	size_t setIndex;
-	splitAddress(tlbData.pAddr(), cacheOffset, setIndex, &pTag);
+	splitAddress(pAddr, cacheOffset, setIndex, &pTag);
 
-	if(!initiateMemoryRequest(cacheOffset, setIndex, pTag)){ //MLDTODO In case of write?
-		return FAILED;
-	}
-
-	COMMIT {
-		line.pTag = pTag;
-
-		if (line.state == LINE_EMPTY){
-//			++m_numEmptyRMisses; //MLDTODO Fix statistics
-		}else{
-//			++m_numResolvedConflicts; //MLDTODO Fix statistics
+	Line* otherLine = findLine(setIndex, pTag, line);
+	if(otherLine)
+	{ //Case 1 or 2
+		COMMIT{
+			PushRegister(otherLine, &line->waiting);
+			line->waiting = INVALID_REG;
+			line->state = LINE_EMPTY;
 		}
 
-		line.state = LINE_LOADING;
-		//PushRegister(line, reg); //MLDTODO Fix register linked list
+		if(hasData(otherLine, 0, m_lineSize))
+		{ //Case 1
+		    if(!initiateWriteback(otherLine)){
+		    	return FAILED; //Deadlockwrite done in initiateWriteback
+		    }
+		}
+	}else
+	{ //Case 3
+		if(!initiateMemoryRequest(cacheOffset, setIndex, pTag)){ //MLDTODO In case of write?
+			return FAILED;
+		}
 
-//		++m_numDelayedReads; //MLDTODO Fix statistics
+		COMMIT {
+			line->tag = pTag;
+
+			if (line->state == LINE_EMPTY){
+	//			++m_numEmptyRMisses; //MLDTODO Fix statistics
+			}else{
+	//			++m_numResolvedConflicts; //MLDTODO Fix statistics
+			}
+
+			line->state = LINE_LOADING;
+			//PushRegister(line, reg); //MLDTODO Fix register linked list
+
+	//		++m_numDelayedReads; //MLDTODO Fix statistics
+		}
 	}
-
-    ////END DO REQUEST
 
     m_lookup_responses.Pop();
     return SUCCESS;
@@ -537,29 +565,8 @@ Result DCacheNaive::DoReadResponses()
 
     DebugMemWrite("Processing read completion for CID %u", (unsigned)response.cid);
 
-    // If bundle creation is waiting for the line data, deliver it
-    if (line.create)
-    {
-        DebugMemWrite("Signalling read completion to creation process");
-        auto& alloc = GetDRISC().GetAllocator();
-        alloc.OnDCachelineLoaded(line.data);
-        COMMIT { line.create = false; }
-    }
-
-    if (line.waiting.valid())
-    {
-        // Push the cache-line to the back of the queue
-        WritebackRequest req;
-        std::copy(line.data, line.data + m_lineSize, req.data);
-        req.waiting = line.waiting;
-
-        DebugMemWrite("Queuing writeback request for CID %u starting at %s", (unsigned)response.cid, req.waiting.str().c_str());
-
-        if (!m_writebacks.Push(req))
-        {
-            DeadlockWrite("Unable to push writeback request to buffer");
-            return FAILED;
-        }
+    if(!initiateWriteback(&line)){
+    	return FAILED; //Deadlockwrite done in initiateWriteback
     }
 
     COMMIT {
@@ -568,6 +575,34 @@ Result DCacheNaive::DoReadResponses()
     }
     m_read_responses.Pop();
     return SUCCESS;
+}
+
+bool DCacheNaive::initiateWriteback(Line* line){
+	// If bundle creation is waiting for the line data, deliver it
+	if (line->create)
+	{
+		DebugMemWrite("Signalling read completion to creation process");
+		auto& alloc = GetDRISC().GetAllocator();
+		alloc.OnDCachelineLoaded(line->data);
+		COMMIT { line->create = false; }
+	}
+
+	if (line->waiting.valid())
+	{
+		// Push the cache-line to the back of the queue
+		WritebackRequest req;
+		std::copy(line->data, line->data + m_lineSize, req.data);
+		req.waiting = line->waiting;
+
+		DebugMemWrite("Queuing writeback request for CID %u starting at %s", (unsigned)getLineId(line), req.waiting.str().c_str());
+
+		if (!m_writebacks.Push(req))
+		{
+			DeadlockWrite("Unable to push writeback request to buffer");
+			return false;
+		}
+	}
+	return true;
 }
 
 Result DCacheNaive::DoReadWritebacks()

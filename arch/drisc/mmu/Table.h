@@ -57,9 +57,7 @@ struct Line{
 	bool	write;
 };
 
-#define NOTIMPL throw std::logic_error("Not implemented");
-//MLDNOTE Not extending MMIOComponent, I consider MMIOComponent deprecated.
-class Table : public Object, public IMemoryAdmin //MLDQUESTION D$, I$, none of them implement IMemoryAdmin. Should I?
+class Table : public Object, public Inspect::Interface<Inspect::Info | Inspect::Read | Inspect::Write>
 {
 	//Nomenclature: A (pending) entry is written to a free (= !p && !l) line.
 
@@ -90,29 +88,15 @@ Line *lookup(RAddr processId, RAddr vAddr, LineTag type);
     Line* fillPending(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId);
     Line* storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write);
 
-
     //MLDTODO What to do when a locked entry matches an invalidation?
 	void freeLines();
 	void freeLines(const RAddr &processId, const RAddr *vAddr);
 
-    void Cmd_Info (std::ostream& out, const std::vector<std::string>& arguments) const override;
-    void Cmd_Read (std::ostream& out, const std::vector<std::string>& arguments) const override;
-    void Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments) override;
+    void Cmd_Info (std::ostream& out, const std::vector<std::string>& arguments) const;
+    void Cmd_Read (std::ostream& out, const std::vector<std::string>& arguments) const;
+    void Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments);
     void Cmd_Usage(std::ostream& out) const;
     void Cmd_Usage_write_line(std::ostream& out) const;
-
-    //MLDNOTE Deze 4 verdwijnen in principe
-    void Reserve(MemAddr /*address*/, MemSize /*size*/, ProcessID /*pid*/, int /*perm*/){NOTIMPL}
-    void Unreserve(MemAddr /*address*/, MemSize /*size*/){NOTIMPL}
-    void UnreserveAll(ProcessID /*pid*/){NOTIMPL}
-    bool CheckPermissions(MemAddr /*address*/, MemSize /*size*/, int /*access*/) const {NOTIMPL return false;}
-
-	//MLDNOTE Interface simulatie <> kernel, console
-    void Read (MemAddr /*address*/, void* /*data*/, MemSize /*size*/) const {NOTIMPL}
-    void Write(MemAddr /*address*/, const void* /*data*/, const bool* /*mask*/, MemSize /*size*/) {NOTIMPL}
-
-    SymbolTable& GetSymbolTable() const {NOTIMPL}
-    void SetSymbolTable(SymbolTable& /*symtable*/) {NOTIMPL}
 
     void operator=(Table&) = delete;
 private:
@@ -121,7 +105,7 @@ private:
     Line *find(const LineTag type);
     Line *find(std::function<bool (Line&)> const&);
     Line *find(RAddr processId, RAddr vAddr, LineTag type);
-    Addr getIndex(const Line &line) const;
+    Addr getIndex(const Line &line) const { return (Addr)(&line - &m_lines[0]); }
 
     void setPrioHigh(Line &entry);
 
