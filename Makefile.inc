@@ -5,7 +5,10 @@ include $(srcdir)/demo/Makefile.inc
 include $(srcdir)/Makefile.cacti.inc
 include $(srcdir)/manager/Makefile.inc
 
-bin_PROGRAMS += mgsim mgsim.dbg mgsim-dyn tinysim tinysim-dyn
+bin_PROGRAMS += mgsim mgsim.dbg mgsim-dyn
+if ENABLE_MEM_SERIAL
+bin_PROGRAMS += tinysim tinysim-dyn
+endif
 dist_man1_MANS += mgsim.1
 
 BASE_CXXFLAGS = $(AM_CXXFLAGS)

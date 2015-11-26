@@ -1,5 +1,4 @@
-#include "DCache.h"
-
+#include <arch/drisc/DCache.h>
 #include <arch/drisc/DRISC.h>
 #include <sim/log2.h>
 #include <sim/config.h>
@@ -65,7 +64,7 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     InitBuffer(m_outgoing, clock, "OutgoingBufferSize"),
     m_wbstate(),
 	m_mmu(&parent.getMMU()),
-    InitSampleVariable(numRHits, SVC_CUMULATIVE),//MLDTODO Registreren variabelen voorbeeld
+    InitSampleVariable(numRHits, SVC_CUMULATIVE),
     InitSampleVariable(numDelayedReads, SVC_CUMULATIVE),
     InitSampleVariable(numEmptyRMisses, SVC_CUMULATIVE),
     InitSampleVariable(numInvalidRMisses, SVC_CUMULATIVE),
@@ -121,8 +120,8 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
     m_data.resize(m_lines.size() * m_lineSize);
     m_valid = new bool[m_lines.size() * m_lineSize];
 
-    RegisterStateArray(m_valid, m_lines.size() * m_lineSize, "valid"); //MLDTODO Registreren variabelen voorbeeld
-    RegisterStateVariable(m_data, "data");//MLDTODO Registreren variabelen voorbeeld
+    RegisterStateArray(m_valid, m_lines.size() * m_lineSize, "valid");
+    RegisterStateVariable(m_data, "data");
 
     for (size_t i = 0; i < m_lines.size(); ++i)
     {
@@ -136,7 +135,7 @@ DCache::DCache(const std::string& name, DRISC& parent, Clock& clock)
 
     m_wbstate.size   = 0;
     m_wbstate.offset = 0;
-    RegisterStateObject(m_wbstate, "wbstate");//MLDTODO Registreren variabelen voorbeeld
+    RegisterStateObject(m_wbstate, "wbstate");
 }
 
 bool DCache::hasData(Line* line, size_t offset, size_t size){
