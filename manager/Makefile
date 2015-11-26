@@ -1,37 +1,56 @@
 CC=slc
-INCLUDE=-I/home/nijntje/mgsim_install/share/mgsim/
-	#-I/opt/svp/sl-s3.4.90-5937-c3.8.47-e209-mta-p4876-ptl-preV5-hlsim-irfan-h4932-trunk/share/sl-core/mtalpha-sim/include/ \
-	 
-	
-#-I/opt/svp/sl-s3.4.90-5937-c3.8.47-e209-mta-p4876-ptl-preV5-hlsim-irfan-h4932-trunk/share/sl-core/include/ -I/opt/svp/sl-s3.4.90-5937-c3.8.47-e209-mta-p4876-ptl-preV5-hlsim-irfan-h4932-trunk/share/sl-core/mtalpha-sim/include/
+INCLUDE=
 SLCFLAGS=-b mta -O1
 LDFLAGS=
+TESTS= \
+	lineBoundariesR.c \
+	lineBoundariesRW.c \
+	quickPageAlignedRW.c \
+	notLineAlignedR.c \
+	notLineAlignedRW.c \
+	unalignedR.c \
+	unalignedRW.c \
+	smallPageBoundaries.c \
+	mediumPageBoundaries.c \
+	notPageAligned.c
 HEADERS=defines.h main.h manager.h MgtMsg.h pagetable.h PTBuilder.h pt_index.h test/memTester.h test/tests.h
-SOURCES=main.c manager.c pagetable.c PTBuilder.c pt_index.c \
-test/memTester.c test/tests.c test/lineBoundariesR.c test/lineBoundariesRW.c test/quickPageAlignedRW.c test/notLineAlignedR.c test/notLineAlignedRW.c test/unalignedR.c test/unalignedRW.c test/smallPageBoundaries.c test/mediumPageBoundaries.c test/notPageAligned.c
+SOURCES=main.c manager.c pagetable.c PTBuilder.c pt_index.c test/memTester.c test/tests.c $(addprefix test/, $(TESTS)) 
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=boot.bin
-PREFIX=/home/nijntje/mgexec/slr/assets
 CFLAGS=-O1 -Werror
 #-Wa,-adhln
 
 all: boot.bin
     
-boot.bin: $(OBJECTS) $(HEADERS)
-	$(CC) $(SLCFLAGS) $(LDFLAGS) $(INCLUDE) $(OBJECTS) -o $@
+boot.bin: require-MGSIM_INCLUDE $(OBJECTS) $(HEADERS)
+	$(CC) $(SLCFLAGS) $(LDFLAGS) $(INCLUDE) -I$(MGSIM_INCLUDE) $(OBJECTS) -o $@
 	
-%.o: %.c $(HEADERS)
-	$(CC) -c $(SLCFLAGS) $(CFLAGS) $(INCLUDE) $< -o $@
+%.o: require-MGSSIM_INCLUDE %.c $(HEADERS)
+	echo $(MGSIM_INCLUDE)
+	$(CC) -c $(SLCFLAGS) $(CFLAGS) $(INCLUDE) -I$(MGSIM_INCLUDE) $< -o $@
 
-
-
-$(PREFIX)/boot.bin: boot.bin
+$(PREFIX)/boot.bin: require-PREFIX boot.bin 
 	cp --verbose ./boot.bin $(PREFIX)/boot.bin
 
-clean:
+clean: 
 	rm *.o
 	rm boot.bin
 	
-install: $(PREFIX)/boot.bin
+install: $(PREFIX)/boot.bin require-PREFIX
 
-.phony: install	clean
+require-PREFIX:
+  ifndef PREFIX
+	$(error PREFIX is required)
+  endif
+
+require-MGSIM_INCLUDE:
+  ifndef MGSIM_INCLUDE
+	$(error MGSIM_INCLUDE is required)
+  endif
+
+#require-%:
+#  ifdef $*
+#	$(error $* is required)
+#  endif
+	
+.phony: install	clean require-PREFIX require-MGSIM_INCLUDE
