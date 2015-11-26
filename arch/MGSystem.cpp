@@ -1005,9 +1005,6 @@ MGSystem::MGSystem(Config& config, bool quiet)
              << ru2.GetUserTime() << " us, "
              << ru2.GetMaxResidentSize() << " KiB (approx)" << endl;
     }
-
-    //MLDTODO Remove after testing
-    if(m_jtag != NULL){ m_jtag->start(); }
 }
 
 MGSystem::~MGSystem()

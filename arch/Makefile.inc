@@ -65,15 +65,7 @@ DEVICE_SRC = \
         arch/dev/UART.h \
         arch/dev/UART.cpp \
         arch/dev/JTAG/JTAG.cpp \
-        arch/dev/JTAG/JTAG.h \
-        arch/dev/JTAG/MgrTester.cpp \
-        arch/dev/JTAG/MgrTester.h \
-        arch/dev/JTAG/MMUTester.h \
-        arch/dev/JTAG/MMUTester.cpp \
-        arch/dev/JTAG/pageTableTypes.h \
-        arch/dev/JTAG/PTBuilder.cpp \
-        arch/dev/JTAG/PTBuilder.h
-        
+        arch/dev/JTAG/JTAG.h
         
 BUILT_SOURCES += arch/dev/RPC.h
 
