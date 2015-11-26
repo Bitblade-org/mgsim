@@ -362,7 +362,7 @@ Result DCachePreNov::Read2(ContextId contextId, MemAddr address, void* data, Mem
         		request.write     = false;
         		request.address   = tlbData.pAddr - offsetBits; //MLDTODO pAddr
 
-        		if (!m_outgoing.Push(request))
+        		if (!m_outgoing.Push(std::move(request)))
         		{
         			++m_numStallingRMisses;//MLDTODO Statistics
         			DeadlockWrite("Unable to push request to outgoing buffer");
@@ -509,7 +509,7 @@ ExtendedResult DCachePreNov::Write2(ContextId contextId, MemAddr address, void* 
     std::fill(request.data.mask+offsetBits+size, request.data.mask+m_lineSize, false);
     }
 
-    if (!m_outgoing.Push(request))
+    if (!m_outgoing.Push(std::move(request)))
     {
         ++m_numStallingWMisses;
         DeadlockWrite("Unable to push request to outgoing buffer");
@@ -563,7 +563,7 @@ Result DCachePreNov::DoLookupResponses(){
     request.write     = false;
     request.address   = tlbData.pAddr - pOffset; //MLDTODO pAddr
 
-	if (!m_outgoing.Push(request))
+	if (!m_outgoing.Push(std::move(request)))
 	{
 		++m_numStallingRMisses; //MLDTODO Fix statistics
 		DeadlockWrite("Unable to push request to outgoing buffer");
@@ -622,12 +622,12 @@ Result DCachePreNov::DoReadResponses()
     {
         // Push the cache-line to the back of the queue
         WritebackRequest req;
-        std::copy(line.data, line.data + m_lineSize, req.data);
+        COMMIT{std::copy(line.data, line.data + m_lineSize, req.data);}
         req.waiting = line.waiting;
 
         DebugMemWrite("Queuing writeback request for CID %u starting at %s", (unsigned)response.cid, req.waiting.str().c_str());
 
-        if (!m_writebacks.Push(req))
+        if (!m_writebacks.Push(std::move(req)))
         {
             DeadlockWrite("Unable to push writeback request to buffer");
             return FAILED;

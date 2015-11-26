@@ -19,9 +19,9 @@ MMU::MMU(const std::string& name, Object& parent, AddrWidth netAddrWidth)
 	m_itlb(0)
 {}
 
-void MMU::initializeIO(IIOBus* iobus){
-	m_itlb = new TLB("itlb", *this, iobus);
-	m_dtlb = new TLB("dtlb", *this, iobus);
+void MMU::initializeIO(IOMessageInterface&	ioif){
+	m_itlb = new TLB("itlb", *this, ioif);
+	m_dtlb = new TLB("dtlb", *this, ioif);
 }
 
 void MMU::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*arguments*/) const{

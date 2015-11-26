@@ -11,9 +11,10 @@
 
 #include "../../../sim/kernel.h"
 
+
 namespace Simulator {
 
-JTAG::JTAG(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid):
+JTAG::JTAG(const std::string& name, Object& parent, IOMessageInterface& iobus, IODeviceID devid):
 		Object(name, parent)
 {
 	iobus.RegisterClient(devid, *this);

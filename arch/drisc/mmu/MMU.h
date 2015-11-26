@@ -19,7 +19,7 @@ public:
     MMU(const std::string& name, Object& parent, AddrWidth netAddrWidth);
     MMU(const MMU &mmu) = delete;
 
-    void initializeIO(IIOBus* iobus);
+    void initializeIO(IOMessageInterface&	m_ioif);
 
     TLB& getITLB(){return *m_itlb;}
     TLB& getDTlb(){return *m_dtlb;}

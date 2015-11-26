@@ -17,40 +17,22 @@ namespace mmu {
 //MLDTODO-DOC Andere ontdekkingen: RAddr is handig voor testen, maar maakt alles gecompliceert...
 
 //MLDTODO-DOC On reserve of +L-P entry: What to do if the pickDestination algo returns a locked entry? Nothing for now...
-bool TLB::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size){
-	COMMIT{
-		//MLDTODO Handle
-		std::cout << "Unexpected read request on " << GetName() << "from device " << from << ", Address " << address << ", size " << size << std::endl;
-	}
 
-    IOData iodata;
-    iodata.size = size;
-    if(address > 24){
-        memset(iodata.data, 0, size);
-    }else{
-        memset(iodata.data, 255, size);
-    }
-    if (!m_ioBus.SendReadResponse(m_ioDevId, from, address, iodata))
-    {
-        DeadlockWrite("Unable to send ROM read response to I/O bus");
-        return false;
-    }
-    return true;
-}
-
-TLB::TLB(const std::string& name, Object& parent, IIOBus* iobus)
+TLB::TLB(const std::string& name, Object& parent, IOMessageInterface& ioif)
 	: Object(name, parent),
+
+	m_ioif(ioif),
+	m_ioDevId(GetConfOpt("DeviceID", IODeviceID, ioif.GetNextAvailableDeviceID())),
+	m_clock(m_ioif.RegisterClient(m_ioDevId, *this)),
 	InitProcess(p_transmit, doTransmit),
-	m_fifo_out("m_fifo_out", *this, iobus->GetClock(), 10, 4),
+	m_fifo_out("m_fifo_out", *this, m_clock, 10, 4),
 
 	InitProcess(p_receive, doReceive),
-	InitBuffer(m_fifo_in, iobus->GetClock(), "inFifoSize"),
-	InitStorage(m_receiving, iobus->GetClock(), false),
+	InitBuffer(m_fifo_in, m_clock, "inFifoSize"),
+	InitStorage(m_receiving, m_clock, false),
 	m_mgtMsgBuffer(),
 	InitProcess(p_dummy, DoNothing),
 
-	m_ioDevId(GetConfOpt("DeviceID", IODeviceID, iobus->GetNextAvailableDeviceID())),
-	m_ioBus(*iobus),
 	m_mgtAddr({0,2}),
 	m_numTables(GetConf("NumberOfTables", size_t)),
 	m_tables(m_numTables),
@@ -73,7 +55,6 @@ TLB::TLB(const std::string& name, Object& parent, IIOBus* iobus)
 		m_tables[i] = table;
 	}
 
-	m_ioBus.RegisterClient(m_ioDevId, *this);
 
     m_fifo_out.Sensitive(p_transmit);
     m_fifo_in.Sensitive(p_dummy);
@@ -91,7 +72,7 @@ Result TLB::doTransmit(){
 	IoMsg item = m_fifo_out.Front();
 	m_fifo_out.Pop();
 
-	if(!m_ioBus.SendNotification(item.addr.devid, item.addr.chan, item.payload)){
+	if(!m_ioif.SendNotification(m_ioDevId, item.addr.devid, item.addr.chan, item.payload)){
 		DeadlockWrite("Could not send message");
 		DebugTLBWrite("message 1 not send");
 		return FAILED;

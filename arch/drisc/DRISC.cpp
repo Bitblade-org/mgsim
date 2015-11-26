@@ -160,6 +160,8 @@ void DRISC::ConnectIO(IOMessageInterface* ioif)
     std::cout << "Initializing IO interface on id " << devid << " for " << GetName() << std::endl;
     m_io_if = new IOInterface("io_if", *this, m_clock, *ioif, devid);
 
+    m_mmu.initializeIO(*ioif); //MLDTODO This is probably not the best place...
+
     if (m_memory != NULL)
         m_io_if->ConnectMemory(m_memory);
 

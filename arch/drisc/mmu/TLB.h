@@ -11,12 +11,11 @@
 #include <sim/inspect.h>
 #include <cli/argument.h>
 #include <arch/simtypes.h>
-#include <arch/IOBus.h>
 #include "sim/kernel.h"
 #include "manager/MgtMsg.h"
 #include "sim/flag.h"
 #include "sim/buffer.h"
-
+#include <arch/IOMessageInterface.h>
 
 #include "Table.h"
 
@@ -43,7 +42,7 @@ struct TlbLineRef{
 };
 
 //MLDNOTE Not extending MMIOComponent. TLB is not a memory component itself. Table probably is.
-class TLB :	public Object, public IIOBusClient, public Inspect::Interface<Inspect::Info | Inspect::Write> {
+class TLB :	public IIOMessageClient, public Object, public Inspect::Interface<Inspect::Info | Inspect::Write> {
 
 	//MLDTODO Create .p.h file
 	struct IoAddr{
@@ -73,12 +72,11 @@ class TLB :	public Object, public IIOBusClient, public Inspect::Interface<Inspec
 	 * - Per lookup: Manager round trip time
 	 */
 public:
-    TLB(const std::string& name, Object& parent, IIOBus* iobus);
+    TLB(const std::string& name, Object& parent, IOMessageInterface& ioif);
     TLB(const TLB&) = delete;
     ~TLB();
 
     bool invoke(){ return true; } //MLDTODO Implement invoke
-    bool OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size);
 	bool OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData& data);
 
 	TLBResultMessage getLine(TlbLineRef lineRef);
@@ -119,6 +117,9 @@ private:
 
     TlbLineRef doLookup(RAddr contextId, RAddr vAddr, LineTag tag);
 
+    IOMessageInterface&	m_ioif;
+	IODeviceID 		m_ioDevId;
+    Clock&			m_clock;
     Process			p_transmit;
     Buffer<IoMsg> 	m_fifo_out;
     Result 			doTransmit();
@@ -132,8 +133,6 @@ private:
     Process 		p_dummy;
     Result 			DoNothing() { COMMIT{ p_dummy.Deactivate(); }; return SUCCESS; }
 
-	IODeviceID 		m_ioDevId;
-	IIOBus&			m_ioBus;
 	IoAddr			m_mgtAddr;
 
     uint8_t	const		m_numTables;

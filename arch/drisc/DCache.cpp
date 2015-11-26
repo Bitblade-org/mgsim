@@ -386,7 +386,7 @@ bool DCache::initiateMemoryRequest
     	}
     }
 
-	if (!m_outgoing.Push(request))
+	if (!m_outgoing.Push(std::move(request)))
 	{
 //		++m_numStallingRMisses; //MLDTODO Fix statistics
 		DeadlockWrite("Unable to push request to outgoing buffer");
@@ -495,7 +495,7 @@ bool DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 
         DebugMemWrite("Received read completion for %#016llx -> CID %u", (unsigned long long)addr, (unsigned)response.cid);
 
-        if (!m_read_responses.Push(response))
+        if (!m_read_responses.Push(std::move(response)))
         {
             DeadlockWrite("Unable to push read completion to buffer");
             return false;
@@ -515,7 +515,7 @@ bool DCache::OnMemoryWriteCompleted(WClientID wid)
 
         WriteResponse response;
         response.wid  =  wid;
-        if (!m_write_responses.Push(response))
+        if (!m_write_responses.Push(std::move(response)))
         {
             DeadlockWrite("Unable to push write completion to buffer");
             return false;

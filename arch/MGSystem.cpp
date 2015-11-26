@@ -872,7 +872,7 @@ MGSystem::MGSystem(Config& config, bool quiet)
             m_devices[i] = rpc;
             RegisterModelObject(*rpc, "rpc");
         } else if (dev_type == "JTAG"){ //MLDTODO Remove after testing!
-        	m_jtag = new JTAG(name, *m_root, iobus, devid);
+        	m_jtag = new JTAG(name, *m_root, ic, devid);
         	m_devices[i] = m_jtag;
         	RegisterModelObject(*m_jtag, "jtag");
         } else {

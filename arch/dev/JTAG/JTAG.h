@@ -6,6 +6,8 @@
 #include "../../../sim/kernel.h"
 #include "../../IOBus.h"
 #include "../../simtypes.h"
+#include <arch/IOMessageInterface.h>
+
 
 
 
@@ -13,11 +15,11 @@
 
 namespace Simulator {
 
-class JTAG: public Object, public IIOBusClient {
+class JTAG: public Object, public IIOMessageClient {
 
 
 public:
-	JTAG(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid);
+	JTAG(const std::string& name, Object& parent, IOMessageInterface& ioif, IODeviceID devid);
 
 	bool OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData& data);
     const std::string& GetIODeviceName() const {return GetName();}
