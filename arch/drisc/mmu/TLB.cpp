@@ -173,13 +173,13 @@ bool TLB::OnWriteRequestReceived(IODeviceID from, MemAddr address, const IOData&
 // DELAYED: Address not in TLB, expecting refill
 // FAILED:  Stalled or Address not in TLB and unable to transmit refill request
 // Expects address including bits within page (offset)
-Result TLB::lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResultMessage &res){
+Result TLB::lookup(Addr contextId, Addr vAddr, bool mayUnlock, TLBResultMessage &res){
 	if(!m_enabled){
-		//DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLB disabled", processId, vAddr);
-		return loopback(processId, vAddr, res);
+		//DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLB disabled", contextId, vAddr);
+		return loopback(contextId, vAddr, res);
 	}else if(vAddr >> 63){
-		DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLS address", processId, vAddr);
-		return loopback(processId, vAddr, res);
+		DebugTLBWrite("Lookup request for %lu:0x%lX looped back, TLS address", contextId, vAddr);
+		return loopback(contextId, vAddr, res);
 	}
 
 	unsigned dcache_linesize = GetDRISCParent()->GetDCache().GetLineSize();
@@ -189,22 +189,22 @@ Result TLB::lookup(Addr processId, Addr vAddr, bool mayUnlock, TLBResultMessage 
 				|| (vAddr > 0x550000 && vAddr  < 0x200000000)
 				|| (					vAddr >= 0x600000000)
 		){
-			DebugTLBWrite("Lookup request for %lu:0x%lX looped back, mapped to old-style Virtual Memory", processId, vAddr);
-			return loopback(processId, vAddr, res);
+			DebugTLBWrite("Lookup request for %lu:0x%lX looped back, mapped to old-style Virtual Memory", contextId, vAddr);
+			return loopback(contextId, vAddr, res);
 		}else{
 			throw exceptf<std::logic_error>("Address 0x%lX is both within TLB reserved space and is mapped to old-style Virtual Memory", vAddr);
 		}
 	}
 
-	RAddr rProcessId = RAddr(processId, getMMU().procAW());
+	RAddr rContextId = RAddr(contextId, getMMU().contextAW());
 	RAddr rVAddr = RAddr::truncateLsb(vAddr, getMMU().vAW(), m_tables[0]->getOffsetWidth());
 
-	DebugTLBWrite("Handling lookup request for %lu:0x%lX (%lu:0x%lX)", processId, rVAddr.m_value, processId, vAddr);
+	DebugTLBWrite("Handling lookup request for %lu:0x%lX (%lu:0x%lX)", contextId, rVAddr.m_value, contextId, vAddr);
 
-	return lookup(rProcessId, rVAddr, mayUnlock, res);
+	return lookup(rContextId, rVAddr, mayUnlock, res);
 }
 
-Result TLB::loopback(Addr /*processId*/, Addr vAddr, TLBResultMessage &res){
+Result TLB::loopback(Addr /*contextId*/, Addr vAddr, TLBResultMessage &res){
 	m_lastLine = nullptr;
 	res.pAddr = vAddr;
 	res.tlbOffsetWidth = 0;
@@ -214,10 +214,10 @@ Result TLB::loopback(Addr /*processId*/, Addr vAddr, TLBResultMessage &res){
 	return SUCCESS;
 }
 
-Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResultMessage &res){
+Result TLB::lookup(RAddr contextId, RAddr vAddr, bool mayUnlock, TLBResultMessage &res){
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
-	TlbLineRef ref = doLookup(processId, vAddr, LineTag::INDEXABLE);
+	TlbLineRef ref = doLookup(contextId, vAddr, LineTag::INDEXABLE);
 	Line* line = ref.m_line;
 	Table* table = ref.m_table;
 	if(line != NULL && line->present == false){
@@ -227,14 +227,14 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResultMessag
 		res.tlbOffsetWidth = 0;
 		res.pAddr = 0;
 		m_lastLine = line;
-		DebugTLBWrite("Lookup request for %lu:0x%lX is already pending...", processId.m_value, vAddr.m_value);
+		DebugTLBWrite("Lookup request for %lu:0x%lX is already pending...", contextId.m_value, vAddr.m_value);
 
 		return DELAYED;
 	}
 	if(line == NULL){
 		Addr tableLineId;
 
-		if(!m_tables[0]->storePending(processId, vAddr, tableLineId, line)){
+		if(!m_tables[0]->storePending(contextId, vAddr, tableLineId, line)){
 			DeadlockWrite("Unable to store pending entry in TLB");
 			return FAILED;
 		}
@@ -242,7 +242,7 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResultMessag
 		MgtMsg msg;
 		msg.type = (uint64_t)MgtMsgType::MISS;
 		msg.mReq.vAddr = vAddr.m_value;
-		msg.mReq.contextId = processId.m_value;
+		msg.mReq.contextId = contextId.m_value;
 		msg.mReq.lineIndex = tableLineId;
 		msg.mReq.tlbType = (uint64_t)manager::TlbType::DTLB;
 		msg.mReq.caller = m_ioDevId;
@@ -259,7 +259,7 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResultMessag
 		res.pAddr = 0;
 		m_lastLine = line;
 
-		DebugTLBWrite("Lookup request for %lu:0x%lX delayed, waiting for requested refill", processId.m_value, vAddr.m_value);
+		DebugTLBWrite("Lookup request for %lu:0x%lX delayed, waiting for requested refill", contextId.m_value, vAddr.m_value);
 		return Result::DELAYED;
 	}
 
@@ -275,7 +275,7 @@ Result TLB::lookup(RAddr processId, RAddr vAddr, bool mayUnlock, TLBResultMessag
 	m_lastLine = NULL;
 	return SUCCESS;
 
-	DebugTLBWrite("Lookup request for %lu:0x%lX success: 0x%lx, r=%d, w=%d", processId.m_value, vAddr.m_value, line->pAddr.m_value, line->read, line->write);
+	DebugTLBWrite("Lookup request for %lu:0x%lX success: 0x%lx, r=%d, w=%d", contextId.m_value, vAddr.m_value, line->pAddr.m_value, line->read, line->write);
 
 	return Result::SUCCESS;
 }
@@ -297,15 +297,15 @@ TLBResultMessage TLB::getLine(TlbLineRef lineRef){
 	return msg;
 }
 
-TlbLineRef TLB::doLookup(RAddr processId, RAddr vAddr, LineTag tag){
-	processId.strictExpect(getMMU().procAW());
+TlbLineRef TLB::doLookup(RAddr contextId, RAddr vAddr, LineTag tag){
+	contextId.strictExpect(getMMU().contextAW());
 	vAddr.strictExpect(m_tables[0]->getVAddrWidth());
 
 	TlbLineRef discoveredEntry{0,0}; //MLDTODO Remove after debugging
 
 	for(Table *table : m_tables){
 		RAddr truncatedAddr = vAddr.truncateLsb(vAddr.m_width - table->getVAddrWidth());
-		Line *line = table->lookup(processId, truncatedAddr, tag);
+		Line *line = table->lookup(contextId, truncatedAddr, tag);
 		if(line != NULL){
 			if(discoveredEntry.m_line != NULL){ //MLDTODO Remove after debugging
 				throw exceptf<std::domain_error>("vAddr %lX exists in multiple tables!", vAddr.m_value);
@@ -347,7 +347,7 @@ void TLB::setDCacheReference(unsigned dRef){
 
 Result TLB::onInvalidateMsg(MgtMsg &msg){
 	RAddr addr = RAddr(msg.iReq.vAddr, getMMU().vAW() - getMinOffsetWidth());
-	RAddr context = RAddr(msg.iReq.contextId, getMMU().procAW());
+	RAddr context = RAddr(msg.iReq.contextId, getMMU().contextAW());
 
 	if(msg.iReq.filterVAddr && msg.iReq.filterContext){
 		COMMITCLI{ invalidate(context, addr); }
@@ -403,22 +403,22 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 	RAddr pAddr = RAddr(msg.refill.pAddr, table->getPAddrWidth());
 	RAddr lineIndex = RAddr(msg.refill.lineIndex, m_tables[0]->getIndexWidth());
 	RAddr vAddr;
-	RAddr processId;
+	RAddr contextId;
 
 	if(msg.dRefill.present == 0){
 		bool res;
 		vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
-		processId = RAddr(0, getMMU().procAW());
+		contextId = RAddr(0, getMMU().contextAW());
 
-		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
+		res = m_tables[0]->getPending(lineIndex, contextId, vAddr, d$lineId);
 		if(!res){
 			throw exceptf<std::domain_error>("Cannot find pending tlb entry"); //MLDTODO Add information
 		}
-		DebugTLBWrite("Lookup request for %lu:0x%lX << %d failed: No page table entry", processId.m_value, vAddr.m_value, table->getOffsetWidth());
+		DebugTLBWrite("Lookup request for %lu:0x%lX << %d failed: No page table entry", contextId.m_value, vAddr.m_value, table->getOffsetWidth());
 
 		COMMIT{
 			//MLDTODO Generalise response to DCache to get rid of hacky TlbLineRef usage
-			cache.OnTLBLookupCompleted(d$lineId.m_value, TlbLineRef{(Line*)vAddr.m_value, (Table*)processId.m_value}, false);
+			cache.OnTLBLookupCompleted(d$lineId.m_value, TlbLineRef{(Line*)vAddr.m_value, (Table*)contextId.m_value}, false);
 		}
 		return SUCCESS;
 	}
@@ -426,17 +426,17 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 	TlbLineRef tlbLineRef;
 
 	if(tableId == 0){
-		DebugTLBWrite("Lookup request for %lu:0x%lX succeeded: placing in table 0", processId.m_value, vAddr.m_value);
+		DebugTLBWrite("Lookup request for %lu:0x%lX succeeded: placing in table 0", contextId.m_value, vAddr.m_value);
 		tlbLineRef.m_line = table->fillPending(lineIndex, msg.dRefill.read, msg.dRefill.write, pAddr, d$lineId);
 		tlbLineRef.m_table = table;
 	}else{
-		DebugTLBWrite("Lookup request for %lu:0x%lX succeeded: placing in table %d", processId.m_value, vAddr.m_value, tableId);
+		DebugTLBWrite("Lookup request for %lu:0x%lX succeeded: placing in table %d", contextId.m_value, vAddr.m_value, tableId);
 
 		bool res;
 		vAddr = RAddr(0, m_tables[0]->getVAddrWidth());
-		processId = RAddr(0, getMMU().procAW());
+		contextId = RAddr(0, getMMU().contextAW());
 
-		res = m_tables[0]->getPending(lineIndex, processId, vAddr, d$lineId);
+		res = m_tables[0]->getPending(lineIndex, contextId, vAddr, d$lineId);
 		if(!res){
 			DeadlockWrite("Cannot find pending TLB line at lineIndex %ld", lineIndex.m_value);
 			return FAILED;
@@ -444,7 +444,7 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 
 		vAddr = vAddr.truncateLsb(table->getOffsetWidth() - m_tables[0]->getOffsetWidth());
 
-		tlbLineRef.m_line = table->storeNormal(processId, vAddr, pAddr, msg.dRefill.read, msg.dRefill.write);
+		tlbLineRef.m_line = table->storeNormal(contextId, vAddr, pAddr, msg.dRefill.read, msg.dRefill.write);
 		tlbLineRef.m_table = table;
 		if(tlbLineRef.m_line == NULL){
 			// DeadlockWrite done in storeNormal
@@ -455,7 +455,7 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 
 	//MLDTODO-DOC Continuatie gegarandeerd zolang een line enkel vanaf netwerk gelocked kan worden. (Line van table <> 0 kan niet pending zijn)
 
-	//MLDTODO D$ locken / process claimen
+	//MLDTODO D$ locken / process claimen (later inzicht: D$ <> TLB zelfde process?)
 	COMMIT{
 		cache.OnTLBLookupCompleted(d$lineId.m_value, tlbLineRef, true);
 	}
@@ -481,11 +481,11 @@ void TLB::Cmd_Usage(std::ostream& out) const{
 	out << "Simulate incomming messages:\n";
 	out << "    From Pipeline:\n";
 	out << "         write sim-l(ookup)\n";
-	out << "            <processId> <vAddr> <mayUnlock>\n";
+	out << "            <contextId> <vAddr> <mayUnlock>\n";
 	out << std::endl;
 	out << "    From Manager:\n";
 	out << "         write sim-i(nvalidate)\n";
-	out << "            <filterPid> <ProcessId> <filterAddr> <Addr>\n";
+	out << "            <filterPid> <contextId> <filterAddr> <Addr>\n";
 	out << std::endl;
 	out << "         write sim-p(roperty)\n";
 	out << "            <ENABLED|MA> <value> [value]\n";
@@ -544,7 +544,7 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		msg.iReq.filterContext = arg.getBool(1);
 		msg.iReq.filterVAddr = arg.getBool(3);
 
-		msg.iReq.contextId = arg.getMAddr(2, getMMU().procAW());
+		msg.iReq.contextId = arg.getMAddr(2, getMMU().contextAW());
 		msg.iReq.vAddr = arg.getMAddr(4, getMMU().vAW());
 
 		Result res = onInvalidateMsg(msg);
@@ -576,7 +576,7 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		msg.type = (uint64_t)MgtMsgType::REFILL;
 		msg.refill.table = arg.getMAddr(1);
 		msg.refill.lineIndex = arg.getMAddr(2);
-		msg.refill.pAddr = arg.getMAddr(3, getMMU().procAW());
+		msg.refill.pAddr = arg.getMAddr(3, getMMU().contextAW());
 		msg.dRefill.read = arg.getBool(4);
 		msg.dRefill.write = arg.getBool(5);
 

@@ -2,6 +2,8 @@
 
 #include "MMU.h"
 #include <sim/log2.h>
+
+
 namespace Simulator {
 namespace drisc {
 namespace mmu {
@@ -13,7 +15,7 @@ m_vWidth(getMMU().vAW() - m_offsetWidth),
 m_pWidth(getMMU().pAW() - m_offsetWidth),
 m_numLines(GetConf("NumberOfLines", size_t)),
 m_evictionStrategy(getEvictionStrategy(GetConf("EvictionStrategy", std::string))),
-m_lines(m_numLines,	Line(getMMU().procAW(), m_vWidth, m_pWidth)),
+m_lines(m_numLines,	Line(getMMU().contextAW(), m_vWidth, m_pWidth)),
 m_head(NULL),
 m_tail(NULL),
 m_indexWidth(ilog2(m_numLines))
@@ -45,25 +47,25 @@ void Table::initStrategy(){
 	}
 }
 
-Line *Table::lookup(RAddr processId, RAddr vAddr, LineTag type){
-	processId.strictExpect(getMMU().procAW());
+Line *Table::lookup(RAddr contextId, RAddr vAddr, LineTag type){
+	contextId.strictExpect(getMMU().contextAW());
 	vAddr.strictExpect(m_vWidth);
 
-	Line* line = find(processId, vAddr, type);
+	Line* line = find(contextId, vAddr, type);
 	if(line != NULL) { setPrioHigh(*line); }
 
 	return line;
 }
 
 
-Line *Table::find(RAddr processId, RAddr vAddr, LineTag type){
-	processId.strictExpect(getMMU().procAW());
+Line *Table::find(RAddr contextId, RAddr vAddr, LineTag type){
+	contextId.strictExpect(getMMU().contextAW());
 	vAddr.strictExpect(m_vWidth);
 
 	auto lambda =
-			[&processId, &vAddr, &type]
+			[&contextId, &vAddr, &type]
 			(Line &line)
-			{return line.is(&processId, &vAddr, type);};
+			{return line.is(&contextId, &vAddr, type);};
 	return find(lambda);
 }
 
@@ -79,7 +81,7 @@ Line *Table::find(std::function<bool (Line&)> const &lambda)
 	return (res == m_lines.end())? NULL : &(*res);
 }
 
-bool Table::getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId){
+bool Table::getPending(RAddr tableLineId, RAddr &contextId, RAddr &vAddr, RAddr &d$LineId){
 	tableLineId.strictExpect(m_indexWidth);
 
 	Line &line = m_lines.at(tableLineId.m_value);
@@ -89,7 +91,7 @@ bool Table::getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr 
 	}
 
 	d$LineId = line.d$lineRef;
-	processId = line.processId;
+	contextId = line.contextId;
 	vAddr = line.vAddr;
 
 	return true;
@@ -107,10 +109,10 @@ void Table::releasePending(RAddr tableLineId){
 	}
 }
 
-Line* Table::storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write){
+Line* Table::storeNormal(RAddr contextId, RAddr vAddr, RAddr pAddr, bool read, bool write){
 	vAddr.strictExpect(m_vWidth);
 	pAddr.strictExpect(m_pWidth);
-	processId.strictExpect(getMMU().procAW());
+	contextId.strictExpect(getMMU().contextAW());
 
 	Line &dst = pickDestination();
 	if(dst.locked){
@@ -123,7 +125,7 @@ Line* Table::storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, b
 	COMMIT{
 		dst.present = true;
 		dst.locked = true;
-		dst.processId = processId;
+		dst.contextId = contextId;
 		dst.vAddr = vAddr;
 		dst.pAddr = pAddr;
 		dst.read = read;
@@ -154,11 +156,11 @@ Line* Table::fillPending(RAddr tableLineId, bool read, bool write, RAddr pAddr, 
 	return &line;
 }
 
-bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* &line){
-	processId.strictExpect(getMMU().procAW());
+bool Table::storePending(RAddr contextId, RAddr vAddr, Addr &tableLineId, Line* &line){
+	contextId.strictExpect(getMMU().contextAW());
 	vAddr.strictExpect(m_vWidth);
 
-	//line = find(processId, vAddr, LineTag::PENDING);
+	//line = find(contextId, vAddr, LineTag::PENDING);
 
 	//if(line == NULL){
 		line = &pickDestination();
@@ -171,7 +173,7 @@ bool Table::storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* 
 
 			line->present = false;
 			line->locked = true;
-			line->processId = processId;
+			line->contextId = contextId;
 			line->vAddr = vAddr;
 		}
 	//}
@@ -248,11 +250,11 @@ void Table::freeLines(){
 	std::for_each(m_lines.begin(), m_lines.end(), lambda);
 }
 
-void Table::freeLines(const RAddr &processId, const RAddr *vAddr){ //MLDTODO Document / find out why processId is ref and vAddr is pointer
+void Table::freeLines(const RAddr &contextId, const RAddr *vAddr){ //MLDTODO Document / find out why processId is ref and vAddr is pointer
 	auto lambda =
 			[&]
 			(Line &line)
-			{if(line.is(&processId, vAddr, LineTag::INDEXABLE)){freeLine(line);}};
+			{if(line.is(&contextId, vAddr, LineTag::INDEXABLE)){freeLine(line);}};
 	std::for_each(m_lines.begin(), m_lines.end(), lambda);
 }
 
@@ -274,7 +276,7 @@ Line::Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth):
 	accessed(false),
 	previous(NULL),
 	next(NULL),
-	processId(0,procWidth),
+	contextId(0,procWidth),
 	vAddr(0, vAddrWidth),
 	pAddr(0, pAddrWidth),
 	d$lineRef(0),
@@ -298,10 +300,10 @@ bool Line::is(LineTag cmp){
 	return (((unsigned)cmp) & ( 1 << type )) >> type;
 }
 
-bool Line::is(const RAddr *cmpProcessId, const RAddr *cmpVAddr, LineTag cmp)
+bool Line::is(const RAddr *cmpContextId, const RAddr *cmpVAddr, LineTag cmp)
 {
 	if(is(cmp)){
-		if(cmpProcessId == NULL || *cmpProcessId == this->processId){
+		if(cmpContextId == NULL || *cmpContextId == this->contextId){
 				if(cmpVAddr == NULL || *cmpVAddr == this->vAddr){
 					return true;
 				}
@@ -362,7 +364,7 @@ void Table::Cmd_Read(std::ostream& out,	const std::vector<std::string>& /* argum
 		out << " | Prev | Next";
 	}
 
-	out << " | " << left << setw(RAddr::getPrintWidth(getMMU().procAW())) << "Proc. ID";
+	out << " | " << left << setw(RAddr::getPrintWidth(getMMU().contextAW())) << "Proc. ID";
 	out << " | " << left << setw(RAddr::getPrintWidth(getVAddrWidth())) << "vAddr";
 	out << " | " << "Type-specific Fields";
 	out << endl;
@@ -389,7 +391,7 @@ void Table::Cmd_Read(std::ostream& out,	const std::vector<std::string>& /* argum
 			out << " | ";
 		}
 
-		out << line.processId << " | ";
+		out << line.contextId << " | ";
 		out << line.vAddr << " | ";
 
 		if(line.is(LineTag::FREE)){
@@ -448,7 +450,7 @@ void Table::Cmd_Write(std::ostream& out, const std::vector<std::string>& argumen
 		Line *line = &(m_lines[lineIndex]);
 
 		arg.namedSet("p", true, line->present);
-		arg.namedSet("pid", true, line->processId);
+		arg.namedSet("cid", true, line->contextId);
 		arg.namedSet("pa", true, line->pAddr);
 		arg.namedSet("l", true, line->locked);
 		arg.namedSet("va", true, line->vAddr);
@@ -476,7 +478,7 @@ void Table::Cmd_Usage_write_line(std::ostream& out) const{
 	out << "write line <lineId> <var=val>...:\n";
 	out << "    variables:\n";
 	out << "        p    Present\n";
-	out << "        pid  Process ID\n";
+	out << "        cid  Context ID\n";
 	out << "        pa   Physical Address\n";
 	out << "        prev Previous Line (Only for LRU tables)\n";
 	out << "        l    Locked\n";

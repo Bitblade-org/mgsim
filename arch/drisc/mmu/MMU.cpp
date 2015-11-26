@@ -13,7 +13,7 @@ MMU::MMU(const std::string& name, Object& parent, AddrWidth netAddrWidth)
 	: Object(name, parent),
 	m_pAddrWidth(GetTopConf("PhysicalAddressWidth", size_t)),
 	m_vAddrWidth(GetConf("VirtualAddressWidth", size_t)),
-	m_procAddrWidth(GetConf("ProcessIdWidth", size_t)),
+	m_contextAddrWidth(GetConf("ProcessIdWidth", size_t)),
 	m_netAddrWidth(netAddrWidth),
 	m_dtlb(0),
 	m_itlb(0)
@@ -28,7 +28,7 @@ void MMU::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*argument
     out << "The MMU blablabla\n\n";
     out << "   Virtual address width: "	<< unsigned(getVAddrWidth()) 	<< " bits\n";
     out << "  Physical address width: "	<< unsigned(getPAddrWidth()) 	<< " bits\n";
-    out << "        Process ID width: "	<< unsigned(getProcAddrWidth()) << " bits\n";
+    out << "        Process ID width: "	<< unsigned(getContextAddrWidth()) << " bits\n";
     out << "   Network address width: " << unsigned(getNetAddrWidth()) << " bits\n";
     out << "\n";
     out << "Supported operations:\n";

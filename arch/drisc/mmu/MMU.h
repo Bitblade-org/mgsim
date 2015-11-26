@@ -28,8 +28,8 @@ public:
     AddrWidth pAW() const {return getPAddrWidth();}
     AddrWidth getVAddrWidth() const {return m_vAddrWidth;}
     AddrWidth vAW() const {return getVAddrWidth();}
-    AddrWidth getProcAddrWidth() const {return m_procAddrWidth;}
-    AddrWidth procAW() const {return getProcAddrWidth();}
+    AddrWidth getContextAddrWidth() const {return m_contextAddrWidth;}
+    AddrWidth contextAW() const {return getContextAddrWidth();}
     AddrWidth getNetAddrWidth() const {return m_netAddrWidth;}
     AddrWidth netAW() const {return getNetAddrWidth();}
 
@@ -39,7 +39,7 @@ public:
 private:
     const AddrWidth	m_pAddrWidth;
     const AddrWidth	m_vAddrWidth;
-    const AddrWidth	m_procAddrWidth;
+    const AddrWidth	m_contextAddrWidth;
     const AddrWidth m_netAddrWidth;
     TLB*			m_dtlb;
     TLB*			m_itlb;

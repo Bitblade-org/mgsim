@@ -39,7 +39,7 @@ enum class LineTag : unsigned char {
 struct Line{
 	Line(AddrWidth procWidth, AddrWidth vAddrWidth, AddrWidth pAddrWidth);
 	bool is(const LineTag cmp);
-	bool is(const RAddr *processId, const RAddr *vAddr, const LineTag cmp);
+	bool is(const RAddr *contextId, const RAddr *vAddr, const LineTag cmp);
 	bool	present;
 	bool 	locked;
 
@@ -47,7 +47,7 @@ struct Line{
 	Line	*previous;
 	Line	*next;
 
-	RAddr	processId;
+	RAddr	contextId;
 	RAddr	vAddr;
 	RAddr	pAddr;
 
@@ -80,17 +80,17 @@ public:
     AddrWidth getPAddrWidth() const;
     AddrWidth getIndexWidth() const {return m_indexWidth;}
 
-Line *lookup(RAddr processId, RAddr vAddr, LineTag type);
+Line *lookup(RAddr contextId, RAddr vAddr, LineTag type);
 
-    bool getPending(RAddr tableLineId, RAddr &processId, RAddr &vAddr, RAddr &d$LineId);
+    bool getPending(RAddr tableLineId, RAddr &contextId, RAddr &vAddr, RAddr &d$LineId);
     void releasePending(RAddr tableLineId);
-    bool storePending(RAddr processId, RAddr vAddr, Addr &tableLineId, Line* &line);
+    bool storePending(RAddr contextId, RAddr vAddr, Addr &tableLineId, Line* &line);
     Line* fillPending(RAddr tableLineId, bool read, bool write, RAddr pAddr, RAddr &d$LineId);
-    Line* storeNormal(RAddr processId, RAddr vAddr, RAddr pAddr, bool read, bool write);
+    Line* storeNormal(RAddr contextId, RAddr vAddr, RAddr pAddr, bool read, bool write);
 
     //MLDTODO What to do when a locked entry matches an invalidation?
 	void freeLines();
-	void freeLines(const RAddr &processId, const RAddr *vAddr);
+	void freeLines(const RAddr &contextId, const RAddr *vAddr);
 
     void Cmd_Info (std::ostream& out, const std::vector<std::string>& arguments) const;
     void Cmd_Read (std::ostream& out, const std::vector<std::string>& arguments) const;
@@ -104,7 +104,7 @@ private:
 
     Line *find(const LineTag type);
     Line *find(std::function<bool (Line&)> const&);
-    Line *find(RAddr processId, RAddr vAddr, LineTag type);
+    Line *find(RAddr contextId, RAddr vAddr, LineTag type);
     Addr getIndex(const Line &line) const { return (Addr)(&line - &m_lines[0]); }
 
     void setPrioHigh(Line &entry);
