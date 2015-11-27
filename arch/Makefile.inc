@@ -78,6 +78,7 @@ PROCESSOR_SRC = \
 	arch/drisc/mmu/Table.h \
 	arch/drisc/mmu/TLB.cpp \
 	arch/drisc/mmu/TLB.h \
+	arch/drisc/mmu/iTLB.h \
         arch/drisc/ActionInterface.cpp \
         arch/drisc/ActionInterface.h \
 	arch/drisc/Allocator.cpp \

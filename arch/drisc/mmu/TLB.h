@@ -94,12 +94,13 @@ public:
 
     bool isEnabled() {return m_enabled;}
 
+    void GetDeviceIdentity(IODeviceIdentification& id) const;
+    const std::string& GetIODeviceName() const;
+
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
     void Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments) override;
     void Cmd_Usage(std::ostream& out) const;
 
-    const std::string& GetIODeviceName() const {return GetName();}
-    void GetDeviceIdentity(IODeviceIdentification& id) const {id = IODeviceIdentification{1,10,1};} //MLDTODO Figure out what this does
     void operator=(TLB&) = delete;
 private:
 	Result lookup(RAddr const contextId, RAddr const vAddr, bool mayUnlock, TLBResultMessage &res);

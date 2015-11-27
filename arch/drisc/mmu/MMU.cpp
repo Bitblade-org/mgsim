@@ -20,7 +20,7 @@ MMU::MMU(const std::string& name, Object& parent, AddrWidth netAddrWidth)
 {}
 
 void MMU::initializeIO(IOMessageInterface&	ioif){
-	m_itlb = new TLB("itlb", *this, ioif);
+	m_itlb = new iTLB("itlb", *this, ioif);
 	m_dtlb = new TLB("dtlb", *this, ioif);
 }
 

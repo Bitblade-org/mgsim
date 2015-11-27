@@ -29,8 +29,8 @@ namespace Simulator
         { {   1,  7,  1 }, "UART" },
         { {   1,  8,  1 }, "RPC" },
 		{ {   1,  9,  1 }, "JTAG"},  //MLDTODO Remove after testing
-		{ {   1, 10,  0 }, "iTLB"},
-		{ {   1, 10,  1 }, "dTLB"},
+		{ {   1, 10,  1 }, "iTLB"},
+		{ {   1, 11,  1 }, "dTLB"},
         { {   0,  0,  0 }, NULL }
     };
 

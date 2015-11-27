@@ -61,6 +61,7 @@ TLB::TLB(const std::string& name, Object& parent, IOMessageInterface& ioif)
     m_receiving.Sensitive(p_receive);
 
     std::cout << "TLB " << GetName() << " initialised with IO devID " << m_ioDevId << std::endl;
+    RegisterModelObject(*this, "dTlb");
 }
 
 TLB::~TLB(){
@@ -444,6 +445,19 @@ Result TLB::onStoreMsg(MgtMsg &msg){
 	return Result::SUCCESS;
 }
 
+void TLB::GetDeviceIdentity(IODeviceIdentification& id) const
+{
+    if (!DeviceDatabase::GetDatabase().FindDeviceByName("MGSim", "dTLB", id))
+    {
+    	DeviceDatabase::GetDatabase().Print(std::cout);
+        throw InvalidArgumentException(*this, "Device identity not registered");
+    }
+}
+
+const std::string& TLB::GetIODeviceName() const
+{
+    return GetName();
+}
 
 void TLB::Cmd_Info(std::ostream& out, const std::vector<std::string>& /* arguments */) const{
     //MLDTODO Display statistics
@@ -567,29 +581,6 @@ void TLB::Cmd_Write(std::ostream& out, const std::vector<std::string>& arguments
 		Cmd_Usage(out);
 	}
 }
-
-//unsigned TLBResult::dcacheReference(unsigned ref) {
-//	assert(m_line && !m_line->present);
-//	unsigned old = m_line->d$lineRef;
-//	m_line->d$lineRef = ref;
-//	return old;
-//}
-//
-//Addr TLBResult::vAddr() {
-//	assert(m_line);
-//	//MLDTODO Hack to allow for 64-bit addresses
-//	int offset = m_mmu->vAW() - m_line->vAddr.m_width;
-//	offset = offset < 0 ? 0 : offset;
-//	return (m_line->vAddr << (offset)).m_value;
-//}
-//
-//Addr TLBResult::pAddr() {
-//	assert(m_line && m_line->present);
-//	//MLDTODO Hack to allow for 64-bit addresses
-//	int offset = m_mmu->pAW() - m_line->pAddr.m_width;
-//	offset = offset < 0 ? 0 : offset;
-//	return (m_line->pAddr << offset).m_value;
-//}
 
 } /* namespace mmu */
 } /* namespace drisc */

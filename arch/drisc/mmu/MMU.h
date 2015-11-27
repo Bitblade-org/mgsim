@@ -9,6 +9,7 @@
 #include "../../../sim/inspect.h"
 #include "../../simtypes.h"
 #include "TLB.h"
+#include "iTLB.h"
 
 namespace Simulator {
 namespace drisc {
