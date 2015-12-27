@@ -494,7 +494,7 @@ void Pipeline::ExecuteStage::ExecMemoryControl(Integer value, int command, int f
         cpu.UnmapMemory(value, req_size);
         break;
     case 2:
-        cpu.MapMemory(value, req_size, cpu.ReadASR(ASR_PID));
+        cpu.MapMemory(value, req_size, cpu.ReadASR(ASR_PID)); //MLDNOTE ContextID
         break;
     case 3:
         if (flags == 0)

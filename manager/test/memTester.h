@@ -13,8 +13,9 @@
 #include "../defines.h"
 #include "../pagetable.h"
 #include "../PTBuilder.h"
+#include "../syscall.h"
 
-sl_decl(memTester, , );
+sl_decl(memTester,, sl_shparm(sl_place_t, syscall_gateway));
 
 void createPageEntries(int contextId, void* ptsPBase, pt_t** next_table, size_t* free);
 void writeStartingData();

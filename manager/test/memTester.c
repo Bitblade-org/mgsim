@@ -1,6 +1,9 @@
 #include "memTester.h"
 
-sl_def(memTester, , ) {
+sl_def(memTester,, sl_shparm(sl_place_t, syscall_gateway)) {
+	sl_place_t syscall_gateway = sl_getp(syscall_gateway);
+	syscall_target(&syscall_gateway);
+
     sl_index(i);
     unsigned pid = get_current_place();
     unsigned core_id = get_core_id();
@@ -16,6 +19,9 @@ sl_def(memTester, , ) {
     output_char('\n', 2);
 
     run(0);
+
+    //Let the compiler know we care
+	sl_setp(syscall_gateway, sl_getp(syscall_gateway));
 }
 sl_enddef
 

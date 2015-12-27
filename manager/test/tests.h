@@ -36,6 +36,7 @@ void printTestEnd(result_t *result, char quiet, char name[]);
 void printString(char text[], char quiet);
 void pad();
 
+void testSyscall(result_t *result, char abort, char quiet);
 void testQuickPageAlignedRW (result_t *result, char abort, char quiet);
 void testNotLineAlignedR(result_t *result, char abort, char quiet);
 void testNotLineAlignedRW(result_t *result, char abort, char quiet);

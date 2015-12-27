@@ -1,8 +1,74 @@
 #include "main.h"
 
-//MLDTODO "slc -b mta - -I/home/nijntje/mgsim_install/share/mgsim/ main.o manager.o memreader.o pagetable.o PTBuilder.o pt_index.o -o boot.bin" does not return or only after a very long time. Note the extra "-"
+#include <mtconf.h>
+#include <stddef.h>
+#include <svp/delegate.h>
+#include <svp/testoutput.h>
+
+#include "defines.h"
+#include "MgtMsg.h"
+#include "pagetable.h"
+
+
+void enu(void){
+    size_t i, j;
+
+	/* ensure that we are connected to I/O */
+    	struct mg_io_info ioInfo;
+
+	    get_io_info(&ioInfo);
+
+
+	    mg_devinfo.nchannels = ioInfo.n_chans;
+	    mg_devinfo.channels = ioInfo.pnc_base;
+	    mg_io_place_id = get_local_place();
+	    mg_devinfo.ndevices = ioInfo.smc_nr_iodevs;
+
+	    struct mg_device_id _dev_ids[ioInfo.smc_nr_iodevs];
+	    struct mg_device_id *devenum = &_dev_ids[0];
+	    void *_dev_addrs[ioInfo.smc_nr_iodevs];
+
+	    for (i = 0; i < ioInfo.smc_nr_iodevs; ++i)
+	        devenum[i] = (((struct mg_device_id*)ioInfo.smc) + 1)[i];
+
+	    mg_devinfo.enumeration = devenum;
+		output_string("* I/O enumeration data at 0x", 2);
+		output_hex(devenum, 2);
+		output_char('.', 2);
+		output_ts(2);
+		output_char('\n', 2);
+
+	    /* set up the device base addresses */
+
+	    void **addrs = &_dev_addrs[0];
+
+	    for (i = 0; i < ioInfo.smc_nr_iodevs; ++i)
+	    {
+	        addrs[i] = ioInfo.aio_base + ioInfo.aio_dev_sz * i;
+	    }
+	    mg_devinfo.base_addrs = addrs;
+
+	    /* detect the devices */
+
+	    for (i = 0; i < ioInfo.smc_nr_iodevs; ++i)
+	    {
+	        printf("Detected: %d,%d,%d\n", devenum[i].provider, devenum[i].model, devenum[i].revision);
+	    }
+}
+
+int get_DTLB_id(struct mg_io_info* ioInfo, size_t core_id){
+	struct mg_device_id search;
+	search.provider = 1;
+	search.model = 11;
+	search.revision = 1;
+	return find_core_device(ioInfo, core_id, &search);
+}
 
 int main(void) {
+	struct mg_io_info ioInfo;
+
+    get_io_info(&ioInfo);
+
 	printf("Running OS on IO Addr %u\n", getIOAddr());
 
 	pt_t* next_table;
@@ -21,12 +87,10 @@ int main(void) {
     // Place id 1 means: Same core, but size 1
     unsigned manager_pid = 1;
 
-    sl_create(,manager_pid,,,,,,manager_init,
-    		sl_sharg(unsigned, channel0, MANAGER_CHANNEL)
-			);
+    sl_create(,manager_pid,,,,,,dispatcher_init,sl_sharg(unsigned, channel0, MANAGER_CHANNEL));
     sl_sync();
 
-    sl_create(,manager_pid,,,,,,manager,
+    sl_create(,manager_pid,,,,,,dispatcher,
     		sl_sharg(unsigned,,MANAGER_CHANNEL),
 			sl_sharg(uint64_t,,(uint64_t)PTS_PBASE)
 			);
@@ -36,7 +100,6 @@ int main(void) {
 	for(int i=0; i<2000; i++){
 		asm("NOP");
 	} // Just so all initialisation printf's from manager have been printed
-
 
 	/*
 	 * ---===[ Reserve and initialise a nice cosy core ]===---
@@ -69,7 +132,7 @@ int main(void) {
 		sl_create(,1,,,,,,tlbEnable,
 				sl_sharg(unsigned,, MANAGER_CHANNEL),
 				sl_sharg(unsigned,, getIOAddr()), //p=1, so this runs on the same core as main
-				sl_sharg(unsigned,, p_io + 2) //if the core has io address 5, the iTLB will be 6 and the dTLB 7
+				sl_sharg(unsigned,, get_DTLB_id(&ioInfo, p_io)) //if the core has io address 5, the iTLB will be 6 and the dTLB 7
 				);						//MLDTODO Raphael is going to claim I can't count on that
 		sl_sync();
 
@@ -93,7 +156,8 @@ int main(void) {
 	 * ---===[ Run memreader ]===---
 	 */
 
-	sl_create(,p,,,,,,memTester);
+	sl_create(,p,,,,,,
+			memTester, sl_sharg(sl_place_t, syscall_gateway, get_current_place()));
 	sl_sync();
 
 	svp_abort();

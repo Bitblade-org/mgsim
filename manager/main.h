@@ -10,11 +10,13 @@
 #include <svp/abort.h>
 #include <svp/sep.h>
 
+#include "dispatcher.h"
 #include "mgsim.h"
 #include "PTBuilder.h"
 #include "manager.h"
 #include "test/memTester.h"
 #include "pt_index.h"
+#include "IO.h"
 
 
 sl_decl(tlbEnable,,
@@ -54,6 +56,7 @@ union asr_param1{
 
 int main(void);
 unsigned getIOAddr(void);
+int get_DTLB_id(struct mg_io_info* ioInfo, size_t core_id);
 void init_manager(void);
 void init_memreader(void);
 

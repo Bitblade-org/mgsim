@@ -12,45 +12,44 @@ TESTS= \
 	unalignedRW.c \
 	smallPageBoundaries.c \
 	mediumPageBoundaries.c \
-	notPageAligned.c
-HEADERS=defines.h main.h manager.h MgtMsg.h pagetable.h PTBuilder.h pt_index.h test/memTester.h test/tests.h
-SOURCES=main.c manager.c pagetable.c PTBuilder.c pt_index.c test/memTester.c test/tests.c $(addprefix test/, $(TESTS)) 
+	notPageAligned.c \
+	syscall_test.c
+HEADERS=defines.h main.h manager.h MgtMsg.h pagetable.h PTBuilder.h pt_index.h \
+	IO.h syscall_gateway.h syscall.h SysCallMsg.h dispatcher.h mgt_io.h \
+	test/memTester.h test/tests.h
+SOURCES=main.c manager.c pagetable.c PTBuilder.c pt_index.c IO.c syscall.c \
+	syscall_gateway.c dispatcher.c mgt_io.c \
+	test/memTester.c test/tests.c $(addprefix test/, $(TESTS)) 
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=boot.bin
 CFLAGS=-O1 -Werror
 #-Wa,-adhln
 
 all: boot.bin
-    
-boot.bin: require-MGSIM_INCLUDE $(OBJECTS) $(HEADERS)
+
+boot.bin: $(OBJECTS) $(HEADERS)
+  ifndef MGSIM_INCLUDE
+    $(error MGSIM_INCLUDE is required)
+  endif
 	$(CC) $(SLCFLAGS) $(LDFLAGS) $(INCLUDE) -I$(MGSIM_INCLUDE) $(OBJECTS) -o $@
-	
-%.o: require-MGSSIM_INCLUDE %.c $(HEADERS)
-	echo $(MGSIM_INCLUDE)
+
+%.o: %.c $(HEADERS)
+  ifndef MGSIM_INCLUDE
+    $(error MGSIM_INCLUDE is required)
+  endif
 	$(CC) -c $(SLCFLAGS) $(CFLAGS) $(INCLUDE) -I$(MGSIM_INCLUDE) $< -o $@
 
-$(PREFIX)/boot.bin: require-PREFIX boot.bin 
+$(PREFIX)/boot.bin: boot.bin
+  ifndef PREFIX
+    $(error PREFIX is required)
+  endif
 	cp --verbose ./boot.bin $(PREFIX)/boot.bin
 
-clean: 
+clean:
 	rm *.o
 	rm boot.bin
-	
-install: $(PREFIX)/boot.bin require-PREFIX
 
-require-PREFIX:
-  ifndef PREFIX
-	$(error PREFIX is required)
-  endif
+install: $(PREFIX)/boot.bin
 
-require-MGSIM_INCLUDE:
-  ifndef MGSIM_INCLUDE
-	$(error MGSIM_INCLUDE is required)
-  endif
-
-#require-%:
-#  ifdef $*
-#	$(error $* is required)
-#  endif
-	
-.phony: install	clean require-PREFIX require-MGSIM_INCLUDE
+.SUFFIXES:
+.phony: install	clean

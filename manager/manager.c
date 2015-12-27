@@ -1,110 +1,39 @@
-#include "manager.h"
+u#include "manager.h"
 
 #include <svp/abort.h>
 
+sl_def(manager_handle,, sl_shparm(pt_t*, pt0), sl_shparm(MgtMsg_t*, msg), sl_shparm(int, result)){
+	pt_t* 		pt0 	= sl_getp(pt0);
+	MgtMsg_t*	mgtMsg  = sl_getp(msg);
 
-sl_def(manager_init,,sl_shparm(unsigned, channel)){
-	volatile uint64_t* cPtr = &(mg_devinfo.channels[sl_getp(channel)]);
+	sl_setp(result, handleMsg(pt0, mgtMsg));
 
-	//Tell cpu.io_if.nmux that we want to receive notifications for this channel
-	*cPtr = 1;
-
-	// To stop compiler from whining
-	sl_setp(channel, sl_getp(channel));
+	//Make sure the compiler knows we know it's weakness
+	sl_getp(result);
+	sl_setp(pt0, pt0);
+	sl_setp(msg, mgtMsg);
 }
-sl_enddef;
+sl_enddef
 
-sl_def(manager, , sl_shparm(unsigned, channel), sl_shparm(uint64_t, pt0)) {
-    sl_index(i);
-
-	first_pt((pt_t*)sl_getp(pt0));
-    int res = manager_main(sl_getp(channel));
-    PRINT_STRING("Manager failed with error code ");
-    PRINT_INT(res);
-    svp_abort();
-
-	// To stop compiler from whining
-    sl_setp(channel, sl_getp(channel));
-    sl_setp(pt0, sl_getp(pt0));
-}
-sl_enddef;
-
-
-int manager_main(unsigned channelNr){
-	volatile uint64_t *channel = &(mg_devinfo.channels[channelNr]);
-	//Channel already initialised by manager_init.
-
-	MgtMsg_t msgBuffer;
-	int result;
-
-	while(1){
-		result = receive_net_msg(&msgBuffer, channel);
-		if(result == 0)	{ continue; }
-		if(result < 0)  { return result; } //A whoopsie occurred
-
-		result = handleMsg(&msgBuffer);
-		if(result < 0)	{ return result; } //A whoopsie occurred
-	}
-
-}
-
-int receive_net_msg(MgtMsg_t* const msg, volatile uint64_t* from){
-	msg->data.part[1] = *from;
-	msg->data.part[0] = *from;
-
-	return 1;
-}
-
-int send_net_msg(MgtMsg_t* const msg, volatile uint64_t* dst){
-	dst[1] = msg->data.part[1];
-	dst[0] = msg->data.part[0];
-	return 1;
-}
-
-
-pt_t* first_pt(pt_t* ptr){
-	static pt_t* pointer;
-
-	if(ptr != NULL){
-		pointer = ptr;
-	}
-
-	return pointer;
-}
-
-int handleMsg(MgtMsg_t* msg){
+int handleMsg(pt_t* pt0, MgtMsg_t* msg){ //MLDTODO Move out of exclusive
 	if(msg->type == MISS){
-		return handleMiss(msg);
+		return handleMiss(pt0, msg);
 	}
 	if(msg->type == INV){
-		return handleInvalidation(msg);
-	}
-	if(msg->type == SET && msg->set.property == SET_PT_ON_MGT){
-		return handleSetPT(msg);
+		return handleInvalidation(pt0, msg);
 	}
 
 	return (0 - 8) - msg->type;
 }
 
-int handleSetPT(MgtMsg_t* msg){
-	PRINT_STRING("Setting PT pointer from ");
-	PRINT_HEX(get_pointer(NULL));
-	PRINT_STRING(" to ");
-	PRINT_HEX((void*)msg->data.part[2]);
-	PRINT_CHAR('\n');
-
-	get_pointer((pte_t*)msg->set.val0);
-	return 1;
-}
-
-int handleInvalidation(MgtMsg_t* req){
+int handleInvalidation(pt_t* pt0, MgtMsg_t* req){
 	(void)(req);
 	PRINT_STRING("handleInvalidation called. Not implemented...\n");
 	//MLDTODO Implement!
 	return 1;
 }
 
-int handleMiss(MgtMsg_t* msg){
+int handleMiss(pt_t* pt0, MgtMsg_t* msg){
 	PRINT_STRING("\nHandling miss for context:");
 	PRINT_UINT(msg->mReq.contextId);
 	PRINT_STRING(", addr:");
@@ -115,7 +44,7 @@ int handleMiss(MgtMsg_t* msg){
 	PRINT_UINT(msg->mReq.lineIndex);
 	PRINT_CHAR('\n');
 	PRINT_STRING("Using pagetable start ptr: ");
-	PRINT_HEX(first_pt(NULL));
+	PRINT_HEX(pt0);
 	PRINT_CHAR('\n');
 
 
@@ -132,7 +61,7 @@ int handleMiss(MgtMsg_t* msg){
 
 	pte_t* entry;
 	unsigned levels;
-	int result = walkPageTable(addr, (VADDR_WIDTH - VADDR_LSO) + CONTEXTID_WIDTH, &entry, &levels);
+	int result = walkPageTable(pt0, addr, (VADDR_WIDTH - VADDR_LSO) + CONTEXTID_WIDTH, &entry, &levels);
 	PRINT_STRING("Walk result: (");
 	PRINT_INT(result);
 	PRINT_STRING(") Levels: ");
@@ -169,10 +98,10 @@ int handleMiss(MgtMsg_t* msg){
  * Returns a pointer to the entry.
  * use getPointer(entry) to get the full address from the entry.
  */
-int walkPageTable(uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
+int walkPageTable(pt_t* pt0, uint64_t addr, size_t len, pte_t** entry, unsigned* levels){
 	print_pt_index(addr);
 
-	pt_t* t = first_pt(NULL);
+	pt_t* t = pt0;
 	*levels = 0;
 
 	while(len >= PT_INDEX_WIDTH){

@@ -1,11 +1,15 @@
 #include "tests.h"
 
+#include <svp/abort.h>
+
 void run(char abort){
 	runAll(NULL, abort);
 }
 
 void runAll(result_t* result, char abort){
+	svp_abort();
 	runTest(&testQuickPageAlignedRW, "Small Page Aligned RW", result, abort, 1);
+	svp_abort();
 	runTest(&testNotLineAlignedR, "Not line aligned R", result, abort, 1);
 	runTest(&testNotLineAlignedRW, "Not line aligned RW", result, abort, 1);
 	runTest(&testLineBoundariesR, "Line boundaries R", result, abort, 1);
@@ -18,7 +22,7 @@ void runAll(result_t* result, char abort){
 	runTest(&testNotSmallPageAligned64RW, "Not page aligned RW (small page, 64 bits)", result, abort, 1);
 	runTest(&testNotMediumPageAligned4096RW, "Not page aligned RW (medium page, 64 bits per 4096 bytes)", result, abort, 1);
 	runTest(&testNotLargePageAligned2MRW, "Not page aligned RW (large page, 64 bits per 2MiB)", result, abort, 1);
-
+	runTest(&testSyscall, "Syscall test", result, abort, 1);
 }
 
 void runTest(test_t test, char name[], result_t* result, char abort, char quiet){

@@ -3,17 +3,17 @@
 
 #ifdef __cplusplus
 #	include <cstdint>
-#	define MGT_ENUM(name) enum class name : uint64_t
-#	define MGT_UNION(name, contents) union name{contents};
+#	define MSG_ENUM(name) enum class name : uint64_t
+#	define MSG_UNION(name, contents) union name{contents};
 	namespace manager{
 #else
 #	include <stddef.h>
 #	include <stdint.h>
-#	define MGT_ENUM(name) enum name
-#	define MGT_UNION(name, contents) typedef union {contents}name ## _t;
+#	define MSG_ENUM(name) enum name
+#	define MSG_UNION(name, contents) typedef union {contents}name ## _t;
 #endif
 
-MGT_ENUM(MgtMsgType){
+MSG_ENUM(MgtMsgType){
 	NO_MSG		= 0,
 	MISS 		= 1,
 	INVALIDATE 	= 2,
@@ -22,12 +22,12 @@ MGT_ENUM(MgtMsgType){
 	SET         = 5,
 };
 
-MGT_ENUM(TlbType){
+MSG_ENUM(TlbType){
 	ITLB	= 0,
 	DTLB	= 1
 };
 
-MGT_ENUM(SetType){
+MSG_ENUM(SetType){
 	SET_PT_ON_MGT 		= 0,
 	SET_MGT_ADDR_ON_TLB = 1,
 	SET_STATE_ON_TLB 	= 2
@@ -103,7 +103,7 @@ struct Set {
 	uint64_t val0;			 //128 - Not always present for SET messages
 };
 
-MGT_UNION(MgtMsg,
+MSG_UNION(MgtMsg,
 	uint64_t		 			type:3;
 	struct MgtMsgData			data;
 	struct MissRequest			mReq;
@@ -114,8 +114,8 @@ MGT_UNION(MgtMsg,
 	struct Set					set;
 )
 
-#undef MGT_ENUM
-#undef MGT_UNION
+#undef MSG_ENUM
+#undef MSG_UNION
 #ifdef __cplusplus
 } /* namespace manager */
 #endif
