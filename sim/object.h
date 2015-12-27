@@ -70,7 +70,7 @@ namespace Simulator
         /// Get a child of the object. @param i the index of the child. @return the child at index i.
         Object*            GetChild(int i)  const { return m_children[i]; }
         /// Get the object fully qualified name. @return the object name.
-        const std::string& GetName()   const { return m_name; }
+        inline const std::string& GetName()   const { return m_name; }
 
         /**
          * @brief Writes simulator debug output.
@@ -134,7 +134,7 @@ namespace Simulator
 
 // Define these "methods" as macros to allow for optimizations
 #define DebugDo_(CAT, msg, ...) \
-		do { COMMIT if ((GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT)) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false) //MLDTODO HAAAACK
+		do { COMMIT if ((GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT) && GetKernel()->TestDebugFilter(GetName())) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false)
 
     //do { COMMIT if ((GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT) && (GetName().at(3) >= ('0' + 4))) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false) //MLDTODO HAAAACK
 

@@ -345,6 +345,11 @@ namespace Simulator
         m_debugMode ^= flags;
     }
 
+    void Kernel::SetDebugFilter(std::string filter)
+    {
+    	m_debugFilter = filter;
+    }
+
     void
     Kernel::RegisterProcess(Process& p)
     {
@@ -361,6 +366,7 @@ namespace Simulator
           m_activeClocks(NULL),
           m_phase(PHASE_COMMIT),
           m_debugMode(0),
+		  m_debugFilter(""),
           m_aborted(false),
           m_suspended(false),
           m_config(NULL),

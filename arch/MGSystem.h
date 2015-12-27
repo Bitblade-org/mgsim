@@ -69,6 +69,10 @@ namespace Simulator {
         void SetDebugMode(int mode) { GetKernel()->SetDebugMode(mode); }
         void ToggleDebugMode(int mode) { GetKernel()->ToggleDebugMode(mode); }
 
+        // Get or set the debug filter
+        std::string GetDebugFilter() const { return GetKernel()->GetDebugFilter(); }
+        void SetDebugFilter(std::string filter) { GetKernel()->SetDebugFilter(filter); }
+
         uint64_t GetOp() const;
         uint64_t GetFlop() const;
 

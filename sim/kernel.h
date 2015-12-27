@@ -72,6 +72,7 @@ public:
 
         CyclePhase          m_phase;        ///< Current sub-cycle phase of the simulation.
         int                 m_debugMode;    ///< Bit mask of enabled debugging modes.
+        std::string			m_debugFilter;	///< Component name mask of desired debug messages.
         bool                m_aborted;      ///< Should the run be aborted?
         bool                m_suspended;    ///< Should the run be suspended?
 
@@ -173,6 +174,27 @@ public:
          * @return the current debug flags.
          */
         inline int GetDebugMode() const { return m_debugMode; }
+
+        /**
+         * Sets the debug filter.
+         * @param filter the debug filter to set.
+         */
+        void SetDebugFilter(std::string filter);
+
+        /**
+         * Gets the current debug filter.
+         * @return the current debug filter.
+         */
+        inline std::string GetDebugFilter() const { return m_debugFilter; }
+
+        /**
+         * Tests against the current filter.
+         * @param other The string to test.
+         * @return the result of the test.
+         */
+        inline bool TestDebugFilter(std::string other) const {
+        	return (other.compare(0, m_debugFilter.size(), m_debugFilter) == 0);
+        }
 
         /**
          * @brief Advances the simulation.
