@@ -6,22 +6,24 @@ using namespace std;
 bool cmd_trace_show(const vector<string>& /*command*/, vector<string>& /*args*/, cli_context& ctx)
 {
     string debugStr;
+    string complement;
     int m = ctx.sys.GetDebugMode();
-    if (m & Kernel::DEBUG_PROG)     debugStr += " prog";
-    if (m & Kernel::DEBUG_SIM)      debugStr += " sim";
-    if (m & Kernel::DEBUG_DEADLOCK) debugStr += " deadlocks";
-    if (m & Kernel::DEBUG_FLOW)     debugStr += " flow";
-    if (m & Kernel::DEBUG_MEM)      debugStr += " mem";
-    if (m & Kernel::DEBUG_IO)       debugStr += " io";
-    if (m & Kernel::DEBUG_REG)      debugStr += " regs";
-    if (m & Kernel::DEBUG_NET)      debugStr += " net";
-    if (m & Kernel::DEBUG_IONET)    debugStr += " ionet";
-    if (m & Kernel::DEBUG_FPU)      debugStr += " fpu";
-    if (m & Kernel::DEBUG_PIPE)     debugStr += " pipe";
-    if (m & Kernel::DEBUG_MEMNET)   debugStr += " memnet";
-    if (m & Kernel::DEBUG_TLB)      debugStr += " tlb";
+    if (m & Kernel::DEBUG_PROG)     debugStr += " prog";		else complement += " prog";
+    if (m & Kernel::DEBUG_SIM)      debugStr += " sim";			else complement += " sim";
+    if (m & Kernel::DEBUG_DEADLOCK) debugStr += " deadlocks";	else complement += " deadlocks";
+    if (m & Kernel::DEBUG_FLOW)     debugStr += " flow";		else complement += " flow";
+    if (m & Kernel::DEBUG_MEM)      debugStr += " mem";			else complement += " mem";
+    if (m & Kernel::DEBUG_IO)       debugStr += " io";			else complement += " io";
+    if (m & Kernel::DEBUG_REG)      debugStr += " regs";		else complement += " regs";
+    if (m & Kernel::DEBUG_NET)      debugStr += " net";			else complement += " net";
+    if (m & Kernel::DEBUG_IONET)    debugStr += " ionet";		else complement += " ionet";
+    if (m & Kernel::DEBUG_FPU)      debugStr += " fpu";			else complement += " fpu";
+    if (m & Kernel::DEBUG_PIPE)     debugStr += " pipe";		else complement += " pipe";
+    if (m & Kernel::DEBUG_MEMNET)   debugStr += " memnet";		else complement += " memnet";
+    if (m & Kernel::DEBUG_TLB)      debugStr += " tlb";			else complement += " tlb";
     if (!debugStr.size()) debugStr = " (nothing)";
     cout << "Tracing enabled for:" << debugStr << endl;
+    cout << "Available:" << complement << endl;
     cout << "Trace filter: '" << ctx.sys.GetDebugFilter() << "'" << endl;
     return false;
 }

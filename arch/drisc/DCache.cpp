@@ -193,28 +193,16 @@ DCache::Line* DCache::findLine(size_t setIndex, size_t pTag, Line* ignore){
 }
 
 Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
-//	size_t pos = GetName().find('.');
-	//unsigned cpuId = std::stoul(GetName().substr(3, pos-3));
     ContextId contextId = 0; //MLDTODO Figure out where to get contextid from
-
-	COMMIT{
-		//if((address >> 63) == 0 ){//|| cpuId > 3){ //Ignore TLS
-			//if(cpuId > 3){
-    	DebugMemWrite("Read: address: 0x%lX, size:%lu", address, size);
-			//}
-		//}
-	}
 
 	Result result = Read2(contextId, address, data, size, reg);
 
 	COMMIT{
-		//if(cpuId > 3){
 			if(result == SUCCESS){
 				DebugMemWrite("Read: address: 0x%lX, size:%lu, result: %s, data: 0x%lX", address, size, resultStr(result).c_str(), *((uint64_t*)data));
 			}else{
 				DebugMemWrite("Read: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
 			}
-		//}
 	}
 	return result;
 }
@@ -222,29 +210,12 @@ Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
 
 ExtendedResult DCache::Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid)
 {
-//	size_t pos = GetName().find('.');
-	//unsigned cpuId = std::stoul(GetName().substr(3, pos-3));
     ContextId contextId = 0; //MLDTODO Figure out where to get contextid from
 
-	COMMIT{
-		//if((address >> 63) == 0 ){//|| cpuId > 3){ //Ignore TLS
-			//if(cpuId > 3){
-    		DebugMemWrite("Write: address: 0x%lX, size:%lu, data: 0x%lX", address, size, *((uint64_t*)data));
-			//}
-		//}
-	}
-
 	ExtendedResult result = Write2(contextId, address, data, size, fid, tid);
-//	COMMIT{
-//		if((address | 0xff) == 0x801fffffffffffff){
-//			std::cout << std::dec << GetKernel()->GetCycleNo() << ": write naar 0x" << std::hex << address << "! Data:0x" << std::hex << *((uint64_t*)data) << ", component:" << GetName() << std::dec << std::endl;
-//		}
-//	}
 
 	COMMIT{
-		//if(cpuId > 3){
-			DebugMemWrite("Write: address: 0x%lX, size:%lu, result: %s", address, size, resultStr(result).c_str());
-		//}
+			DebugMemWrite("Write: address: 0x%lX, size:%lu, data: 0x%lx, result: %s", address, size, *((uint64_t*)data), resultStr(result).c_str());
 	}
 	return result;
 }

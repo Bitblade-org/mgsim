@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include <svp/abort.h>
 
-#include "SysCallMsg.h"
-#include "syscall.h"
+#include "../clientLib/syscall.h"
 #include "debug.h"
+#include "SysCallMsg.h"
 
 
 sl_decl(syscall_listener_init);

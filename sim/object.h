@@ -132,7 +132,7 @@ namespace Simulator
 #define COMMIT  if (IsCommitting())
 #define COMMITCLI if(IsCommitting() || GetKernel()->GetActiveProcess() == NULL)
 
-// Define these "methods" as macros to allow for optimizations
+// Define these "methods" as macros to allow for optimizations //MLDTODO fnmatch (c lib)
 #define DebugDo_(CAT, msg, ...) \
 		do { COMMIT if ((GetKernel()->GetDebugMode() & Kernel::DEBUG_##CAT) && GetKernel()->TestDebugFilter(GetName())) DebugSimWrite_(msg, ##__VA_ARGS__); } while(false)
 
