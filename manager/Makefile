@@ -35,9 +35,11 @@ CFLAGS=-O1 -Werror
 all: boot.bin
 
 lib/libpt.a: $(OBJECTS_PT)
+	mkdir -p lib
 	$(AR) $(ARFLAGS) $@ $(OBJECTS_PT)
 	
 lib/libsyscall.a: $(OBJECTS_SYSCALL)
+	mkdir -p lib
 	$(AR) $(ARFLAGS) $@ $(OBJECTS_SYSCALL)
 
 boot.bin: lib/libpt.a lib/libsyscall.a $(OBJECTS) $(HEADERS)
