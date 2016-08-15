@@ -262,10 +262,11 @@ void Table::freeLines(const RAddr &contextId, const RAddr *vAddr){ //MLDTODO Doc
 void Table::freeLine(Line &line){
 	//MLDTODO Figure out how to handle locked lines while invalidating.
 	if(line.locked == true){
-		throw exceptf<std::domain_error>("Attempt to invalidate locked TLB line");
+		//throw exceptf<std::domain_error>("Attempt to invalidate locked TLB line");
 	}
 
 	COMMIT{
+		line.locked = false;
 		line.present = false;
 	}
 }
