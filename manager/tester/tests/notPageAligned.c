@@ -2,6 +2,26 @@
 
 #include "tests.h"
 
+const char* testNotSmallPageAligned64RW_name(){
+	return "Not page aligned RW (small page, 64 bits)";
+}
+
+int testNotSmallPageAligned64RW_pre(tlbRef_t tlbReference, char quiet){
+	invalidateTlb(tlbReference);
+	return 0;
+}
+
+void testNotSmallPageAligned64RW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
+			testNotSmallPageAligned64RW,
+			sl_sharg(result_t*, result, result),
+			sl_sharg(char,, abort),
+			sl_sharg(char,, quiet));
+	sl_sync();
+}
+
+int testNotSmallPageAligned64RW_post(tlbRef_t tlbReference, char quiet){ return 0; };
+
 sl_def(testNotSmallPageAligned64RW,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet)){
 	result_t* result = sl_getp(result);
 	char abort = sl_getp(abort);
@@ -33,6 +53,26 @@ sl_def(testNotSmallPageAligned64RW,, sl_shparm(result_t*, result), sl_shparm(cha
 }
 sl_enddef;
 
+const char* testNotMediumPageAligned4096RW_name(){
+	return "Not page aligned RW (medium page, 64 bits per 4096 bytes)";
+}
+
+int testNotMediumPageAligned4096RW_pre(tlbRef_t tlbReference, char quiet){
+	invalidateTlb(tlbReference);
+	return 0;
+}
+
+void testNotMediumPageAligned4096RW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
+			testNotMediumPageAligned4096RW,
+			sl_sharg(result_t*, result, result),
+			sl_sharg(char,, abort),
+			sl_sharg(char,, quiet));
+	sl_sync();
+}
+
+int testNotMediumPageAligned4096RW_post(tlbRef_t tlbReference, char quiet){ return 0; };
+
 sl_def(testNotMediumPageAligned4096RW,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet)){
 	result_t* result = sl_getp(result);
 	char abort = sl_getp(abort);
@@ -63,6 +103,26 @@ sl_def(testNotMediumPageAligned4096RW,, sl_shparm(result_t*, result), sl_shparm(
 	sl_setp(quiet, quiet);	//To give the compiler a warm feeling
 }
 sl_enddef;
+
+const char* testNotLargePageAligned2MRW_name(){
+	return "Not page aligned RW (large page, 64 bits per 2MiB)";
+}
+
+int testNotLargePageAligned2MRW_pre(tlbRef_t tlbReference, char quiet){
+	invalidateTlb(tlbReference);
+	return 0;
+}
+
+void testNotLargePageAligned2MRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
+			testNotLargePageAligned2MRW,
+			sl_sharg(result_t*, result, result),
+			sl_sharg(char,, abort),
+			sl_sharg(char,, quiet));
+	sl_sync();
+}
+
+int testNotLargePageAligned2MRW_post(tlbRef_t tlbReference, char quiet){ return 0; };
 
 sl_def(testNotLargePageAligned2MRW,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet)){
 	result_t* result = sl_getp(result);

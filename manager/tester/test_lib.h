@@ -6,6 +6,7 @@
 typedef struct {
 	int nrTests;
 	int nrFailed;
+	char resultText[80];
 } result_t;
 
 //typedef void (*test_t)(result_t *result, char abort, char quiet);
@@ -22,9 +23,11 @@ void write16(uint64_t addr, uint16_t data, char quiet);
 void write32(uint64_t addr, uint32_t data, char quiet);
 void write64(uint64_t addr, uint64_t data, char quiet);
 
-void printTestStart(char quiet, char name[]);
-void printTestEnd(result_t *result, char quiet, char name[]);
-void printString(char text[], char quiet);
+void printTestStart(char quiet, const char name[]);
+void printTestEnd(const result_t *result, char quiet, const char name[]);
+void printString(const char text[], char quiet);
+void printUint(uint64_t val, char quiet);
+void printChar(char c, char quiet);
 void pad();
 
 void addSResult(result_t* destination, char result);

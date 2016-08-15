@@ -1,5 +1,14 @@
 #include "IO.h"
 
+
+unsigned getIOAddr(void){
+	union asr_param1 io_config;
+
+	mgsim_read_asr(io_config.raw, ASR_IO_PARAMS1);
+
+	return io_config.core_dev_id;
+}
+
 //This method works on the assumption that the ID of the core and the ID's of
 //the devices linked to that core will form a contiguous set.
 //This also means 0 is an invalid response.

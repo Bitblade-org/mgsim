@@ -1,9 +1,3 @@
-/*
- * io.h
- *
- *  Created on: 27 Nov 2015
- *      Author: nijntje
- */
 
 #ifndef ARCH_IO_H_
 #define ARCH_IO_H_
@@ -13,6 +7,26 @@
 #include <stdio.h>
 #include <mgsim.h>
 #include <mtconf.h>
+
+/*
+ * From IOInterface.cpp:
+ * 		ASR_IO_PARAMS1 has 32 bits:
+ * 			bits 0-7:   number of I/O devices mapped to the AIO
+ * 			bits 8-15:  number of notification channels mapped to the PNC
+ * 			bits 16-23: device ID of the SMC (enumeration) device on the I/O bus
+ * 			bits 24-31: device ID of this core on the I/O bus
+ */
+
+union asr_param1{
+	uint32_t 	raw;
+
+	struct{
+		uint8_t		nr_io_devices;
+		uint8_t		nr_notification_channels;
+		uint8_t		smc_dev_id;
+		uint8_t		core_dev_id;
+	};
+};
 
 // If a core is connected to IO, the maximum number of IO devices must be >0.
 // Thus, smc_nr_iodevs=0 implies the core is not connected to IO.
@@ -33,6 +47,8 @@ struct mg_io_info{
 
 size_t find_core_device(struct mg_io_info* ioInfo, size_t core_id, struct mg_device_id* dev_id);
 void get_io_info(struct mg_io_info* ioInfo);
+unsigned getIOAddr(void);
+
 
 
 #endif /* ARCH_IO_H_ */

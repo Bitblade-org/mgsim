@@ -1,6 +1,25 @@
-#include <stdlib.h>
-
 #include "tests.h"
+
+const char* testLineBoundariesRW_name(){
+	return "Line boundaries RW";
+}
+
+int testLineBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
+	invalidateTlb(tlbReference);
+	return 0;
+}
+
+void testLineBoundariesRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
+			testLineBoundariesR,
+			sl_sharg(result_t*, result, result),
+			sl_sharg(char,, abort),
+			sl_sharg(char,, quiet));
+	sl_sync();
+}
+
+int testLineBoundariesRW_post(tlbRef_t tlbReference, char quiet){ return 0; };
+
 
 sl_def(testLineBoundariesRW,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet)){
 	result_t* result = sl_getp(result);

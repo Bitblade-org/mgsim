@@ -1,5 +1,25 @@
 #include "tests.h"
 
+const char* testMediumPageBoundariesRW_name(){
+	return "Page boundaries of medium page RW";
+}
+
+int testMediumPageBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
+	invalidateTlb(tlbReference);
+	return 0;
+}
+
+void testMediumPageBoundariesRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
+			testMediumPageBoundariesRW,
+			sl_sharg(result_t*, result, result),
+			sl_sharg(char,, abort),
+			sl_sharg(char,, quiet));
+	sl_sync();
+}
+
+int testMediumPageBoundariesRW_post(tlbRef_t tlbReference, char quiet){ return 0; };
+
 sl_def(testMediumPageBoundariesRW,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet)){
 	result_t* result = sl_getp(result);
 	char abort = sl_getp(abort);

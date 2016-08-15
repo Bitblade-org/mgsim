@@ -2,6 +2,26 @@
 
 static uint64_t calculateExpected64(uint64_t start);
 
+const char* testUnalignedR_name(){
+	return "Unaligned RW";
+}
+
+int testUnalignedR_pre(tlbRef_t tlbReference, char quiet){
+	invalidateTlb(tlbReference);
+	return 0;
+}
+
+void testUnalignedR_run(sl_place_t destination, result_t* result, char abort, char quiet){
+	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
+			testUnalignedR,
+			sl_sharg(result_t*, result, result),
+			sl_sharg(char,, abort),
+			sl_sharg(char,, quiet));
+	sl_sync();
+}
+
+int testUnalignedR_post(tlbRef_t tlbReference, char quiet){ return 0; };
+
 sl_def(testUnalignedR,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet)){
 	result_t* result = sl_getp(result);
 	char abort = sl_getp(abort);

@@ -1,5 +1,6 @@
 #include "test_lib.h"
 
+#include <string.h>
 #include <stddef.h>
 #include <svp/abort.h>
 #include <svp/testoutput.h>
@@ -100,6 +101,7 @@ void printWrite(uint64_t addr, uint64_t data){
 void resetResults(result_t* result){
 	result->nrFailed = 0;
 	result->nrTests = 0;
+	memset(result->resultText, 0, sizeof(result->resultText));
 }
 
 void addSResult(result_t* destination, char result){
@@ -116,7 +118,7 @@ void addResults(result_t* destination, result_t* other){
 	}
 }
 
-void printTestStart(char quiet, char name[]){
+void printTestStart(char quiet, const char name[]){
 	if(quiet == 0){
 		output_string("Starting test \"", 2);
 		output_string(name, 2);
@@ -128,7 +130,7 @@ void printTestStart(char quiet, char name[]){
 	}
 }
 
-void printTestEnd(result_t *result, char quiet, char name[]){
+void printTestEnd(const result_t *result, char quiet, const char name[]){
 	if(quiet == 0){
 		pad();
 		output_string("End of test \"", 2);
@@ -158,6 +160,10 @@ void printTestEnd(result_t *result, char quiet, char name[]){
 		output_uint(result->nrTests - result->nrFailed, 2);
 		output_string(" / ", 2);
 		output_uint(result->nrTests, 2);
+		if(result->resultText[0] != 0){
+			output_string(" | ", 2);
+			output_string(result->resultText, 2);
+		}
 		output_char('\n', 2);
 	}
 }
@@ -166,9 +172,23 @@ void pad(){
 	output_string("              ", 2);
 }
 
-void printString(char text[], char quiet){
+void printString(const char text[], char quiet){
 	if(quiet == 0){
 		pad(0);
 		output_string(text, 2);
+	}
+}
+
+void printUint(uint64_t val, char quiet){
+	if(quiet == 0){
+		pad(0);
+		output_uint(val, 2);
+	}
+}
+
+void printChar(char c, char quiet){
+	if(quiet == 0){
+		pad(0);
+		output_char(c, 2);
 	}
 }
