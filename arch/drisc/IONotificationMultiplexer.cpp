@@ -85,6 +85,10 @@ bool IONotificationMultiplexer::SetWriteBackAddress(IONotificationChannelID whic
         return false;
     }
 
+    if (!m_mask[which]){
+        throw exceptf<>("Invalid I/O read to disabled channel %u", (unsigned)which);
+    }
+
     m_writebacks[which]->Write(addr);
     return true;
 }
