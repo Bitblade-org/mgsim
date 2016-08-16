@@ -48,7 +48,9 @@ struct mg_io_info{
 size_t find_core_device(struct mg_io_info* ioInfo, size_t core_id, struct mg_device_id* dev_id);
 void get_io_info(struct mg_io_info* ioInfo);
 unsigned getIOAddr(void);
-
+void* getPncBase(void);
+void* getPncBase(void);
+void* getNotificationChannelAddress(unsigned int channel);
 
 
 #endif /* ARCH_IO_H_ */

@@ -6,6 +6,7 @@
 #include "../ptLib/pagetable.h"
 #include "../ptLib/pt_index.h"
 #include "../ptLib/PTBuilder.h"
+#include "test_def.h"
 
 /**
  * Method to initialise the test environment.
@@ -31,15 +32,15 @@ void tester_init(int contextId, void* ptsPBase, pt_t** next_table, size_t* free)
 // larger page = 1GiB = 0x4 0000 0000 : 0x4 4000 0000
 void createPageEntries(int contextId, void* ptsPBase, pt_t** next_table, size_t* free){
 	uint64_t index;
-	index = calculate_pt_index(contextId, 0x440000ul);
+	index = calculate_pt_index(contextId, COUNT8R_START);
 	write_entry(ptsPBase, index,   (void*)0x440000ul, 0, next_table, free, 1, 0, 0); //COUNT8
-	index = calculate_pt_index(contextId, 0x441000ul);
+	index = calculate_pt_index(contextId, COUNT64R_START);
 	write_entry(ptsPBase, index,   (void*)0x441000ul, 0, next_table, free, 1, 0, 0); //COUNT64-1
 	index = calculate_pt_index(contextId, 0x442000ul);
 	write_entry(ptsPBase, index,   (void*)0x442000ul, 0, next_table, free, 1, 0, 0); //COUNT64-2
 	index = calculate_pt_index(contextId, 0x443000ul);
 	write_entry(ptsPBase, index,   (void*)0x443000ul, 0, next_table, free, 1, 0, 0); //COUNT64-3
-	index = calculate_pt_index(contextId, 0x444000ul);
+	index = calculate_pt_index(contextId, ADDR64_START);
 	write_entry(ptsPBase, index,   (void*)0x444000ul, 0, next_table, free, 1, 0, 0); //unused
 
 	index = calculate_pt_index(contextId, 0x500000ul);
@@ -112,15 +113,36 @@ void createPageEntries(int contextId, void* ptsPBase, pt_t** next_table, size_t*
 // Space reserved for testing:
 //	0x440000 - 0x550000 inclusive
 void writeStartingData(){
-	for(int i=0; i<192; i++){
-		uint8_t* ptr = ((uint8_t*)0x440000ul + i);
-		*ptr = i % 256;
+
+	//Fill 0x44 00 00 - 0x44 08 00
+	//with bytes containing the positive numbers (0-255) in sequence, rolling over where applicable.
+	uint64_t* ptr = (uint64_t*)COUNT8R_START;
+	for(int i=0; i<256; i++, ptr++){
+		uint64_t buffer = 0;
+		for(int j=0; j<8; j++){
+			buffer |= (uint64_t)((i*8+j) % 256) << (8*(j));
+		}
+		*ptr = buffer;
 	}
 
-	uint64_t* ptr = (uint64_t*)0x441000ul;
-	for(int i=0; i<1536; i++){
+
+	//Fill 0x44 10 00 - 0x44 11 00 with words representing 0, 1, 2, ..., 31
+	//Fill 0x44 1e 00 - 0x44 21 00 with words representing 480, 481, ,,, 543 (512 +/- 32)
+	//Fill 0x44 2e 00 - 0x44 31 00 with words representing 992, 993, .., 1056 (1024 +/- 32)
+	//Fill 0x44 3e 00 - 0x44 00 00 with words representing 1504, 1505, ..,  1535
+	uint64_t* ptrStart = (uint64_t*)COUNT64R_START;
+	ptr = ptrStart;
+	for(int i=0; i<1536; i++, ptr++){
+		if(i ==    0 + 32){ i= 512 - 32; ptr = ptrStart + i; }
+		if(i ==  512 + 32){ i=1024 - 32; ptr = ptrStart + i; }
+		if(i == 1024 + 32){ i=1536 - 32; ptr = ptrStart + i; }
 		*ptr = i;
-		ptr += 1;
+	}
+
+	//Fill 0x44 40 00 - 0x44 48 00 with words representing 255, 254, ..., 0
+	ptr = (uint64_t*)ADDR64_START;
+	for(int i=255; i>=0; i--, ptr++){
+		*ptr = i;//(uint64_t)ptr;
 	}
 }
 

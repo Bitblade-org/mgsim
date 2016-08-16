@@ -1,10 +1,13 @@
 #include "dispatcher.h"
 
 #include <svp/abort.h>
+#include <mgsim.h>
+#include "../ioLib/IO.h"
 
 
 sl_def(dispatcher_init,, sl_shparm(unsigned, channel)){
-	volatile uint64_t* cPtr = &(mg_devinfo.channels[sl_getp(channel)]);
+    volatile uint64_t* cPtr = (uint64_t*)getNotificationChannelAddress(sl_getp(channel));
+
 
 	//Tell cpu.io_if.nmux that we want to receive notifications for this channel
 	*cPtr = 1;
@@ -16,65 +19,35 @@ sl_enddef;
 
 sl_def(dispatcher,, sl_shparm(unsigned, channelNr), sl_shparm(uint64_t, pt0)) {
 	pt_t* 				pt0 		= (pt_t*)sl_getp(pt0);
-	unsigned 			channelNr 	= sl_getp(channelNr);
-	volatile uint64_t*	channel 	= &(mg_devinfo.channels[channelNr]);
-	//Channel already initialised by manager_dispatcher_init.
+    volatile uint64_t*  cPtr = (uint64_t*)getNotificationChannelAddress(sl_getp(channelNr));
 
-	PRINT_STRING("Manager dispatcher received a notification!\n");
+	//Channel already initialised by manager_dispatcher_init.
 
 	int result;
 
 	while(1){
 		MgtMsg_t msgBuffer;
+		msgBuffer.data.part[1] = *cPtr;
+		msgBuffer.data.part[0] = *cPtr;
 
-		result = receive_net_msg(&msgBuffer, channel);
-		if(result == 0)	{ continue; }
-		if(result < 0)  { break; } //A whoopsie occurred
+		if(msgBuffer.type != MISS){
+			output_string("Page walker dispatcher received an unrecognised message\n", 2);
+			svp_abort();
+		}
 
 	    // Place id 1 means: Same core, but size 1
-		sl_create(,1,,,,,(sl__exclusive, sl__force_wait), manager_handle,
+		sl_create(,1,,,,,(sl__exclusive, sl__force_wait), handle_miss,
 				sl_sharg(pt_t*, 	pt0, 	pt0),
 				sl_sharg(MgtMsg_t*, msg, 	&msgBuffer),
-				sl_sharg(int, 		result, 0)
 		);
 		sl_sync();
-
-		result = sl_geta(result);
-		if(result < 0)	{ break; }
 	}
 
-    PRINT_STRING("Manager failed with error code ");
-    PRINT_INT(result);
-    svp_abort();
+	output_string("Page walker dispatcher failed!\n", 2);
+	svp_abort();
 
 	// To stop compiler from whining
-    sl_setp(channelNr, channelNr);
+    sl_setp(channelNr, 0);
     sl_setp(pt0, (uint64_t)pt0);
 }
 sl_enddef;
-
-
-//int dispatcher_main(pt_t* pt0, unsigned channelNr){
-//	volatile uint64_t *channel = &(mg_devinfo.channels[channelNr]);
-//	//Channel already initialised by manager_dispatcher_init.
-//
-//	MgtMsg_t msgBuffer;
-//	int result;
-//
-//	PRINT_STRING("Manager dispatcher received a notification!\n");
-//
-//	while(1){
-//		result = receive_net_msg(&msgBuffer, channel);
-//		if(result == 0)	{ continue; }
-//		if(result < 0)  { return result; } //A whoopsie occurred
-//
-//	    // Place id 1 means: Same core, but size 1
-//		sl_create(,1,,,,,(sl__exclusive, sl__force_wait),
-//				manager_handle, sl_sharg(pt_t*, pt0, pt0), sl_sharg(MgtMsg_t*, msg, &msgBuffer), sl_sharg(int, result, 0));
-//		sl_sync();
-//
-//		result = sl_geta(result);
-//		if(result < 0)	{ return result; } //A whoopsie occurred
-//	}
-//}
-

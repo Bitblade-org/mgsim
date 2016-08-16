@@ -9,6 +9,24 @@ unsigned getIOAddr(void){
 	return io_config.core_dev_id;
 }
 
+void* getPncBase(void){
+	long pncBase;
+
+	mgsim_read_asr(pncBase, ASR_PNC_BASE);
+
+	return (void*)pncBase;
+}
+
+void* getNotificationChannelAddress(unsigned int channel){
+	long pncBase;
+
+	mgsim_read_asr(pncBase, ASR_PNC_BASE);
+	pncBase += channel * 8; //MLDTODO Have to differentiate for other systems
+
+	return (void*)pncBase;
+}
+
+
 //This method works on the assumption that the ID of the core and the ID's of
 //the devices linked to that core will form a contiguous set.
 //This also means 0 is an invalid response.

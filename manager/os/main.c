@@ -88,13 +88,28 @@ int main(void) {
 	 * ---===[ Starting manager ]===---
 	 */
 
+    sl_place_t place_walker;
+    int result = sep_alloc(root_sep, &place_walker, SAL_EXACT, 1);
+    if (result == -1){
+    	printf("SEP Unable to allocate core for page walker");
+    	svp_abort();
+    }
+
+    printf("Figuring out IO Address of page walker core\n");
+    sl_create(,place_walker,,,,,,getRemoteIOAddr,
+    		sl_sharg(unsigned, addr1, 0) // Initialising to stop compiler from complaining
+			);
+    sl_sync();
+    unsigned nocId_walker = sl_geta(addr1);
+    printf("IO Address of page walking core is %u\n", nocId_walker);
+
     // Place id 1 means: Same core, but size 1
     unsigned manager_pid = 1;
 
-    sl_create(,manager_pid,,,,,,dispatcher_init,sl_sharg(unsigned, channel0, MANAGER_CHANNEL));
+    sl_create(,place_walker,,,,,,dispatcher_init,sl_sharg(unsigned, channel0, MANAGER_CHANNEL));
     sl_sync();
 
-    sl_create(,manager_pid,,,,,,dispatcher,
+    sl_create(,place_walker,,,,,,dispatcher,
     		sl_sharg(unsigned,,MANAGER_CHANNEL),
 			sl_sharg(uint64_t,,(uint64_t)PTS_PBASE)
 			);
@@ -105,32 +120,27 @@ int main(void) {
 		asm("NOP");
 	} // Just so all initialisation printf's from manager have been printed
 
-	/*
-	 * ---===[ Reserve and initialise a nice cosy core ]===---
-	 */
-
-    sl_place_t p;
-    int r = sep_alloc(root_sep, &p, SAL_EXACT, 1);
-    if (r == -1){
-    	printf("SEP Unable to allocate core for memreader");
+    sl_place_t place_tester;
+    result = sep_alloc(root_sep, &place_tester, SAL_EXACT, 1);
+    if (result == -1){
+    	printf("SEP Unable to allocate core for testing platform");
     	svp_abort();
     }
 
 
     //Figure out it's IO Address
     printf("Figuring out IO Address of victim core\n");
-    sl_create(,p,,,,,,getRemoteIOAddr,
-    		sl_sharg(unsigned, addr, 0) // Initialising to stop compiler from complaining
+    sl_create(,place_tester,,,,,,getRemoteIOAddr,
+    		sl_sharg(unsigned, addr2, 0) // Initialising to stop compiler from complaining
 			);
     sl_sync();
-    unsigned p_io = sl_geta(addr);
+    unsigned nocId_tester = sl_geta(addr2);
 
-    tlbRef_t tlbReference = getTlbReference(&ioInfo, p_io, TLB_TYPE_D);
-    printf("IO Address of victim core is %u\n", p_io);
+    tlbRef_t tlbReference = getTlbReference(&ioInfo, nocId_tester, TLB_TYPE_D);
+    printf("IO Address of victim core is %u\n", nocId_tester);
     printf("Expecting victim dTLB to be on id %u\n", tlbReference.nocId);
 
-    enableTlb(getIOAddr(), MANAGER_CHANNEL, tlbReference);
-
+    enableTlb(nocId_walker, MANAGER_CHANNEL, tlbReference);
 	//MLDTODO It's a longshot, but maybe there is a better way? Response?
 	for(int i=0; i<200; i++){
 		asm("NOP");
@@ -148,7 +158,7 @@ int main(void) {
 	 * ---===[ Run memreader ]===---
 	 */
 
-	runAll(NULL, p, 0, tlbReference);
+	runAll(NULL, place_tester, 0, tlbReference);
 
 //	svp_abort();
 

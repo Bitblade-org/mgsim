@@ -92,8 +92,8 @@ Result TLB::doReceive(){
 	unsigned addr = item.addr.chan / 8;
 
 	if(addr <= 1){
-		assert(item.addr.devid == m_mgtAddr.devid);
 
+		//assert(item.addr.devid == m_mgtAddr.devid);
 		m_mgtMsgBuffer.data.part[addr] = item.payload;
 
 		if(addr == 0){

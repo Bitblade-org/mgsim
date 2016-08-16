@@ -59,6 +59,9 @@ private:
     // Helper to Initialize()
     void InitializeRegisters();
 public:
+
+    const std::vector<DRISC*>& getGrid(){ return m_grid; }
+
     CycleNo GetCycleNo() const { return m_clock.GetCycleNo(); }
     PID   GetPID()      const { return m_pid; }
     PSize GetGridSize() const { return m_grid.size(); }

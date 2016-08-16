@@ -192,6 +192,26 @@ DCache::Line* DCache::findLine(size_t setIndex, size_t pTag, Line* ignore){
 	return NULL;
 }
 
+bool DCache::invalidate(){
+	DebugMemWrite("Flushing cache");
+
+	for (size_t i = 0; i < m_lines.size(); ++i)
+	{
+		if(m_lines[i].state != LINE_EMPTY){
+			if(m_lines[i].state == LINE_LOADING){
+				DeadlockWrite("A loading line was encountered");
+				std::cout << "Line " << std::dec << i << " is LOADING! " << std::endl;
+				return false;
+			}else if(m_lines[i].state == LINE_FULL){
+				//std::cout << "Line " << std::dec << i << " used to contain " << std::hex << m_lines[i].tag << " but not anymore! \n";
+			}
+		}
+		m_lines[i].state = LINE_EMPTY;
+	}
+
+	return true;
+}
+
 Result DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg){
     ContextId contextId = 0; //MLDTODO Figure out where to get contextid from
 

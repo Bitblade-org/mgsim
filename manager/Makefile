@@ -5,21 +5,7 @@ INCLUDE=
 SLCFLAGS=-b mta
 #LDFLAGS=-L./lib/ -lpt -lsyscall
 #LDFLAGS=-L/home/nijntje/mgsim/manager/lib/libpt.a -Llib/libsyscall.a
-TESTS= \
-	lineBoundariesR.c \
-	lineBoundariesRW.c \
-	smallPageAlignedRW.c \
-	notLineAlignedR.c \
-	notLineAlignedRW.c \
-	unalignedR.c \
-	unalignedRW.c \
-	smallPageBoundaries.c \
-	mediumPageBoundaries.c \
-	notPageAligned.c \
-	syscall_test.c \
-	clock.c \
-	clock.asm.c \
-	b_4k_t_p.c
+TESTS= $(wildcard tester/tests/*.c)
 HEADERS=defines.h os/main.h manager/manager.h MgtMsg.h ptLib/pagetable.h ptLib/PTBuilder.h ptLib/pt_index.h \
 	ioLib/IO.h os/syscall_gateway.h clientLib/syscall.h manager/dispatcher.h manager/mgt_io.h \
 	tester/tester.h tester/test_init.h tester/test_lib.h tlbLib/tlbControl.h tlbLib/tlbRef.h
@@ -27,12 +13,12 @@ SOURCES_SYSCALL=clientLib/syscall.c
 SOURCES_PT=ptLib/pt_index.c ptLib/pagetable.c ptLib/PTBuilder.c
 SOURCES=os/main.c manager/manager.c ioLib/IO.c tlbLib/tlbControl.c \
 	os/syscall_gateway.c manager/dispatcher.c manager/mgt_io.c \
-	tester/tester.c tester/test_init.c tester/test_lib.c tester/tests/timedRead.asm.c $(addprefix tester/tests/, $(TESTS)) $(SOURCES_PT) $(SOURCES_SYSCALL)
+	tester/tester.c tester/test_init.c tester/test_lib.c $(TESTS) $(SOURCES_PT) $(SOURCES_SYSCALL)
 OBJECTS_SYSCALL=$(SOURCES_SYSCALL:.c=.o)
 OBJECTS_PT=$(SOURCES_PT:.c=.o)
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=boot.bin
-CFLAGS=-O1 -Werror
+CFLAGS=-O3 -Werror
 ASMC_CC=slc
 ASMC_CFLAGS=-O0 -Werror -fno-asmopt $(SLCFLAGS)
 #ASMC_CC=mtalpha-linux-gnu-gcc

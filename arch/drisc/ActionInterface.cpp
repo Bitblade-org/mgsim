@@ -1,6 +1,7 @@
 #include "ActionInterface.h"
 #include <cctype>
 #include <sstream>
+#include "DRISC.h"
 
 namespace Simulator
 {
@@ -21,7 +22,7 @@ namespace drisc
  *    maximum address: 1 1 1
  */
 
-size_t ActionInterface::GetSize() const { return 8 * sizeof(Integer);  }
+size_t ActionInterface::GetSize() const { return 16 * sizeof(Integer);  }
 
 
 Result ActionInterface::Read (MemAddr /*address*/, void* /*data*/, MemSize /*size*/, LFID /*fid*/, TID /*tid*/, const RegAddr& /*writeback*/)
@@ -38,6 +39,28 @@ Result ActionInterface::Write(MemAddr address, const void *data, MemSize size, L
 
     address /= sizeof(Integer);
     Integer value = UnserializeRegister(RT_INTEGER, data, size);
+
+    if (address & 8){
+        Object& dparent = *GetParent();
+    	auto& localCpu = static_cast<DRISC&>(dparent);
+
+    	uint64_t cpuId = *(uint64_t*)data;
+
+    	auto& remoteCpu = localCpu.getGrid()[cpuId];
+    	if(remoteCpu->GetName() != std::string("cpu") + std::to_string(cpuId)){
+            throw exceptf<>(*this, "Could not find cpu with id %u", (unsigned int)cpuId);
+    	}
+
+
+    	COMMIT{
+			if(remoteCpu->GetDCache().invalidate()){
+				return SUCCESS;
+			}
+	    	return FAILED;
+    	}
+
+    	return SUCCESS;
+    }
 
     if (address & 4)
     {

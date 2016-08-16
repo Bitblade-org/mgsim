@@ -28,7 +28,18 @@ unsigned int __attribute__((optimize("O0"))) timedRead_asm(uint64_t target, uint
 // make a type (http://dare.uva.nl/document/2/109511, pg80)
 //sl_typedef_fptr(testPtr_t,, 			sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet));
 
-DECLARE_TEST(b_4k_t_p);
+DECLARE_TEST(action);
+
+DECLARE_TEST(b_4k);
+DECLARE_TEST(b_4k_p);
+DECLARE_TEST(b_4k_t);
+DECLARE_TEST(b_4k_d);
+DECLARE_TEST(b_4k_pt);
+DECLARE_TEST(b_4k_pd);
+DECLARE_TEST(b_4k_td);
+DECLARE_TEST(b_4k_ptd);
+
+
 DECLARE_TEST(testClock);
 DECLARE_TEST(testSyscall);
 DECLARE_TEST(testSmallPageAlignedRW);
