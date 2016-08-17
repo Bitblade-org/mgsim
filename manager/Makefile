@@ -8,12 +8,12 @@ SLCFLAGS=-b mta
 TESTS= $(wildcard tester/tests/*.c)
 HEADERS=defines.h os/main.h manager/manager.h MgtMsg.h ptLib/pagetable.h ptLib/PTBuilder.h ptLib/pt_index.h \
 	ioLib/IO.h os/syscall_gateway.h clientLib/syscall.h manager/dispatcher.h manager/mgt_io.h \
-	tester/tester.h tester/test_init.h tester/test_lib.h tlbLib/tlbControl.h tlbLib/tlbRef.h
+	tester/tester.h tester/test_init.h tester/test_lib.h tlbLib/tlbControl.h tlbLib/tlbRef.h tester/timedRead/timedRead.h
 SOURCES_SYSCALL=clientLib/syscall.c
 SOURCES_PT=ptLib/pt_index.c ptLib/pagetable.c ptLib/PTBuilder.c
 SOURCES=os/main.c manager/manager.c ioLib/IO.c tlbLib/tlbControl.c \
 	os/syscall_gateway.c manager/dispatcher.c manager/mgt_io.c \
-	tester/tester.c tester/test_init.c tester/test_lib.c $(TESTS) $(SOURCES_PT) $(SOURCES_SYSCALL)
+	tester/tester.c tester/test_init.c tester/test_lib.c tester/timedRead/timedRead.c tester/timedRead/timedRead.asm.c $(TESTS) $(SOURCES_PT) $(SOURCES_SYSCALL)
 OBJECTS_SYSCALL=$(SOURCES_SYSCALL:.c=.o)
 OBJECTS_PT=$(SOURCES_PT:.c=.o)
 OBJECTS=$(SOURCES:.c=.o)

@@ -9,7 +9,7 @@ int testNotLineAlignedRW_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testNotLineAlignedRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testNotLineAlignedRW_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testNotLineAlignedRW,
 			sl_sharg(result_t*, result, result),

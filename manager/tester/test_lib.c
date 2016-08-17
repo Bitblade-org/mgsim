@@ -141,7 +141,7 @@ void printTestEnd(const result_t *result, char quiet, const char name[]){
 		output_uint(result->nrTests, 2);
 		output_string(" failed\n", 2);
 	}else{
-		output_string("\033[1A", 2);
+		//output_string("\033[1A", 2);
 		if(result->nrFailed == 0){
 			output_string(" [ ", 2);
 			output_string("\033[1;32m", 2);

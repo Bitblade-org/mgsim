@@ -9,7 +9,7 @@ int testSmallPageBoundariesR_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testSmallPageBoundariesR_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testSmallPageBoundariesR_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testSmallPageBoundariesR,
 			sl_sharg(result_t*, result, result),
@@ -68,7 +68,7 @@ int testSmallPageBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testSmallPageBoundariesRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testSmallPageBoundariesRW_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testSmallPageBoundariesRW,
 			sl_sharg(result_t*, result, result),

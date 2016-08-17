@@ -7,7 +7,7 @@ int testSyscall_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testSyscall_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testSyscall_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testSyscall,
 			sl_sharg(result_t*, result, result),

@@ -9,7 +9,7 @@ int testMediumPageBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testMediumPageBoundariesRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testMediumPageBoundariesRW_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testMediumPageBoundariesRW,
 			sl_sharg(result_t*, result, result),

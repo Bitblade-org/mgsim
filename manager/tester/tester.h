@@ -16,7 +16,7 @@
 
 
 typedef int (*preTest_ft)(tlbRef_t tlbReference, char quiet);
-typedef void (*runTest_ft)(sl_place_t destination, result_t* result, char abort, char quiet);
+typedef void (*runTest_ft)(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet);
 typedef int (*postTest_ft)(tlbRef_t tlbReference, char quiet);
 typedef const char* (*testName_ft)();
 

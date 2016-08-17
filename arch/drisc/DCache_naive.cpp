@@ -333,7 +333,7 @@ Result DCacheNaive::Read2(ContextId contextId, MemAddr address, void* data, MemS
 			DebugMemWrite("D-Cache state 6");
 			COMMIT{
 				m_mmu->getDTlb().setDCacheReference(getLineId(line));
-				line->tlbOffset = address && ~(UINT64_MAX << m_mmu->getDTlb().getMaxOffsetWidth());
+				line->tlbOffset = address & ~(UINT64_MAX << m_mmu->getDTlb().getMaxOffsetWidth());
 				line->state = LINE_LOADING;
 				PushRegister(line, reg);
 //        		//MLDTODO Statistics
@@ -486,7 +486,6 @@ Result DCacheNaive::DoLookupResponses(){
 
     mmu::TLBResultMessage tlbData = m_mmu->getDTlb().getLine(response.tlbLineRef);
 	MemAddr pAddr = tlbData.pAddr << tlbData.tlbOffsetWidth;
-	//std::cout << "offs:" << tlbData.tlbOffsetWidth << std::endl;
 	assert(!tlbData.pending);
 
     //Unreachable by writes, so this must be case 1, 2, 3 or 5 (read)
@@ -494,7 +493,7 @@ Result DCacheNaive::DoLookupResponses(){
     assert(line->state == LINE_LOADING);
 
 	pAddr |= ((1 << tlbData.tlbOffsetWidth) - 1) & line->tlbOffset;
-	//MLDTODO Add offset bits
+
 	DebugMemWrite("Handling lookup completion for CID %u, (%#016llx)", (unsigned)response.cid, (unsigned long long)pAddr);
 
 	if(!tlbData.read)

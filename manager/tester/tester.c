@@ -16,6 +16,9 @@ void runNewTest(struct test* test, sl_place_t dst, result_t* result, tlbRef_t tl
 void runAll(result_t* result, sl_place_t dst, char abort, tlbRef_t tlbReference){
 	struct test test;
 
+	test = TEST_REF(trCal, 1, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
 	test = TEST_REF(b_4k, 1, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
@@ -134,7 +137,7 @@ void runNewTest(struct test* test, sl_place_t dst, result_t* result, tlbRef_t tl
 	printTestStart(test->quiet, testName);
 
 	test->preTestFunction(tlbReference, test->quiet); //Should test return value
-	test->runTestFunction(dst, &localResult, test->abort, test->quiet);
+	test->runTestFunction(dst, tlbReference, &localResult, test->abort, test->quiet);
 	test->postTestFunction(tlbReference, test->quiet); //Should test return value
 
 	printTestEnd(&localResult, test->quiet, (char*)testName	);

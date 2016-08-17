@@ -11,7 +11,7 @@ int testNotSmallPageAligned64RW_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testNotSmallPageAligned64RW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testNotSmallPageAligned64RW_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testNotSmallPageAligned64RW,
 			sl_sharg(result_t*, result, result),
@@ -62,7 +62,7 @@ int testNotMediumPageAligned4096RW_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testNotMediumPageAligned4096RW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testNotMediumPageAligned4096RW_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testNotMediumPageAligned4096RW,
 			sl_sharg(result_t*, result, result),
@@ -113,7 +113,7 @@ int testNotLargePageAligned2MRW_pre(tlbRef_t tlbReference, char quiet){
 	return 0;
 }
 
-void testNotLargePageAligned2MRW_run(sl_place_t destination, result_t* result, char abort, char quiet){
+void testNotLargePageAligned2MRW_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
 	sl_create(,destination,,,,, (sl__exclusive, sl__force_wait),
 			testNotLargePageAligned2MRW,
 			sl_sharg(result_t*, result, result),

@@ -197,16 +197,19 @@ bool DCache::invalidate(){
 
 	for (size_t i = 0; i < m_lines.size(); ++i)
 	{
-		if(m_lines[i].state != LINE_EMPTY){
-			if(m_lines[i].state == LINE_LOADING){
-				DeadlockWrite("A loading line was encountered");
-				std::cout << "Line " << std::dec << i << " is LOADING! " << std::endl;
-				return false;
-			}else if(m_lines[i].state == LINE_FULL){
-				//std::cout << "Line " << std::dec << i << " used to contain " << std::hex << m_lines[i].tag << " but not anymore! \n";
-			}
-		}
-		m_lines[i].state = LINE_EMPTY;
+		Line &line = m_lines[i];
+
+        // We have the line, invalidate it
+        if (line.state == LINE_FULL) {
+            // Full lines are invalidated by clearing them. Simple.
+            line.state = LINE_EMPTY;
+            //std::cout << "Line " << std::dec << i << " used to contain " << std::hex << m_lines[i].tag << " but not anymore! \n";
+        } else if (line.state == LINE_LOADING) {
+            // The data is being loaded. Invalidate the line and it will get cleaned up
+            // when the data is read.
+            line.state = LINE_INVALID;
+            //std::cout << "Line " << std::dec << i << " used to contain " << std::hex << m_lines[i].tag << " but not anymore! \n";
+        }
 	}
 
 	return true;
@@ -522,6 +525,7 @@ bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask
 	splitAddress(address, cacheOffset, setIndex, &pTag);
     Line *line = findLine(setIndex, pTag);
 
+
     // FIXME: snoops should really either lock the line or access
     // through a different port. Here we cannot (yet) invoke the
     // arbitrator because there is no scaffolding to declare which
@@ -543,12 +547,20 @@ bool DCache::OnMemorySnooped(MemAddr address, const char* data, const bool* mask
 
         COMMIT
         {
+
+//        	char d[m_lineSize];
+//        	memcpy(d, line->data, m_lineSize);
+
             // We do, update the data and mark written bytes as valid
             // Note that we don't have to check against already written data or queued reads
             // because we don't have to guarantee sequential semantics from other cores.
             // This falls within the non-determinism behavior of the architecture.
             line::blit(line->data, data, mask, m_lineSize);
             line::setif(line->valid, true, mask, m_lineSize);
+
+//            if(memcmp(d, line->data, m_lineSize) != 0){
+//            	std::cout << GetName() << ": Memory snoop for address " << std::hex << address << " successful!" << std::endl;
+//            }
 
             // Statistics
             ++m_numSnoops;
@@ -602,7 +614,7 @@ void DCache::Cmd_Info(std::ostream& out, const std::vector<std::string>& /*argum
     "- inspect <component> buffers\n"
     "  Reads and display the outgoing request buffer.\n"
     "- inspect <component> lines\n"
-    "  Reads and displays the cache-lines.\n";
+    "  Reads and displays the acache-lines.\n";
 }
 
 void DCache::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const

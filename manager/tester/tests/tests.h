@@ -4,7 +4,7 @@
 
 #define DECLARE_TEST(NAME) \
 	int NAME ## _pre(tlbRef_t tlbReference, char quiet); \
-	void NAME ## _run(sl_place_t destination, result_t* result, char abort, char quiet); \
+	void NAME ## _run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet); \
 	int NAME ## _post(tlbRef_t tlbReference, char quiet); \
 	const char* NAME ## _name(void); \
 	sl_decl(NAME,,sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet))
@@ -20,16 +20,13 @@
 #include <svp/abort.h>
 
 
-unsigned int __attribute__((optimize("O0"))) timedRead_asm(uint64_t target, uint64_t expect);
-
-
 //MLDTODO Aanpassingen voor gemak (dbg makefile, logging filter enz) ook in scriptie.
 
 // make a type (http://dare.uva.nl/document/2/109511, pg80)
 //sl_typedef_fptr(testPtr_t,, 			sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet));
 
 DECLARE_TEST(action);
-
+DECLARE_TEST(trCal);
 DECLARE_TEST(b_4k);
 DECLARE_TEST(b_4k_p);
 DECLARE_TEST(b_4k_t);

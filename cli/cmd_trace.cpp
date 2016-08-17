@@ -24,7 +24,7 @@ bool cmd_trace_show(const vector<string>& /*command*/, vector<string>& /*args*/,
     if (!debugStr.size()) debugStr = " (nothing)";
     cout << "Tracing enabled for:" << debugStr << endl;
     cout << "Available:" << complement << endl;
-    cout << "Trace filter: '" << ctx.sys.GetDebugFilter() << "'" << endl;
+    cout << "Trace filter: '" << ctx.sys.GetDebugFilter() << "' (`trace f=[..]` to change)" << endl;
     return false;
 }
 
