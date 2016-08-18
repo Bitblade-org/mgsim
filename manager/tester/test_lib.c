@@ -99,9 +99,7 @@ void printWrite(uint64_t addr, uint64_t data){
 }
 
 void resetResults(result_t* result){
-	result->nrFailed = 0;
-	result->nrTests = 0;
-	memset(result->resultText, 0, sizeof(result->resultText));
+	memset(result, 0, sizeof(result_t));
 }
 
 void addSResult(result_t* destination, char result){
@@ -141,7 +139,7 @@ void printTestEnd(const result_t *result, char quiet, const char name[]){
 		output_uint(result->nrTests, 2);
 		output_string(" failed\n", 2);
 	}else{
-		//output_string("\033[1A", 2);
+		output_string("\033[1A", 2);
 		if(result->nrFailed == 0){
 			output_string(" [ ", 2);
 			output_string("\033[1;32m", 2);

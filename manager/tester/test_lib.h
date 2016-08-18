@@ -7,6 +7,8 @@ typedef struct {
 	int nrTests;
 	int nrFailed;
 	char resultText[80];
+	uint64_t metrics[100];
+	int nextMetric;
 } result_t;
 
 //typedef void (*test_t)(result_t *result, char abort, char quiet);

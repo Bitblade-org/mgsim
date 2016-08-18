@@ -5,6 +5,26 @@
 #include <svp/delegate.h>
 #include <svp/sep.h>
 
+
+void doTimedReadTest(struct testParameters* p){
+	// Make sure every other cache is filled
+	p->iter++;
+
+	for(int i=0; i<p->iter; i++){
+		preRead(p->destination, p->target, p->expect, p->result, p->abort, p->quiet);
+		flush(p->flush, p->tlbReference);
+		timedRead(p->destination, p->target, p->expect, p->result, p->abort, p->quiet);
+	}
+
+	snprintf(p->result->resultText, 80, "CYCLES: |(%-4d)| %-4d | %-4d | %-4d | %-4d | %-4d | %-4d | %-4d | %-4d | %-4d | %-4d |",
+			p->result->metrics[0], p->result->metrics[1], p->result->metrics[2], p->result->metrics[3],
+			p->result->metrics[4], p->result->metrics[5], p->result->metrics[6], p->result->metrics[7],
+			p->result->metrics[8], p->result->metrics[9], p->result->metrics[10]
+	);
+
+}
+
+
 void flush(unsigned char flags, tlbRef_t tlbReference){
 	if(flags & FLUSH_PAGETABLE_CACHE){
 		flushDCache(CPUID_PAGEWALKER);
@@ -63,22 +83,7 @@ sl_def(sl_preRead,, sl_shparm(result_t*, result), sl_shparm(char, abort),
 	uint64_t target = sl_getp(target);
 	uint64_t expect = sl_getp(expect);
 
-	timedReadData_t data;
-	data.input.address = target;
-	data.input.expectation = expect;
-
-	timedRead_asm(&data);
-
-//	printf("TimedRead responded with: data: 0x%X, xor: 0x%X, clock: %u", data.output.read_result, data.output.xor_result, data.output.clock_result);
-
-	if(data.output.xor_result){
-		printString("TimedRead setup failed: Read did not return expected value", quiet);
-	}
-
-	addSResult(result, read64((uint64_t)&data.output.read_result, expect, abort, quiet));
-	printString("TimedRead preread completed in ", quiet);
-	printUint(data.output.clock_result, quiet);
-	printString(" core cycles (not adjusted for calibration)\n", quiet);
+	addSResult(result, read64(target, expect, abort, quiet));
 
 	sl_setp(result, result); //Show the compiler some love
 	sl_setp(abort, abort);
@@ -108,11 +113,12 @@ sl_def(sl_timedRead,, sl_shparm(result_t*, result), sl_shparm(char, abort),
 	}
 
 	addSResult(result, read64((uint64_t)&data.output.read_result, expect, abort, quiet));
-	printString("TimedRead timing read completed in ", quiet);
-	printUint(data.output.clock_result, quiet);
-	printString(" core cycles (not adjusted for calibration)\n", quiet);
+	if(!quiet){
+		printf("TimedRead timing read (iter %d) completed in %d core cycles (%d adjusted for calibration)\n",
+				result->nextMetric, data.output.clock_result, data.output.clock_result + TIMEDREAD_CALIBRATION_VALUE);
+	}
 
-	snprintf(result->resultText, 80, "CYCLES=%d", data.output.clock_result + TIMEDREAD_CALIBRATION_VALUE);
+	result->metrics[result->nextMetric++] = data.output.clock_result + TIMEDREAD_CALIBRATION_VALUE;
 
 	sl_setp(result, result); //Show the compiler some love
 	sl_setp(abort, abort);

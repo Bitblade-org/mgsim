@@ -25,21 +25,21 @@ sl_def(testNotLineAlignedRW,, sl_shparm(result_t*, result), sl_shparm(char, abor
 	char abort = sl_getp(abort);
 	char quiet = sl_getp(quiet);
 
-	write8(S_SANDBOXW, 0xFF, quiet);
-	addSResult(result, read8(S_SANDBOXR, 0xFF, abort, quiet));
+	write8(SMALL_SANDBOXW, 0xFF, quiet);
+	addSResult(result, read8(SMALL_SANDBOXR, 0xFF, abort, quiet));
 
-	write8(S_SANDBOXW + 1, 0x55, quiet);
-	addSResult(result, read8(S_SANDBOXR, 0xFF, abort, quiet));
-	addSResult(result, read8(S_SANDBOXR + 1, 0x55, abort, quiet));
+	write8(SMALL_SANDBOXW + 1, 0x55, quiet);
+	addSResult(result, read8(SMALL_SANDBOXR, 0xFF, abort, quiet));
+	addSResult(result, read8(SMALL_SANDBOXR + 1, 0x55, abort, quiet));
 
 	int fails = 0;
 	int testNr = 0;
 	for(testNr=0; testNr<(2*LINE_SIZE); testNr++){
-		write8(S_SANDBOXW + testNr, testNr, 1);
-		if(read8(S_SANDBOXR + testNr, testNr, 0, 1)){
+		write8(SMALL_SANDBOXW + testNr, testNr, 1);
+		if(read8(SMALL_SANDBOXR + testNr, testNr, 0, 1)){
 			fails++;
-			write8(S_SANDBOXW + testNr, testNr, quiet);
-			read8(S_SANDBOXR + testNr, testNr, abort, quiet);
+			write8(SMALL_SANDBOXW + testNr, testNr, quiet);
+			read8(SMALL_SANDBOXR + testNr, testNr, abort, quiet);
 		}
 		if(fails >= 5){
 			printString("Ending test prematurely due too many failures\n", quiet);

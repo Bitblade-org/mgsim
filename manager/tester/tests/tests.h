@@ -36,6 +36,24 @@ DECLARE_TEST(b_4k_pd);
 DECLARE_TEST(b_4k_td);
 DECLARE_TEST(b_4k_ptd);
 
+DECLARE_TEST(b_2m);
+DECLARE_TEST(b_2m_p);
+DECLARE_TEST(b_2m_t);
+DECLARE_TEST(b_2m_d);
+DECLARE_TEST(b_2m_pt);
+DECLARE_TEST(b_2m_pd);
+DECLARE_TEST(b_2m_td);
+DECLARE_TEST(b_2m_ptd);
+
+DECLARE_TEST(b_1g);
+DECLARE_TEST(b_1g_p);
+DECLARE_TEST(b_1g_t);
+DECLARE_TEST(b_1g_d);
+DECLARE_TEST(b_1g_pt);
+DECLARE_TEST(b_1g_pd);
+DECLARE_TEST(b_1g_td);
+DECLARE_TEST(b_1g_ptd);
+
 
 DECLARE_TEST(testClock);
 DECLARE_TEST(testSyscall);

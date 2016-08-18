@@ -31,7 +31,7 @@ sl_def(testUnalignedR,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl
 	uint64_t expect;
 
 	for(int i=0; i<8; i++){
-		loc = COUNT8R_START + i;
+		loc = SMALL_COUNT8R_START + i;
 		expect = calculateExpected64(i);
 		addSResult(result, read64(loc, expect, abort, quiet));
 	}

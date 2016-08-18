@@ -8,6 +8,19 @@
 #include <svp/delegate.h>
 #include <svp/sep.h>
 
+struct testParameters {
+	sl_place_t destination;
+	tlbRef_t tlbReference;
+	uint64_t target;
+	uint64_t expect;
+	result_t* result;
+	char doPreRead;
+	char flush;
+	char quiet;
+	char abort;
+	char iter;
+};
+
 struct input {
 	uint64_t address;
 	uint64_t expectation;
@@ -39,6 +52,7 @@ void flush(unsigned char flags, tlbRef_t tlbReference);
 void preRead(sl_place_t destination, uint64_t target, uint64_t expect, result_t* result, char abort, char quiet);
 void timedRead(sl_place_t destination, uint64_t target, uint64_t expect, result_t* result, char abort, char quiet);
 void testCalibration(sl_place_t destination, result_t* result, char abort, char quiet);
+void doTimedReadTest(struct testParameters* p);
 
 sl_decl(sl_preRead,,        sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet), sl_shparm(uint64_t, target), sl_shparm(uint64_t, expect));
 sl_decl(sl_timedRead,,      sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet), sl_shparm(uint64_t, target), sl_shparm(uint64_t, expect));

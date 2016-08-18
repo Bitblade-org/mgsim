@@ -30,23 +30,23 @@ sl_def(testLineBoundariesR,, sl_shparm(result_t*, result), sl_shparm(char, abort
 	uint64_t loc;
 	uint64_t expect;
 
-	loc = COUNT8R_START + LINE_SIZE - 8;
+	loc = SMALL_COUNT8R_START + LINE_SIZE - 8;
 	expect = calculateExpected64(LINE_SIZE - 8);
 	addSResult(result, read8(loc, expect, abort, quiet));
 
-	loc = COUNT8R_START + LINE_SIZE;
+	loc = SMALL_COUNT8R_START + LINE_SIZE;
 	expect = calculateExpected64(LINE_SIZE);
 	addSResult(result, read8(loc, expect, abort, quiet));
 
-	loc = COUNT8R_START + LINE_SIZE + LINE_SIZE - 8;
+	loc = SMALL_COUNT8R_START + LINE_SIZE + LINE_SIZE - 8;
 	expect = calculateExpected64(LINE_SIZE + LINE_SIZE - 8);
 	addSResult(result, read8(loc, expect, abort, quiet));
 
-	loc = COUNT8R_START + LINE_SIZE + LINE_SIZE;
+	loc = SMALL_COUNT8R_START + LINE_SIZE + LINE_SIZE;
 	expect = calculateExpected64(LINE_SIZE + LINE_SIZE);
 	addSResult(result, read8(loc, expect, abort, quiet));
 
-	loc = COUNT8R_START + LINE_SIZE + LINE_SIZE + LINE_SIZE - 8;
+	loc = SMALL_COUNT8R_START + LINE_SIZE + LINE_SIZE + LINE_SIZE - 8;
 	expect = calculateExpected64(LINE_SIZE + LINE_SIZE + LINE_SIZE - 8);
 	addSResult(result, read8(loc, expect, abort, quiet));
 

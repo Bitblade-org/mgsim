@@ -30,11 +30,11 @@ sl_def(testNotSmallPageAligned64RW,, sl_shparm(result_t*, result), sl_shparm(cha
 	int fails = 0;
 	int testNr = 0;
 	for(testNr=0; testNr<(SMALL_PAGE_SIZE / 8); testNr++){
-		write64(S_SANDBOXW + testNr * 8, testNr, 1);
-		if(read8(S_SANDBOXR + testNr * 8, testNr, 0, 1)){
+		write64(SMALL_SANDBOXW + testNr * 8, testNr, 1);
+		if(read8(SMALL_SANDBOXR + testNr * 8, testNr, 0, 1)){
 			fails++;
-			write8(S_SANDBOXW + testNr * 8, testNr, quiet);
-			read8(S_SANDBOXR + testNr * 8, testNr, abort, quiet);
+			write8(SMALL_SANDBOXW + testNr * 8, testNr, quiet);
+			read8(SMALL_SANDBOXR + testNr * 8, testNr, abort, quiet);
 		}
 		if(fails >= 5){
 			printString("Ending test prematurely due to too many failures\n", quiet);

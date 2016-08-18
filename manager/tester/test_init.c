@@ -24,7 +24,7 @@ void tester_init(int contextId, void* ptsPBase, pt_t** next_table, size_t* free)
 // Space reserved for testing medium pages (2MiB)
 // V: 0x2 0000 0000 - 0x3 0000 0000
 // P: 0x3 0000 0000 - 0x4 0000 0000
-// larger page = 2MiB = 0x2 0000 0000 : 0x2 0020 0000
+// medium page = 2MiB = 0x2 0000 0000 : 0x2 0020 0000
 //
 // Space reserved for testing large pages (1GiB)
 // V: 0x4 0000 0000 - 0x5 0000 0000
@@ -32,15 +32,15 @@ void tester_init(int contextId, void* ptsPBase, pt_t** next_table, size_t* free)
 // larger page = 1GiB = 0x4 0000 0000 : 0x4 4000 0000
 void createPageEntries(int contextId, void* ptsPBase, pt_t** next_table, size_t* free){
 	uint64_t index;
-	index = calculate_pt_index(contextId, COUNT8R_START);
+	index = calculate_pt_index(contextId, SMALL_COUNT8R_START);
 	write_entry(ptsPBase, index,   (void*)0x440000ul, 0, next_table, free, 1, 0, 0); //COUNT8
-	index = calculate_pt_index(contextId, COUNT64R_START);
+	index = calculate_pt_index(contextId, SMALL_COUNT64R_START);
 	write_entry(ptsPBase, index,   (void*)0x441000ul, 0, next_table, free, 1, 0, 0); //COUNT64-1
 	index = calculate_pt_index(contextId, 0x442000ul);
 	write_entry(ptsPBase, index,   (void*)0x442000ul, 0, next_table, free, 1, 0, 0); //COUNT64-2
 	index = calculate_pt_index(contextId, 0x443000ul);
 	write_entry(ptsPBase, index,   (void*)0x443000ul, 0, next_table, free, 1, 0, 0); //COUNT64-3
-	index = calculate_pt_index(contextId, ADDR64_START);
+	index = calculate_pt_index(contextId, SMALL_ICOUNT64_START);
 	write_entry(ptsPBase, index,   (void*)0x444000ul, 0, next_table, free, 1, 0, 0); //unused
 
 	index = calculate_pt_index(contextId, 0x500000ul);
@@ -86,6 +86,9 @@ void createPageEntries(int contextId, void* ptsPBase, pt_t** next_table, size_t*
 	mod += 0x200000; index = calculate_pt_index(contextId, baseV + mod);
 	write_entry(ptsPBase, index, (void*)baseP + mod, 1, next_table, free, 1, 0, 0); //M-SANDBOX-R4
 
+	index = calculate_pt_index(contextId, 0x201000000ul);
+	write_entry(ptsPBase, index, (void*)0x301000000ul, 1, next_table, free, 1, 0, 0); //M-SANDBOX-R4
+
 	baseV = 0x210000000ul;
 	baseP = 0x300000000ul;
 	mod = 0;       	 index = calculate_pt_index(contextId, baseV + mod);
@@ -108,15 +111,20 @@ void createPageEntries(int contextId, void* ptsPBase, pt_t** next_table, size_t*
 	baseP = 0x500000000ul;
 	index = calculate_pt_index(contextId, baseV);
 	write_entry(ptsPBase, index, (void*)baseP, 2, next_table, free, 0, 1, 0); //L-SANDBOX-W
+
+	baseV = L_COUNT64R_V;
+	baseP = baseV + 0x100000000ul;
+	index = calculate_pt_index(contextId, baseV);
+	write_entry(ptsPBase, index, (void*)baseP, 2, next_table, free, 1, 0, 0);
 }
 
 // Space reserved for testing:
 //	0x440000 - 0x550000 inclusive
 void writeStartingData(){
 
-	//Fill 0x44 00 00 - 0x44 08 00
+	//Fill 0x44 00 00 - 0x44 08 00 (1 KiB of 2 KiB page)
 	//with bytes containing the positive numbers (0-255) in sequence, rolling over where applicable.
-	uint64_t* ptr = (uint64_t*)COUNT8R_START;
+	uint64_t* ptr = (uint64_t*)SMALL_COUNT8R_START;
 	for(int i=0; i<256; i++, ptr++){
 		uint64_t buffer = 0;
 		for(int j=0; j<8; j++){
@@ -126,11 +134,12 @@ void writeStartingData(){
 	}
 
 
+	//Fill edges of multiple 2 KiB pages
 	//Fill 0x44 10 00 - 0x44 11 00 with words representing 0, 1, 2, ..., 31
 	//Fill 0x44 1e 00 - 0x44 21 00 with words representing 480, 481, ,,, 543 (512 +/- 32)
 	//Fill 0x44 2e 00 - 0x44 31 00 with words representing 992, 993, .., 1056 (1024 +/- 32)
 	//Fill 0x44 3e 00 - 0x44 00 00 with words representing 1504, 1505, ..,  1535
-	uint64_t* ptrStart = (uint64_t*)COUNT64R_START;
+	uint64_t* ptrStart = (uint64_t*)SMALL_COUNT64R_START;
 	ptr = ptrStart;
 	for(int i=0; i<1536; i++, ptr++){
 		if(i ==    0 + 32){ i= 512 - 32; ptr = ptrStart + i; }
@@ -139,8 +148,22 @@ void writeStartingData(){
 		*ptr = i;
 	}
 
+	//Fill first 2 KiB of 2 MiB page with words containing numbers (0-255) in sequence
+	ptrStart = (uint64_t*)M_COUNT64R_P;
+	ptr = ptrStart;
+	for(int i=0; i<256; i++, ptr++){
+		*ptr = i;
+	}
+
+	//Fill first 2 KiB of 1 GiB page with words containing numbers (0-255) in sequence
+	ptrStart = (uint64_t*)L_COUNT64R_P;
+	ptr = ptrStart;
+	for(int i=0; i<256; i++, ptr++){
+		*ptr = i;
+	}
+
 	//Fill 0x44 40 00 - 0x44 48 00 with words representing 255, 254, ..., 0
-	ptr = (uint64_t*)ADDR64_START;
+	ptr = (uint64_t*)SMALL_ICOUNT64_START;
 	for(int i=255; i>=0; i--, ptr++){
 		*ptr = i;//(uint64_t)ptr;
 	}

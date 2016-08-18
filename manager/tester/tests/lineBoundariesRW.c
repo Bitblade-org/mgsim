@@ -27,8 +27,8 @@ sl_def(testLineBoundariesRW,, sl_shparm(result_t*, result), sl_shparm(char, abor
 	char quiet = sl_getp(quiet);
 
 	uint64_t mod;
-	uint64_t baseR = S_SANDBOXR;
-	uint64_t baseW = S_SANDBOXW;
+	uint64_t baseR = SMALL_SANDBOXR;
+	uint64_t baseW = SMALL_SANDBOXW;
 	uint64_t data;
 	//Cannot use random numbers according to SL17:
 	// 	However, the following library features are not supported on the MGSim targets:

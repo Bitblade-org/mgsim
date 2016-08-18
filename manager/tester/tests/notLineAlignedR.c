@@ -26,8 +26,8 @@ sl_def(testNotLineAlignedR,, sl_shparm(result_t*, result), sl_shparm(char, abort
 	char quiet = sl_getp(quiet);
 
 	for(int i=0; i<LINE_SIZE; i++){
-		if(read8(COUNT8R_START + i, i % 256, 0, 1)){
-			addSResult(result, read8(COUNT8R_START + i, i % 256, abort, quiet));
+		if(read8(SMALL_COUNT8R_START + i, i % 256, 0, 1)){
+			addSResult(result, read8(SMALL_COUNT8R_START + i, i % 256, abort, quiet));
 		}else{
 			addSResult(result, 0);
 		}

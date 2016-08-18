@@ -25,7 +25,7 @@ sl_def(testSmallPageBoundariesR,, sl_shparm(result_t*, result), sl_shparm(char, 
 	char abort = sl_getp(abort);
 	char quiet = sl_getp(quiet);
 
-	uint64_t baseR = COUNT64R_START;
+	uint64_t baseR = SMALL_COUNT64R_START;
 	uint64_t mod;
 	uint64_t data;
 
@@ -85,8 +85,8 @@ sl_def(testSmallPageBoundariesRW,, sl_shparm(result_t*, result), sl_shparm(char,
 	char quiet = sl_getp(quiet);
 
 	uint64_t mod;
-	uint64_t baseR = S_SANDBOXR;
-	uint64_t baseW = S_SANDBOXW;
+	uint64_t baseR = SMALL_SANDBOXR;
+	uint64_t baseW = SMALL_SANDBOXW;
 	uint64_t data;
 	//Cannot use random numbers according to SL17:
 	// 	However, the following library features are not supported on the MGSim targets:

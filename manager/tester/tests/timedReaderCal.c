@@ -10,7 +10,7 @@ int trCal_pre(tlbRef_t tlbReference, char quiet){ return 0; }
 int trCal_post(tlbRef_t tlbReference, char quiet){ return 0; };
 
 void trCal_run(sl_place_t destination, tlbRef_t tlbReference, result_t* result, char abort, char quiet){
-	uint64_t loc = ADDR64_START+8*10;
+	uint64_t loc = SMALL_ICOUNT64_START+8*10;
 	uint64_t expect = 245;
 
 	testCalibration(destination, result, abort, quiet);

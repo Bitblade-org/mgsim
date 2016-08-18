@@ -14,59 +14,104 @@ void runNewTest(struct test* test, sl_place_t dst, result_t* result, tlbRef_t tl
 
 
 void runAll(result_t* result, sl_place_t dst, char abort, tlbRef_t tlbReference){
+	printf("Size of result_t=%u\n", sizeof(result_t));
 	struct test test;
 
 	test = TEST_REF(trCal, 1, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
-	test = TEST_REF(b_4k, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_p, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_t, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_d, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_pt, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_pd, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_td, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-	test = TEST_REF(b_4k_ptd, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
-
-//	test = TEST_REF(action, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
-
 	test = TEST_REF(testClock, 1, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
-//	test = TEST_REF(b_4k_td, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
-//
-//	test = TEST_REF(b_4k_d, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
-//
-//	test = TEST_REF(b_4k_t, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
-//
-//	test = TEST_REF(b_4k, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
-//
-//	test = TEST_REF(testClock, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
 
-//	test = TEST_REF(testSyscall, 1, 1);
-//	runNewTest(&test, dst, result, tlbReference);
+	int quiet = 1;
+	test = TEST_REF(b_4k, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_p, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_t, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_d, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_pt, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_pd, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_td, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_4k_ptd, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+
+
+	quiet = 1;
+
+	test = TEST_REF(b_2m, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_p, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_t, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_d, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_pt, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_pd, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_td, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_2m_ptd, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+
+
+
+
+
+	quiet = 1;
+
+	test = TEST_REF(b_1g, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_p, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_t, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_d, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_pt, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_pd, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_td, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(b_1g_ptd, quiet, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+
+
+
+
 
 
 	test = TEST_REF(testSmallPageAlignedRW, 1, 1);

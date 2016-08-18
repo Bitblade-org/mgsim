@@ -65,7 +65,7 @@ void __attribute__((optimize("O0"))) timedRead_asm(timedReadData_t* data){
 			"subq %3, %2, %2;"		/* %3 - %2 ---> %2 */
 			"nop;"
 			"nop;"
-			"stq %0, 536($31);"		/* Print %0 */
+		/*	"stq %0, 536($31);"		Print %0 */
 			"nop;"
 			"nop;"
 			"stq %0, 0(%4);"		/* %0 to MEM[%4] */
@@ -112,7 +112,7 @@ void __attribute__((optimize("O0"))) timedRead_asm_calibrationRun(timedReadData_
 			"subq %3, %2, %2;"		/* %3 - %2 ---> %2 */
 			"nop;"
 			"nop;"
-			"stq %0, 536($31);"		/* Print %0 */
+		/*	"stq %0, 536($31);"		Print %0 */
 			"nop;"
 			"nop;"
 			"stq %0, 0(%4);"		/* %0 to MEM[%4] */

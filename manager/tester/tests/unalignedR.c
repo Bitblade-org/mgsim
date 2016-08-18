@@ -28,8 +28,8 @@ sl_def(testUnalignedRW,, sl_shparm(result_t*, result), sl_shparm(char, abort), s
 	uint64_t data = 0;
 
 	for(int i=0; i<8; i++){
-		write64(S_SANDBOXW + i, data, quiet);
-		addSResult(result, read64(S_SANDBOXR + i, data, abort, quiet));
+		write64(SMALL_SANDBOXW + i, data, quiet);
+		addSResult(result, read64(SMALL_SANDBOXR + i, data, abort, quiet));
 		data = ~data;
 	}
 
