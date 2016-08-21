@@ -5,7 +5,6 @@ const char* testNotLineAlignedR_name(){
 }
 
 int testNotLineAlignedR_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

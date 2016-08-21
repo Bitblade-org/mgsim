@@ -7,7 +7,6 @@ const char* testNotSmallPageAligned64RW_name(){
 }
 
 int testNotSmallPageAligned64RW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 
@@ -58,7 +57,6 @@ const char* testNotMediumPageAligned4096RW_name(){
 }
 
 int testNotMediumPageAligned4096RW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 
@@ -109,7 +107,6 @@ const char* testNotLargePageAligned2MRW_name(){
 }
 
 int testNotLargePageAligned2MRW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

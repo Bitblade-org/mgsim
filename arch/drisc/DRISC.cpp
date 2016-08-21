@@ -75,7 +75,7 @@ DRISC::DRISC(const std::string& name, Object& parent, Clock& clock, PID pid, con
     m_lpout.Connect(m_mmio, IOMatchUnit::WRITE);
     m_lperr.Connect(m_mmio, IOMatchUnit::WRITE);
     m_oldmmu.Connect(m_mmio, IOMatchUnit::WRITE);
-    m_action.Connect(m_mmio, IOMatchUnit::WRITE);
+    m_action.Connect(m_mmio, IOMatchUnit::READWRITE);
 
     // Check if there is an initial register configuration
     if (!GetConfOpt("InitRegs", string, "").empty())

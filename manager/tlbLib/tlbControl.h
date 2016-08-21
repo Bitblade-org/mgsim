@@ -8,7 +8,7 @@
 #define TLB_TYPE_D 1
 
 void enableTlb(unsigned int managerIOid, unsigned int managerChannel, tlbRef_t tlbReference);
-void invalidateTlb(tlbRef_t tlbReference);
+//void invalidateTlb(tlbRef_t tlbReference);
 tlbRef_t getTlbReference(struct mg_io_info* ioInfo, size_t core_id, char tlbType);
 
 

@@ -14,17 +14,22 @@ void runNewTest(struct test* test, sl_place_t dst, result_t* result, tlbRef_t tl
 
 
 void runAll(result_t* result, sl_place_t dst, char abort, tlbRef_t tlbReference){
-	printf("Size of result_t=%u\n", sizeof(result_t));
 	struct test test;
 
-	test = TEST_REF(trCal, 1, 1);
+	test = TEST_REF(action, 1, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
-	test = TEST_REF(testClock, 1, 1);
+	test = TEST_REF(coreId, 1, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(trCal, 0, 1);
+	runNewTest(&test, dst, result, tlbReference);
+
+	test = TEST_REF(testClock, 0, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
 
-	int quiet = 1;
+	int quiet = 0;
 	test = TEST_REF(b_4k, quiet, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
@@ -153,9 +158,6 @@ void runAll(result_t* result, sl_place_t dst, char abort, tlbRef_t tlbReference)
 	test = TEST_REF(testNotLargePageAligned2MRW, 1, 1);
 	runNewTest(&test, dst, result, tlbReference);
 
-	test = TEST_REF(action, 1, 1);
-	runNewTest(&test, dst, result, tlbReference);
-
 //	test = TEST_REF(testAllPageSizes, 1, 1);
 //	runNewTest(&test, dst, result, tlbReference);
 
@@ -195,9 +197,4 @@ void runNewTest(struct test* test, sl_place_t dst, result_t* result, tlbRef_t tl
 	}
 
 	addResults(result, &localResult);
-}
-
-void flushDCache(uint64_t cpu){
-	uint64_t* ptr = (uint64_t*)0x2A0;
-	*ptr = cpu;
 }

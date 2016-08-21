@@ -5,7 +5,6 @@ const char* testSmallPageBoundariesR_name(){
 }
 
 int testSmallPageBoundariesR_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 
@@ -64,7 +63,6 @@ const char* testSmallPageBoundariesRW_name(){
 }
 
 int testSmallPageBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

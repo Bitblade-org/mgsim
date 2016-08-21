@@ -26,6 +26,7 @@
 //sl_typedef_fptr(testPtr_t,, 			sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(char, quiet));
 
 DECLARE_TEST(action);
+DECLARE_TEST(coreId);
 DECLARE_TEST(trCal);
 DECLARE_TEST(b_4k);
 DECLARE_TEST(b_4k_p);

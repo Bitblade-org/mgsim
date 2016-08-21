@@ -102,6 +102,8 @@ public:
     void Cmd_Usage(std::ostream& out) const;
 
     void operator=(TLB&) = delete;
+    void invalidate();
+
 private:
 	Result lookup(RAddr const contextId, RAddr const vAddr, bool mayUnlock, TLBResultMessage &res);
 	Result loopback(Addr contextId, Addr vAddr, TLBResultMessage &res);
@@ -109,7 +111,6 @@ private:
     Result handleMgtMsg(MgtMsg msg);
 
     void unlink(Line &line);
-    void invalidate();
     void invalidate(RAddr pid);
     void invalidate(RAddr pid, RAddr addr);
 

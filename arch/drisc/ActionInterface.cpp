@@ -25,42 +25,116 @@ namespace drisc
 size_t ActionInterface::GetSize() const { return 16 * sizeof(Integer);  }
 
 
-Result ActionInterface::Read (MemAddr /*address*/, void* /*data*/, MemSize /*size*/, LFID /*fid*/, TID /*tid*/, const RegAddr& /*writeback*/)
+Result ActionInterface::Read (MemAddr address, void* data, MemSize size, LFID /* fid */ , TID /* tid */, const RegAddr& /* writeback */)
 {
-    UNREACHABLE;
+    if (address == 0x50)
+    {
+    	if(size != sizeof(Integer)){
+            throw exceptf<>(*this, "Invalid action control: %#016llx", (unsigned long long)address);
+    	}
+
+    	Object& dparent = *GetParent();
+    	auto& localCpu = static_cast<DRISC&>(dparent);
+    	uint64_t deltaC = localCpu.GetCycleNo() - lastTimerCycleCount;
+    	lastTimerCycleCount = localCpu.GetCycleNo();
+
+    	if(timerValue > deltaC){
+    		timerValue -= deltaC;
+    		return FAILED;
+    	}
+
+		deltaC -= timerValue;
+		timerValue = 0;
+	    SerializeRegister(RT_INTEGER, deltaC, data, sizeof(Integer));
+
+    	if(deltaC != 0){
+    		std::cout << "Timer overshoot: " << deltaC << "\n";
+    	}
+
+	    return SUCCESS;
+
+    }
+
+    UNREACHABLE
+}
+
+void ActionInterface::Cmd_Info(std::ostream& out, const std::vector<std::string>&) const{
+	Object& dparent = *GetParent();
+	auto& localCpu = static_cast<DRISC&>(dparent);
+	uint64_t deltaC = localCpu.GetCycleNo() - lastCycleCount;
+
+	for(int i=0; i<8; i++){
+		uint64_t count = stateCycleCounter[i];
+		if(currentState == i){
+			count += deltaC;
+		}
+		out << "STATE " << i << ": " << count << " cycles\n";
+	}
+}
+
+void ActionInterface::stateUpdate(const unsigned char newState){
+	Object& dparent = *GetParent();
+	auto& localCpu = static_cast<DRISC&>(dparent);
+	uint64_t deltaC = localCpu.GetCycleNo() - lastCycleCount;
+	lastCycleCount = localCpu.GetCycleNo();
+
+//	std::cout << "cycles[" << std::dec << unsigned(currentState) << "] = " << stateCycleCounter[currentState] << " + " << deltaC << " = ";
+
+	stateCycleCounter[currentState] += deltaC;
+//	std::cout << stateCycleCounter[currentState] << "; currCycle = " << unsigned(newState) << std::endl;
+	currentState = newState;
 }
 
 Result ActionInterface::Write(MemAddr address, const void *data, MemSize size, LFID fid, TID tid)
 {
-    if (address % sizeof(Integer) != 0)
+	COMMIT{ std::cout << "Write to actioninterface with address " << std::hex << address << std::endl; }
+    if (address % sizeof(Integer) != 0 && (address & ~0x4F) != 0)
     {
         throw exceptf<>(*this, "Invalid action control: %#016llx", (unsigned long long)address);
     }
 
-    address /= sizeof(Integer);
     Integer value = UnserializeRegister(RT_INTEGER, data, size);
 
-    if (address & 8){
-        Object& dparent = *GetParent();
-    	auto& localCpu = static_cast<DRISC&>(dparent);
+    if (address & 0x40){
+		Object& dparent = *GetParent();
+		auto& localCpu = static_cast<DRISC&>(dparent);
 
-    	uint64_t cpuId = *(uint64_t*)data;
-
-    	auto& remoteCpu = localCpu.getGrid()[cpuId];
-    	if(remoteCpu->GetName() != std::string("cpu") + std::to_string(cpuId)){
-            throw exceptf<>(*this, "Could not find cpu with id %u", (unsigned int)cpuId);
-    	}
-
-
-    	COMMIT{
-			if(remoteCpu->GetDCache().invalidate()){
-				return SUCCESS;
+		if(address & 0x10){
+			COMMIT{
+				lastTimerCycleCount = localCpu.GetCycleNo();
+				timerValue = value;
 			}
-	    	return FAILED;
-    	}
+			return SUCCESS;
+		}else if(address & 8){
+    		COMMIT{
+				unsigned char state = address % 8;
+				stateUpdate(state);
+    		}
+    		return SUCCESS;
+    	}else{
+			Integer cpuId = value;
 
-    	return SUCCESS;
+			auto& remoteCpu = localCpu.getGrid()[cpuId];
+			if(remoteCpu->GetName() != std::string("cpu") + std::to_string(cpuId)){
+				throw exceptf<>(*this, "Could not find cpu with id %u", (unsigned int)cpuId);
+			}
+
+			COMMIT{
+				if(address & 1){
+					remoteCpu->getMMU().getDTlb().invalidate();
+				}
+
+				if(address & 2){
+					if(!remoteCpu->GetDCache().invalidate()){
+						return FAILED;
+					}
+				}
+			}
+			return SUCCESS;
+    	}
     }
+
+    address /= sizeof(Integer);
 
     if (address & 4)
     {
@@ -117,7 +191,12 @@ Result ActionInterface::Write(MemAddr address, const void *data, MemSize size, L
 }
 
 ActionInterface::ActionInterface(const std::string& name, Object& parent)
-    : MMIOComponent(name, parent)
+    : MMIOComponent(name, parent),
+	  currentState(0),
+	  lastCycleCount(0),
+	  stateCycleCounter(),
+	  timerValue(0),
+	  lastTimerCycleCount(0)
 {
 }
 

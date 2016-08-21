@@ -11,7 +11,6 @@ const char* testClock_name(){
 }
 
 int testClock_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

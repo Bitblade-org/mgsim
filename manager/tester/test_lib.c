@@ -190,3 +190,11 @@ void printChar(char c, char quiet){
 		output_char(c, 2);
 	}
 }
+
+
+uint64_t getCurrentCore(){
+	uint64_t cid;
+	asm volatile("getcid %0" : "=r"(cid));
+
+	return cid;
+}

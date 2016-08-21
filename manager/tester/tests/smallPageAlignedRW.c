@@ -7,7 +7,6 @@ const char* testSmallPageAlignedRW_name(){
 }
 
 int testSmallPageAlignedRW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

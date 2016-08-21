@@ -3,7 +3,6 @@
 #include "tests.h"
 
 int testSyscall_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

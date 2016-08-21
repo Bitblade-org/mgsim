@@ -27,8 +27,10 @@ sl_def(dispatcher,, sl_shparm(unsigned, channelNr), sl_shparm(uint64_t, pt0)) {
 
 	while(1){
 		MgtMsg_t msgBuffer;
+		asm volatile("stq $31, 681($31)");
 		msgBuffer.data.part[1] = *cPtr;
 		msgBuffer.data.part[0] = *cPtr;
+		asm volatile("stq $31, 682($31)");
 
 		if(msgBuffer.type != MISS){
 			output_string("Page walker dispatcher received an unrecognised message\n", 2);

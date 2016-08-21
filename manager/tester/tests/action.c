@@ -3,18 +3,14 @@
 #include "../test_lib.h"
 #include "../tester.h"
 
-unsigned int __attribute__((optimize("O0"))) clock_asm0();
-unsigned int __attribute__((optimize("O0"))) clock_asm1();
-unsigned int __attribute__((optimize("O0"))) clock_asm2();
-unsigned int __attribute__((optimize("O0"))) clock_asmc();
-
+#include <svp/abort.h>
+#include <svp/testoutput.h>
 
 const char* action_name(){
 	return "ActionInterface dev platform";
 }
 
 int action_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 
@@ -34,12 +30,26 @@ sl_def(action,, sl_shparm(result_t*, result), sl_shparm(char, abort), sl_shparm(
 	char abort = sl_getp(abort);
 	char quiet = sl_getp(quiet);
 
-	flushDCache(1);
-	flushDCache(2);
+	uint64_t timerValue = 10000;
+	uint64_t startCount;
+	uint64_t endCount;
+	uint64_t overshoot;
 
+	asm volatile("ldq %0, 168($31)" : "=r"(startCount));
+	asm volatile("stq %0, 688($31)" :: "r"(timerValue));
+	asm volatile("ldq %0, 688($31)" : "=r"(overshoot));
+	asm volatile("ldq %0, 168($31)" : "=r"(endCount));
+
+	snprintf(result->resultText, 80, "Test ran for %d cycles. Reported overshoot: %d", endCount - startCount, overshoot);
+
+	if(endCount - startCount < timerValue || endCount - startCount > timerValue + 100){
+		addSResult(result, 1);
+	}else{
+		addSResult(result, 0);
+	}
 
 	sl_setp(result, result); //Every time we forget to do this, a compiler
-	sl_setp(abort, abort);	 //somewhere on the world throws a null pointer
+	sl_setp(abort, abort);	 //somewhere in the world throws a null pointer
 	sl_setp(quiet, quiet);	 //exception.
 }
 sl_enddef;

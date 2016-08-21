@@ -26,20 +26,18 @@ void doTimedReadTest(struct testParameters* p){
 
 
 void flush(unsigned char flags, tlbRef_t tlbReference){
+	uint64_t* ptr;
+	uint64_t localFlags = flags & (FLUSH_LOCAL_CACHE + FLUSH_LOCAL_TLB);
+
+	if(localFlags){
+		ptr = (uint64_t*)(localFlags + 0x2A0);
+		*ptr = getCurrentCore();
+	}
+
+
 	if(flags & FLUSH_PAGETABLE_CACHE){
-		flushDCache(CPUID_PAGEWALKER);
-	}
-
-	if(flags & FLUSH_LOCAL_CACHE){
-		flushDCache(LOCAL_CPUID);
-	}
-
-	if(flags & FLUSH_LOCAL_TLB){
-		invalidateTlb(tlbReference);
-		// Callback not implemented, so this will have to do for now.
-		for(int i=0; i<250; i++){
-			asm volatile("nop;");
-		}
+		ptr = (uint64_t*)0x2A2;
+		*ptr = CPUID_PAGEWALKER;
 	}
 }
 

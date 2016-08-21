@@ -22,23 +22,23 @@ void enableTlb(unsigned int managerIOid, unsigned int managerChannel, tlbRef_t t
 	sendSinglePartMessage(&message, tlbReference);
 }
 
-void invalidateTlb(tlbRef_t tlbReference){
-	//MLDTODO-DOC TLB can be controlled through messages!!!
-
-	MgtMsg_t message;
-	message.type = INVALIDATE;
-	message.iReq.caller = getIOAddr();
-	message.iReq.contextId = 0;
-	message.iReq.vAddr = 0;
-	message.iReq.filterContext = 0;
-	message.iReq.filterVAddr = 0;
-
-	sendDualPartMessage(&message, tlbReference);
-
-	for(int i=0; i<200; i++){
-		asm volatile ("nop");
-	}
-}
+//void invalidateTlb(tlbRef_t tlbReference){
+//	//MLDTODO-DOC TLB can be controlled through messages!!!
+//
+//	MgtMsg_t message;
+//	message.type = INVALIDATE;
+//	message.iReq.caller = getIOAddr();
+//	message.iReq.contextId = 0;
+//	message.iReq.vAddr = 0;
+//	message.iReq.filterContext = 0;
+//	message.iReq.filterVAddr = 0;
+//
+//	sendDualPartMessage(&message, tlbReference);
+//
+//	for(int i=0; i<200; i++){
+//		asm volatile ("nop");
+//	}
+//}
 
 tlbRef_t getTlbReference(struct mg_io_info* ioInfo, size_t core_id, char tlbType){
 	struct mg_device_id search;

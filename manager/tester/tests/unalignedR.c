@@ -5,7 +5,6 @@ const char* testUnalignedRW_name(){
 }
 
 int testUnalignedRW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

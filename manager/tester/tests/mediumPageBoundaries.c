@@ -5,7 +5,6 @@ const char* testMediumPageBoundariesRW_name(){
 }
 
 int testMediumPageBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

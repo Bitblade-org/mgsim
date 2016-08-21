@@ -36,5 +36,6 @@ void addSResult(result_t* destination, char result);
 void addResults(result_t* destination, result_t* other);
 void resetResults(result_t* result);
 
+uint64_t getCurrentCore();
 
 #endif /* TESTER_TEST_LIB_H_ */

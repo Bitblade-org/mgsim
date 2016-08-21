@@ -5,7 +5,6 @@ const char* testLineBoundariesRW_name(){
 }
 
 int testLineBoundariesRW_pre(tlbRef_t tlbReference, char quiet){
-	invalidateTlb(tlbReference);
 	return 0;
 }
 

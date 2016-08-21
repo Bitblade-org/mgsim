@@ -44,7 +44,6 @@ typedef union {
 #define FLUSH_PAGETABLE_CACHE	4
 
 #define CPUID_PAGEWALKER 4
-#define LOCAL_CPUID		 5
 
 void __attribute__((optimize("O0"))) timedRead_asm(timedReadData_t* data);
 void __attribute__((optimize("O0"))) timedRead_asm_calibrationRun(timedReadData_t* data);

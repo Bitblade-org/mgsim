@@ -32,6 +32,5 @@ struct test {
 void run(char abort);
 void runAll(result_t *result, sl_place_t dst, char abort, tlbRef_t tlbReference);
 void runTest(char test, sl_place_t dst, char name[], result_t* result, char abort, char quiet, tlbRef_t tlbReference);
-void flushDCache(uint64_t cpu);
 
 #endif /* MANAGER_TEST_TESTS_H_ */
